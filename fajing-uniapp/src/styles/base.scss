@@ -1,0 +1,56 @@
+/* 发镜 AI · 全局样式入口
+ * 设计变量与组件样式来自 H5 原型 fajing-ai.html（视觉以原型为准）
+ */
+@import './_prototype.scss';
+
+/* ---------- Uniapp 适配层 ---------- */
+page {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+/* 原型用 .page 绝对定位切换，Uniapp 每个页面是独立路由，这里改为占满一屏 */
+.page {
+  position: relative;
+  inset: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+.page.active {
+  display: flex;
+}
+
+/* 图片兜底：加载失败显示中性底色 */
+img {
+  background-color: #F1ECEC;
+}
+
+/* #ifdef H5 */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+uni-app,
+uni-page,
+uni-page-wrapper,
+uni-page-body {
+  height: 100%;
+}
+/* #endif */
+
+/* #ifdef MP-WEIXIN */
+page {
+  height: 100%;
+}
+/* #endif */
+
+/* ---------- 安全区 ---------- */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}

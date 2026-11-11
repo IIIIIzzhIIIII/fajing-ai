@@ -1,0 +1,82 @@
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^fj-icon$": "@/components/FjIcon.vue",
+      "^fj-tabbar$": "@/components/FjTabBar.vue",
+      "^fj-sheet$": "@/components/FjSheet.vue"
+    }
+  },
+  "pages": [
+    {
+      "path": "pages/splash/splash",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "发镜 AI"
+      }
+    },
+    {
+      "path": "pages/home/home",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "发镜 AI"
+      }
+    },
+    {
+      "path": "pages/upload/upload",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "上传照片"
+      }
+    },
+    {
+      "path": "pages/styles/styles",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "选发型"
+      }
+    },
+    {
+      "path": "pages/generating/generating",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "生成中"
+      }
+    },
+    {
+      "path": "pages/result/result",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "你的新发型"
+      }
+    },
+    {
+      "path": "pages/card/card",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "理发师沟通卡"
+      }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/community/community",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "发型讨论"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationStyle": "custom",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "发镜 AI",
+    "navigationBarBackgroundColor": "#FAF8F7",
+    "backgroundColor": "#FAF8F7"
+  }
+}
