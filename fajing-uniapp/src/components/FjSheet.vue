@@ -215,7 +215,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
@@ -374,17 +374,21 @@ function clearData() {
 }
 
 /* 打开评论时拉取数据 */
-uni.$on('fajing:open-comments', async (post) => {
+function onOpenComments(post) {
   ui.commentPost = post
   ui.sheet = 'comments'
   comments.value = (post.comments || []).slice()
-  try {
-    const list = await API.comments(post.id)
-    if (Array.isArray(list) && list.length) comments.value = list
-  } catch (e) {
-    /* 已 toast */
-  }
-})
+  API.comments(post.id)
+    .then((list) => {
+      if (Array.isArray(list) && list.length) comments.value = list
+    })
+    .catch(() => {
+      /* 已统一 toast */
+    })
+}
+
+onMounted(() => uni.$on('fajing:open-comments', onOpenComments))
+onUnmounted(() => uni.$off('fajing:open-comments', onOpenComments))
 </script>
 
 <style lang="scss" scoped>

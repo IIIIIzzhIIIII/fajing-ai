@@ -1,0 +1,3390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#C95676">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23C95676'/%3E%3Cpath d='M10 9l12 14M22 9L10 23' stroke='%23fff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>发镜 AI · 剪之前，先看见</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+/* ============ Design Tokens ============ */
+:root{
+  --pink:#C95676; --pink-400:#DB7B94; --pink-500:#C95676; --pink-600:#B54263; --pink-700:#9E3654;
+  --pink-50:#FAF1F3; --pink-100:#F5E3E8; --pink-200:#E9C9D2;
+  --ink:#2D3436; --ink-2:#4E575A; --muted:#8B9295;
+  --line:#EDE4E6; --bg:#FAF8F7; --surface:#FFFFFF;
+  --gold:#E3A33C; --blue:#5B7CFA; --blue-ink:#2C3A55;
+  --r-lg:22px; --r-md:16px; --r-sm:12px;
+  --sh-sm:0 2px 10px rgba(45,52,54,.05);
+  --sh-md:0 10px 28px rgba(226,110,150,.16);
+  --sh-lg:0 24px 60px rgba(45,52,54,.20);
+  --font:"PingFang SC","HarmonyOS Sans SC","MiSans","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;overflow-x:hidden;height:100%}
+body{
+  font-family:var(--font);color:var(--ink);min-height:100%;
+  display:flex;justify-content:center;align-items:flex-start;
+  background:#EFEBE8;
+  background-image:radial-gradient(1100px 560px at 12% -5%,#F5E3E6 0%,transparent 62%),
+                   radial-gradient(900px 520px at 92% 18%,#E9E9F0 0%,transparent 58%);
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit}
+/* 高度链 html→body→#app 跟踪真实可视高度（比 100vh 可靠），dvh 作为增强 */
+#app{position:relative;width:100%;max-width:420px;min-height:100%;height:100%;height:100dvh;background:var(--bg);overflow:hidden;isolation:isolate}
+@media(min-width:520px){
+  body{align-items:center;padding:22px 0}
+  #app{height:min(880px,calc(100vh - 44px));height:min(880px,calc(100dvh - 44px));
+       min-height:min(880px,calc(100dvh - 44px));
+       border-radius:34px;box-shadow:0 34px 80px rgba(45,52,54,.22),0 0 0 1px rgba(255,255,255,.7) inset}
+}
+/* ============ Pages ============ */
+.page{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg);overflow:hidden}
+.page.active{display:flex;animation:pageIn .26s cubic-bezier(.22,.61,.36,1)}
+@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{display:none}
+/* ============ Icons ============ */
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:16px;height:16px}.ic-xs{width:13px;height:13px}.ic-lg{width:24px;height:24px}
+/* ============ Buttons ============ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:0;cursor:pointer;
+  font-size:15px;font-weight:600;border-radius:var(--r-md);padding:13px 18px;
+  transition:transform .12s ease,box-shadow .2s ease,background .2s ease,opacity .2s ease}
+.btn:active{transform:scale(.965)}
+.btn-primary{background:linear-gradient(135deg,var(--pink-400),var(--pink-600));color:#fff;box-shadow:0 12px 26px rgba(181,66,99,.30)}
+.btn-primary:disabled{background:#EADFE3;color:#B7A8AF;box-shadow:none;cursor:not-allowed}
+.btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:var(--sh-sm)}
+.btn-block{width:100%}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:999px;background:#fff;
+  border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--ink-2);box-shadow:var(--sh-sm);cursor:pointer;
+  transition:transform .12s ease}
+.pill:active{transform:scale(.95)}
+/* ============ Splash ============ */
+#page-splash{background:linear-gradient(160deg,#D97A92 0%,#C95676 46%,#A63E5C 100%)}
+.splash-blob{position:absolute;border-radius:50%;filter:blur(2px);opacity:.5;pointer-events:none}
+.splash-inner{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:0 32px}
+.splash-logo{width:88px;height:88px;border-radius:28px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.5);
+  display:flex;align-items:center;justify-content:center;color:#fff;backdrop-filter:blur(10px);
+  box-shadow:0 20px 40px rgba(150,20,60,.28)}
+.splash-name{color:#fff;font-size:34px;font-weight:800;letter-spacing:-.5px;margin:0}
+.splash-slogan{color:rgba(255,255,255,.9);font-size:14px;letter-spacing:.34em;margin:0}
+.splash-line{width:36px;height:2px;border-radius:2px;background:rgba(255,255,255,.5)}
+.splash-skip{position:absolute;bottom:calc(36px + env(safe-area-inset-bottom));left:0;right:0;text-align:center;color:rgba(255,255,255,.72);font-size:12px;letter-spacing:.2em;z-index:2}
+/* ============ Home ============ */
+.home-head{display:flex;align-items:center;justify-content:space-between;padding:calc(22px + env(safe-area-inset-top)) 20px 6px}
+.logo-mark{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--pink-400),var(--pink-600));
+  color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(181,66,99,.32)}
+.hero{position:relative;padding:14px 20px 0;text-align:center}
+.hero::before{content:"";position:absolute;width:220px;height:220px;border-radius:50%;right:-70px;top:-40px;
+  background:radial-gradient(circle,rgba(240,214,220,.8),transparent 68%);z-index:-1}
+.hero-eyebrow{font-size:10px;font-weight:700;letter-spacing:.32em;color:var(--pink-600);margin-bottom:10px}
+.hero-title{font-size:38px;line-height:1.18;font-weight:800;letter-spacing:-1px;margin:0}
+.grad-text{background:linear-gradient(115deg,#C95676,#D98A63);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-sub{font-size:12.5px;color:var(--muted);margin:12px 0 0;letter-spacing:.2px}
+.cta-wrap{display:flex;justify-content:center;padding:26px 0 8px}
+.cta{position:relative;width:186px;height:186px;border-radius:50%;border:0;cursor:pointer;color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  background:radial-gradient(120% 120% at 30% 20%,#DC8CA3 0%,#C95676 50%,#A63E5C 100%);
+  box-shadow:0 22px 46px rgba(166,62,92,.34),0 0 0 10px rgba(255,255,255,.6);
+  transition:transform .16s ease}
+.cta:active{transform:scale(.96)}
+.cta::after{content:"";position:absolute;inset:-18px;border-radius:50%;border:1px dashed rgba(201,86,118,.4);animation:spin 18s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cta-main{font-size:16px;font-weight:700;letter-spacing:.2px}
+.cta-sub{font-size:11px;opacity:.82}
+.sell-row{display:flex;justify-content:center;gap:6px;padding:18px 14px 4px}
+.sell{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 4px;border-radius:14px;
+  background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9)}
+.sell-ico{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  background:var(--pink-50);color:var(--pink-600)}
+.sell-t{font-size:11.5px;font-weight:700;color:var(--ink)}
+.sell-d{font-size:10px;color:var(--muted)}
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;padding:22px 20px 10px}
+.sec-title{font-size:16px;font-weight:800;margin:0;letter-spacing:-.2px}
+.sec-more{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:2px;background:none;border:0;cursor:pointer}
+.hot-strip{display:flex;gap:10px;overflow-x:auto;padding:2px 20px 8px;scrollbar-width:none}
+.hot-strip::-webkit-scrollbar{display:none}
+.hot-card{flex:none;width:96px;cursor:pointer;border:0;background:none;padding:0;text-align:left}
+.hot-thumb{width:96px;height:122px;border-radius:16px;overflow:hidden;background:linear-gradient(145deg,#F5E7EA,#EEE9F2);
+  box-shadow:var(--sh-sm);position:relative}
+.hot-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.hot-tag{position:absolute;left:6px;top:6px;font-size:9px;padding:2px 6px;border-radius:99px;
+  background:rgba(255,255,255,.9);color:var(--pink-700);font-weight:700}
+.hot-name{font-size:11.5px;color:var(--ink-2);margin-top:7px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ============ Tab bar ============ */
+.tabbar{flex:none;display:flex;align-items:center;justify-content:space-around;
+  padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.92);
+  backdrop-filter:blur(14px);border-top:1px solid var(--line);z-index:6}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:#B4A9AE;font-weight:600;
+  background:none;border:0;padding:4px 18px;cursor:pointer;transition:color .18s}
+.tab.on{color:var(--pink-600)}
+.tab.on .tab-dot{opacity:1}
+.tab-dot{width:4px;height:4px;border-radius:50%;background:var(--pink-600);opacity:0;transition:opacity .18s}
+/* ============ Upload ============ */
+/* 刘海屏顶部安全区 */
+.topbar{flex:none;display:flex;align-items:center;gap:10px;padding:calc(16px + env(safe-area-inset-top)) 16px 8px}
+.icon-btn{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  background:#fff;border:1px solid var(--line);color:var(--ink);cursor:pointer;box-shadow:var(--sh-sm);
+  transition:transform .12s}
+.icon-btn:active{transform:scale(.92)}
+.topbar-title{font-size:17px;font-weight:800;letter-spacing:-.2px;flex:1;text-align:center;margin-right:36px}
+.pad{padding:0 20px}
+.field-title{font-size:22px;font-weight:800;letter-spacing:-.4px;margin:16px 0 6px;line-height:1.3}
+.field-sub{font-size:12.5px;color:var(--muted);margin:0 0 16px;line-height:1.6}
+.dropzone{position:relative;width:100%;aspect-ratio:3/3.6;border-radius:24px;border:1.5px dashed var(--pink-200);
+  background:linear-gradient(160deg,#FCF8F8,#F9F2F3);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:10px;overflow:hidden;cursor:pointer;transition:border-color .2s,background .2s}
+.dropzone:active{background:#F6E9EC}
+.dropzone .ic{color:var(--pink-500)}
+.dz-title{font-size:14px;font-weight:700}
+.dz-sub{font-size:11.5px;color:var(--muted)}
+.dz-preview{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+.dropzone.has-img{border-style:solid;border-color:transparent}
+.dropzone.has-img .dz-preview{display:block}
+.dropzone.has-img .dz-empty{display:none}
+.dz-retake{position:absolute;right:12px;bottom:12px;display:none;background:rgba(0,0,0,.55);color:#fff;
+  border:0;border-radius:99px;padding:7px 12px;font-size:11.5px;font-weight:600;gap:5px;align-items:center;cursor:pointer}
+.dropzone.has-img .dz-retake{display:flex}
+.upload-btns{display:flex;gap:10px;margin-top:14px}
+.upload-btns .btn{flex:1}
+.tips{display:flex;gap:8px;margin-top:20px}
+.tip{flex:1;background:#fff;border-radius:14px;padding:12px 10px;text-align:center;box-shadow:var(--sh-sm)}
+.tip-emoji{font-size:19px;line-height:1}
+.tip-t{font-size:11px;font-weight:700;margin-top:7px}
+.tip-d{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.35}
+.consent{display:flex;gap:9px;align-items:flex-start;margin-top:20px;padding:13px 14px;background:#fff;
+  border-radius:14px;border:1px solid var(--line)}
+.cbx{width:20px;height:20px;border-radius:6px;border:1.5px solid #DCCFD4;flex:none;display:flex;align-items:center;
+  justify-content:center;color:#fff;background:#fff;transition:all .16s;cursor:pointer;margin-top:1px}
+.cbx.on{background:var(--pink-500);border-color:var(--pink-500)}
+.cbx .ic{opacity:0;transition:opacity .16s}
+.cbx.on .ic{opacity:1}
+.consent-t{font-size:11.5px;line-height:1.6;color:var(--ink-2)}
+.consent-t b{color:var(--pink-700)}
+.bottom-bar{flex:none;padding:12px 20px calc(16px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,#FAF8F7 70%,rgba(250,248,247,0));z-index:5}
+/* ============ Chips / Segmented ============ */
+.seg{display:flex;padding:4px;background:#fff;border-radius:14px;box-shadow:var(--sh-sm);gap:4px}
+.seg-item{flex:1;text-align:center;padding:9px 0;border-radius:11px;font-size:13px;font-weight:700;color:var(--muted);
+  background:none;border:0;cursor:pointer;transition:all .2s}
+.seg-item.on{background:var(--pink-500);color:#fff;box-shadow:0 6px 14px rgba(201,86,118,.28)}
+.chip-row{display:flex;gap:8px;overflow-x:auto;padding:2px 20px 4px;scrollbar-width:none}
+.chip-row::-webkit-scrollbar{display:none}
+/* 所有横向滚动条：约束在手机宽度内 + iOS 滚动惯性，防止内容被裁掉 */
+.chip-row,.color-row,.hot-strip,.result-strip{min-width:0;max-width:100%;-webkit-overflow-scrolling:touch}
+.chip{flex:none;padding:7px 14px;border-radius:99px;font-size:12px;font-weight:600;color:var(--ink-2);
+  background:#fff;border:1px solid var(--line);cursor:pointer;transition:all .18s}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.gender-tabs{display:flex;gap:8px}
+.gender-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border-radius:13px;
+  background:#fff;border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;
+  transition:all .2s}
+.gender-tab.on{background:#fff;color:var(--pink-700);border-color:var(--pink-200);
+  box-shadow:0 6px 16px rgba(201,86,118,.15)}
+.gender-tab.on[data-g="male"]{color:var(--blue-ink);border-color:#C9D4F5;box-shadow:0 6px 16px rgba(91,124,250,.16)}
+/* ============ Style grid ============ */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:2px 20px 8px}
+.style-card{position:relative;border:0;padding:0;background:none;cursor:pointer;text-align:left}
+.style-thumb{position:relative;width:100%;aspect-ratio:3/3.9;border-radius:14px;overflow:hidden;
+  background:linear-gradient(150deg,#F5E7EA,#EEE9F2);border:2px solid transparent;transition:border-color .18s,transform .12s}
+.style-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.style-card:active .style-thumb{transform:scale(.97)}
+.style-card.on .style-thumb{border-color:var(--pink-500);box-shadow:0 8px 20px rgba(201,86,118,.22)}
+.style-badge{position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;background:var(--pink-500);
+  color:#fff;display:flex;align-items:center;justify-content:center;transform:scale(0);transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.style-card.on .style-badge{transform:scale(1)}
+.style-name{font-size:11.5px;font-weight:600;color:var(--ink-2);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.style-tagline{font-size:9.5px;color:var(--muted);margin-top:1px}
+.style-card.on .style-name{color:var(--pink-700)}
+/* AI 脸型识别 + 个性化推荐（参考 YouCam Makeup：先分析脸型，再推荐适合的款） */
+.rec-card{display:flex;align-items:center;gap:10px;margin:12px 0 2px;padding:10px 12px;border-radius:15px;
+  background:linear-gradient(135deg,#FFF7F3,#FCEFF2);border:1px solid #F5DFE4;box-shadow:var(--sh-sm)}
+.rec-ico{width:32px;height:32px;border-radius:10px;background:#fff;color:var(--pink-600);display:flex;align-items:center;
+  justify-content:center;flex:none;box-shadow:0 4px 10px rgba(201,86,118,.16)}
+.rec-main{flex:1;min-width:0}
+.rec-t{font-size:11.5px;font-weight:700;color:var(--ink);line-height:1.35}
+.rec-t b{color:var(--pink-700)}
+.rec-d{font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec-btn{flex:none;border:0;cursor:pointer;font-size:11px;font-weight:800;color:#fff;padding:7px 11px;border-radius:99px;
+  background:linear-gradient(135deg,var(--pink-400),var(--pink-600));box-shadow:0 6px 14px rgba(181,66,99,.26);
+  transition:transform .12s}
+.rec-btn:active{transform:scale(.94)}
+.style-rec{position:absolute;left:5px;top:5px;font-size:8.5px;font-weight:700;padding:1.5px 5px;border-radius:99px;
+  background:rgba(255,255,255,.93);color:var(--pink-700);box-shadow:0 2px 6px rgba(0,0,0,.10);pointer-events:none}
+.color-row{display:flex;gap:9px;overflow-x:auto;padding:4px 20px 6px;scrollbar-width:none}
+.color-row::-webkit-scrollbar{display:none}
+.color-dot{flex:none;width:44px;text-align:center;background:none;border:0;cursor:pointer;padding:0}
+.color-swatch{width:38px;height:38px;border-radius:50%;margin:0 auto;border:2px solid #fff;
+  box-shadow:0 3px 10px rgba(45,52,54,.16);display:flex;align-items:center;justify-content:center;color:#fff}
+.color-dot.on .color-swatch{outline:2px solid var(--pink-500);outline-offset:2px}
+.color-name{font-size:9.5px;color:var(--muted);margin-top:5px;white-space:nowrap}
+/* ============ Generating ============ */
+#page-generating{background:radial-gradient(120% 80% at 50% 10%,#262a4a 0%,#181A2E 55%,#101020 100%);color:#fff}
+.gen-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  padding:14px 30px;overflow-y:auto;scrollbar-width:none}
+.gen-wrap::-webkit-scrollbar{display:none}
+.ring{position:relative;width:150px;height:150px}
+.ring svg{transform:rotate(-90deg)}
+.ring-bg{stroke:rgba(255,255,255,.1)}
+.ring-fg{stroke:url(#ringGrad);stroke-linecap:round;transition:stroke-dashoffset .18s linear}
+.ring-core{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.ring-num{font-size:26px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.ring-unit{font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.2em}
+.gen-title{font-size:16px;font-weight:700;text-align:center;min-height:24px}
+.gen-steps{display:flex;flex-direction:column;gap:12px;width:100%;margin-top:4px}
+.gen-step{display:flex;align-items:center;gap:10px;opacity:.36;transition:opacity .4s}
+.gen-step.on{opacity:1}
+.gen-step.done{opacity:.62}
+.step-ico{width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.24);display:flex;
+  align-items:center;justify-content:center;flex:none;font-size:11px;color:rgba(255,255,255,.7)}
+.gen-step.on .step-ico{background:rgba(201,86,118,.25);border-color:rgba(201,86,118,.75);color:#F0B7C7}
+.gen-step.done .step-ico{background:rgba(255,255,255,.14);color:#fff}
+.step-t{font-size:12.5px;color:rgba(255,255,255,.86)}
+.gen-hint{font-size:10.5px;color:rgba(255,255,255,.36);text-align:center;line-height:1.7}
+/* 生成中：四张效果图逐张"显影"，把等待变成期待（参考 FaceApp / Lensa 的揭晓节奏） */
+.gen-thumbs{display:flex;gap:8px;justify-content:center;width:100%}
+.gen-thumb{position:relative;width:54px;height:68px;border-radius:12px;overflow:hidden;flex:none;
+  background:linear-gradient(145deg,#2E3254,#232640);border:1.5px solid rgba(255,255,255,.10);
+  transition:border-color .4s,box-shadow .4s}
+.gen-thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transform:scale(1.16);
+  filter:blur(10px) saturate(.5);
+  transition:opacity .7s ease,filter .9s ease,transform 1s cubic-bezier(.22,.61,.36,1)}
+.gen-thumb.on{border-color:rgba(232,160,180,.72);box-shadow:0 8px 18px rgba(201,86,118,.26)}
+.gen-thumb.on img{opacity:1;transform:none;filter:none}
+.gen-thumb-n{position:absolute;left:4px;bottom:4px;z-index:2;font-size:8px;font-weight:700;color:#fff;
+  background:rgba(0,0,0,.42);padding:1px 4px;border-radius:4px}
+.gen-thumb::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.18) 50%,transparent 80%);
+  transform:translateX(-120%);animation:shimmer 1.6s infinite}
+.gen-thumb.on::after{display:none}
+@keyframes shimmer{to{transform:translateX(120%)}}
+/* ============ Result ============ */
+.ba-wrap{position:relative;width:100%;aspect-ratio:340/420;border-radius:22px;overflow:hidden;background:#EEE6EA;
+  box-shadow:0 18px 40px rgba(45,52,54,.18);touch-action:pan-y;user-select:none}
+.ba-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+#baBefore{filter:grayscale(1) contrast(.92) brightness(.96)}
+#baAfter{transition:opacity .25s}
+.ba-clip{position:absolute;inset:0;overflow:hidden;clip-path:inset(0 50% 0 0)}
+.ba-handle{position:absolute;top:0;bottom:0;left:50%;width:2px;background:rgba(255,255,255,.95);
+  box-shadow:0 0 12px rgba(0,0,0,.28);transform:translateX(-1px);cursor:ew-resize}
+.knob{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;
+  background:#fff;box-shadow:0 6px 16px rgba(0,0,0,.26);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.write-on{position:absolute;right:10px;bottom:10px;font-size:9px;letter-spacing:.05em;color:rgba(255,255,255,.9);
+  background:rgba(0,0,0,.28);padding:3px 7px;border-radius:6px;backdrop-filter:blur(3px);pointer-events:none}
+.ba-tag{position:absolute;top:10px;font-size:9.5px;padding:3px 8px;border-radius:99px;background:rgba(0,0,0,.34);
+  color:#fff;backdrop-filter:blur(3px);pointer-events:none}
+.ba-tag.l{left:10px}.ba-tag.r{right:10px}
+.result-strip{display:flex;gap:9px;overflow-x:auto;padding:14px 20px 4px;scrollbar-width:none}
+.result-strip::-webkit-scrollbar{display:none}
+.r-thumb{flex:none;width:62px;height:76px;border-radius:12px;overflow:hidden;border:2px solid transparent;
+  padding:0;background:#EEE6EA;cursor:pointer;position:relative;transition:border-color .18s,transform .12s}
+.r-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.r-thumb.on{border-color:var(--pink-500);transform:translateY(-2px)}
+.r-thumb-idx{position:absolute;left:3px;top:3px;font-size:8.5px;background:rgba(0,0,0,.45);color:#fff;
+  padding:1px 4px;border-radius:4px}
+/* 结果页常驻转化栏：保存 / 分享 / 解锁高清 始终可见（不再随内容滚出屏幕） */
+.result-bar{flex:none;display:flex;align-items:stretch;gap:8px;padding:9px 14px calc(10px + env(safe-area-inset-bottom));
+  background:rgba(255,255,255,.95);backdrop-filter:blur(16px);border-top:1px solid var(--line);z-index:6;
+  box-shadow:0 -10px 26px rgba(45,52,54,.06)}
+.rb-act{flex:none;width:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  background:none;border:0;border-radius:14px;color:var(--ink-2);font-size:10px;font-weight:600;cursor:pointer;
+  transition:transform .12s,background .18s}
+.rb-act:active{transform:scale(.94);background:#F7F0F2}
+.rb-primary{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  min-height:48px;padding:7px 12px;border:0;border-radius:15px;color:#fff;cursor:pointer;
+  background:linear-gradient(135deg,#E8AE4C,#C97E12);box-shadow:0 10px 22px rgba(201,126,18,.30);
+  transition:transform .12s,background .24s,box-shadow .24s}
+.rb-primary:active{transform:scale(.98)}
+.rb-primary.done{background:linear-gradient(135deg,var(--pink-400),var(--pink-600));
+  box-shadow:0 10px 22px rgba(181,66,99,.28)}
+.rb-t{font-size:13.5px;font-weight:800;letter-spacing:-.2px;line-height:1.25;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:100%}
+.rb-s{font-size:9.5px;font-weight:600;opacity:.92;line-height:1.2;white-space:nowrap}
+.result-meta{display:flex;align-items:center;justify-content:space-between;padding:4px 20px 0}
+.meta-name{font-size:15px;font-weight:800;letter-spacing:-.2px}
+.meta-desc{font-size:10.5px;color:var(--muted);margin-top:2px}
+.res-view-seg{margin-bottom:12px}
+.res-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.res-grid.single{grid-template-columns:1fr}
+.res-cell{position:relative;border:0;padding:0;border-radius:16px;overflow:hidden;aspect-ratio:3/3.9;
+  background:#EEE6EA;box-shadow:var(--sh-sm);cursor:pointer;transition:transform .12s,box-shadow .18s}
+.res-cell:active{transform:scale(.98)}
+.res-cell img{width:100%;height:100%;object-fit:cover;display:block}
+.res-cell.on{box-shadow:0 0 0 2px var(--pink-500),0 10px 24px rgba(201,86,118,.22)}
+.res-cell-name{position:absolute;left:0;right:0;bottom:0;padding:26px 10px 9px;color:#fff;font-size:12px;
+  font-weight:700;text-align:left;background:linear-gradient(to top,rgba(0,0,0,.66),transparent)}
+.res-cell-idx{position:absolute;top:8px;left:8px;font-size:9px;padding:2px 6px;border-radius:99px;
+  background:rgba(0,0,0,.42);color:#fff;backdrop-filter:blur(3px)}
+.res-grid-tip{text-align:center;font-size:10px;color:var(--muted);padding:10px 0 2px}
+/* 脸型适配度（结果页信任背书，参考 YouCam 的 AI 脸型分析） */
+.fit-card{display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px 14px;border-radius:16px;
+  background:linear-gradient(135deg,#FFF9F4,#FDF1F3);border:1px solid #F6E3E7;box-shadow:var(--sh-sm)}
+.fit-score{position:relative;width:54px;height:54px;flex:none;display:flex;align-items:center;justify-content:center}
+.fit-score svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.fit-score-bg{stroke:#F1DDE2}
+.fit-score-fg{stroke:url(#fitGrad);stroke-linecap:round;transition:stroke-dashoffset .9s cubic-bezier(.22,.61,.36,1)}
+.fit-score-num{font-size:16px;font-weight:800;color:var(--pink-700);letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.fit-score-num small{font-size:9px;font-weight:700}
+.fit-main{flex:1;min-width:0}
+.fit-t{font-size:12.5px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:6px}
+.fit-lv{font-size:9.5px;padding:2px 6px;border-radius:99px;background:var(--pink-500);color:#fff;font-weight:700}
+.fit-d{font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.fit-tags{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.fit-tag{font-size:9.5px;padding:2px 7px;border-radius:99px;background:#fff;border:1px solid #F2E2E7;color:var(--pink-700);font-weight:600}
+/* 对比重播提示 */
+.ba-replay{display:flex;align-items:center;justify-content:center;gap:4px;width:100%;margin-top:9px;padding:3px 0;
+  background:none;border:0;font-family:inherit;font-size:10.5px;color:var(--muted);cursor:pointer}
+.ba-replay:active{color:var(--pink-600)}
+/* 隐私与数据 */
+.priv-row{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid #F6EDF0}
+.priv-row:last-of-type{border-bottom:0}
+.priv-ico{width:28px;height:28px;border-radius:9px;background:var(--pink-50);color:var(--pink-600);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.priv-t{font-size:12px;font-weight:700}
+.priv-d{font-size:10.5px;color:var(--muted);line-height:1.55;margin-top:2px}
+.btn-danger{background:#fff;border:1px solid #F0CBD4;color:#C23B5C;box-shadow:none}
+.btn-danger:active{background:#FDF2F4}
+/* 免费额度用完弹层 */
+.quota-ico{width:54px;height:54px;border-radius:50%;background:#FFF3E4;color:#C68A25;
+  display:flex;align-items:center;justify-content:center;margin:4px auto 12px}
+.quota-title{font-size:18px;font-weight:800;text-align:center;margin:0 0 6px;letter-spacing:-.2px}
+.quota-sub{font-size:12px;color:var(--muted);text-align:center;line-height:1.65;margin:0 auto 18px;max-width:290px}
+/* ============ Profile ============ */
+.profile-hero{padding:26px 20px 18px;display:flex;align-items:center;gap:14px}
+.avatar{width:58px;height:58px;border-radius:20px;background:linear-gradient(140deg,#F2D9DE,#ECE4F0);
+  display:flex;align-items:center;justify-content:center;color:var(--pink-600);box-shadow:var(--sh-sm)}
+.menu{background:#fff;border-radius:var(--r-lg);margin:0 20px;overflow:hidden;box-shadow:var(--sh-sm)}
+.menu-item{display:flex;align-items:center;gap:12px;padding:15px 16px;width:100%;background:none;border:0;
+  border-bottom:1px solid #F8F0F3;font-size:13.5px;color:var(--ink);cursor:pointer;text-align:left}
+.menu-item:last-child{border-bottom:0}
+.menu-ico{width:32px;height:32px;border-radius:10px;background:var(--pink-50);color:var(--pink-600);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.menu-item .chev{margin-left:auto;color:#C9BFC3}
+.hist-item{display:flex;gap:12px;padding:12px;background:#fff;border-radius:16px;box-shadow:var(--sh-sm);margin-bottom:10px}
+.hist-img{width:52px;height:64px;border-radius:10px;overflow:hidden;background:#EEE6EA;flex:none}
+.hist-img img{width:100%;height:100%;object-fit:cover}
+.empty{text-align:center;padding:34px 20px;color:var(--muted);font-size:12px}
+/* ============ Toast / Sheet ============ */
+#toast{position:absolute;left:50%;top:calc(22px + env(safe-area-inset-top));transform:translate(-50%,-16px);z-index:80;opacity:0;pointer-events:none;
+  background:rgba(30,32,36,.9);color:#fff;font-size:12.5px;padding:10px 16px;border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.24);transition:all .26s;max-width:86%;text-align:center;backdrop-filter:blur(8px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.mask{position:absolute;inset:0;background:rgba(20,20,26,.5);backdrop-filter:blur(2px);z-index:70;display:none;
+  opacity:0;transition:opacity .24s}
+.mask.show{display:block;opacity:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:26px 26px 0 0;z-index:71;
+  transform:translateY(102%);transition:transform .3s cubic-bezier(.22,.61,.36,1);
+  padding:10px 20px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(0,0,0,.16);max-height:88%;overflow-y:auto}
+.sheet.show{transform:translateY(0)}
+.sheet-grip{width:38px;height:4px;border-radius:4px;background:#EADFE3;margin:2px auto 14px}
+.sheet-close{position:absolute;top:12px;right:14px;width:30px;height:30px;border-radius:50%;background:#F4EFEF;
+  border:0;display:flex;align-items:center;justify-content:center;color:#8B9295;cursor:pointer;transition:transform .12s}
+.sheet-close:active{transform:scale(.9)}
+
+.sheet-title{font-size:17px;font-weight:800;margin:0 0 4px;letter-spacing:-.2px}
+.sheet-sub{font-size:11.5px;color:var(--muted);margin:0 0 16px;line-height:1.6}
+.plan{display:flex;align-items:center;gap:12px;padding:14px;border-radius:16px;border:1.5px solid var(--line);
+  margin-bottom:10px;cursor:pointer;transition:all .18s;background:#fff}
+.plan.on{border-color:var(--pink-500);background:#FBF4F5;box-shadow:0 8px 20px rgba(201,86,118,.13)}
+.plan-radio{width:18px;height:18px;border-radius:50%;border:1.5px solid #DCCFD4;display:flex;align-items:center;
+  justify-content:center;flex:none}
+.plan.on .plan-radio{border-color:var(--pink-500)}
+.plan.on .plan-radio::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--pink-500)}
+.plan-t{font-size:13.5px;font-weight:700}
+.plan-d{font-size:10.5px;color:var(--muted);margin-top:2px}
+.plan-price{margin-left:auto;font-size:17px;font-weight:800;color:var(--pink-700);letter-spacing:-.5px}
+.plan-price small{font-size:10px;font-weight:600;color:var(--muted)}
+/* 付费墙限时优惠倒计时（参考 FaceApp / Lensa 的紧迫感转化） */
+.pay-sale{display:flex;align-items:center;justify-content:center;gap:4px;margin:0 0 12px;padding:7px 10px;border-radius:10px;
+  background:#FFF4E5;color:#A0601A;font-size:10.5px;font-weight:600}
+.pay-sale b{font-size:11.5px;color:#C97E12;font-variant-numeric:tabular-nums}
+.pay-sale.over{background:#F4EFEF;color:var(--muted)}
+.pay-sale.over b{color:var(--muted)}
+/* 分享免费解锁：每批 1 次，给不想付费的人一条出口，同时把锁款变成传播理由 */
+.pay-share{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:9px;padding:11px;
+  border:1px dashed var(--pink-200);border-radius:14px;background:#FFFBFB;color:var(--pink-700);
+  font-size:12.5px;font-weight:700;cursor:pointer;transition:transform .12s,background .18s}
+.pay-share:active{transform:scale(.98);background:#FDF4F6}
+.pay-share-note{font-size:9.5px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.5}
+
+.tiny{font-size:10px;color:var(--muted);line-height:1.6}
+.divider{height:1px;background:#F6EDF0;margin:14px 0}
+
+/* ============ Share sheet ============ */
+/* 分享卡：左右双拼「原图 / AI 后」，比单张效果图更有传播力（参考 FaceApp / Lensa 的前后对比分享） */
+.share-card{position:relative;display:flex;border-radius:18px;overflow:hidden;background:#EEE6EA;aspect-ratio:4/3.3;box-shadow:var(--sh-md)}
+.share-card .sc-half{position:relative;flex:1;min-width:0;overflow:hidden}
+.share-card .sc-half img{width:100%;height:100%;object-fit:cover;display:block}
+.share-card .sc-half.before img{filter:grayscale(.2) brightness(.96)}
+.share-card.single .sc-half.before{display:none}
+.sc-divider{position:absolute;top:0;bottom:0;left:50%;width:2px;background:rgba(255,255,255,.92);transform:translateX(-1px);
+  z-index:2;box-shadow:0 0 10px rgba(0,0,0,.2);pointer-events:none}
+.share-card.single .sc-divider{display:none}
+.sc-tag{position:absolute;top:8px;left:8px;z-index:3;font-size:9px;padding:2px 6px;border-radius:99px;
+  background:rgba(0,0,0,.42);color:#fff;backdrop-filter:blur(3px)}
+.sc-tag.r{left:auto;right:8px;background:rgba(201,86,118,.92)}
+.share-card-mask{position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(22,16,19,.82) 0%,rgba(22,16,19,.16) 42%,transparent 62%)}
+.share-card-text{position:absolute;left:14px;right:14px;bottom:12px;z-index:4;color:#fff}
+.share-brand{display:flex;align-items:center;gap:5px;font-size:10.5px;opacity:.82;letter-spacing:.02em}
+.share-title{font-size:16px;font-weight:800;margin-top:4px;letter-spacing:-.2px}
+.copy-box{display:flex;gap:10px;align-items:flex-start;background:#FAF6F7;border:1px dashed var(--pink-200);border-radius:14px;padding:12px;margin-top:14px}
+.copy-text{flex:1;font-size:11.5px;color:var(--ink-2);line-height:1.65}
+.copy-btn{flex:none;display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--line);border-radius:10px;
+  padding:7px 10px;font-size:11px;font-weight:700;color:var(--pink-700);cursor:pointer;transition:transform .12s}
+.copy-btn:active{transform:scale(.94)}
+.share-channels{display:flex;gap:8px;margin-top:16px}
+.channel{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;cursor:pointer;
+  font-size:10.5px;font-weight:600;color:var(--ink-2);padding:0;transition:transform .12s}
+.channel:active{transform:scale(.94)}
+.channel-ico{width:44px;height:44px;border-radius:15px;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:15px;font-weight:700;box-shadow:0 6px 14px rgba(45,52,54,.16)}
+.share-bonus{display:flex;align-items:center;gap:7px;justify-content:center;margin-top:14px;padding:9px 12px;
+  border-radius:12px;background:#FFF7EC;color:#9A6A18;font-size:11px;font-weight:600}
+
+/* ============ Barber card ============ */
+.barber-entry{display:flex;align-items:center;gap:10px;width:100%;margin-top:14px;padding:12px;border-radius:16px;
+  background:linear-gradient(135deg,#2D3436,#414B4E);border:0;color:#fff;cursor:pointer;text-align:left;
+  box-shadow:0 12px 26px rgba(45,52,54,.20);transition:transform .12s}
+.barber-entry:active{transform:scale(.98)}
+.be-ico{width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.12);display:flex;align-items:center;
+  justify-content:center;color:#F0B7C7;flex:none}
+.be-t{font-size:12.5px;font-weight:700}
+.be-d{font-size:10px;color:rgba(255,255,255,.6);margin-top:2px}
+.barber-wrap{padding:6px 20px 4px}
+.barber-card{background:#fff;border-radius:20px;overflow:hidden;border:1px solid #F1E7EA;box-shadow:0 14px 34px rgba(45,52,54,.13)}
+.bc-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+  background:linear-gradient(135deg,#2D3436,#414B4E);color:#fff}
+.bc-brand{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;letter-spacing:.02em}
+.bc-tag{font-size:9.5px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22)}
+.bc-photo{position:relative;background:#EEE6EA;aspect-ratio:4/3.2}
+.bc-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.bc-photo::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.4),transparent 46%);pointer-events:none}
+.bc-badge{position:absolute;left:12px;bottom:10px;z-index:2;color:#fff;font-size:10px;padding:3px 8px;border-radius:99px;
+  background:rgba(0,0,0,.42);backdrop-filter:blur(3px)}
+.bc-body{padding:14px 14px 4px}
+.bc-name{font-size:17px;font-weight:800;letter-spacing:-.2px}
+.bc-note{font-size:10.5px;color:var(--muted);margin-top:3px}
+.bc-specs{margin-top:12px;border-radius:12px;overflow:hidden;background:#FBF7F8;border:1px solid #F2E8EB}
+.bc-row{display:flex;gap:10px;padding:9px 11px;border-bottom:1px solid #F2E8EB;font-size:11px}
+.bc-row:last-child{border-bottom:0}
+.bc-k{width:40px;flex:none;color:var(--muted);font-weight:600}
+.bc-v{flex:1;color:var(--ink);font-weight:600;line-height:1.5}
+.bc-tip{margin-top:10px;font-size:10.5px;color:var(--ink-2);background:#FFF7EC;border-radius:10px;padding:9px 11px;line-height:1.6}
+.bc-foot{display:flex;align-items:center;justify-content:space-between;padding:11px 14px 13px;font-size:9.5px;color:var(--muted)}
+.bc-qr{font-weight:700;color:var(--pink-600)}
+/* ============ 结果解锁（免费第 1 款 · 其余付费解锁） ============ */
+.r-thumb.locked img{filter:blur(6px) saturate(.9);transform:scale(1.12)}
+.r-thumb.locked::after{content:"";position:absolute;inset:0;background:rgba(26,20,24,.26);pointer-events:none}
+.r-thumb-lock{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;color:#fff;pointer-events:none}
+.r-thumb-lock .ic{width:15px;height:15px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4))}
+.r-thumb-free{position:absolute;left:3px;bottom:3px;z-index:3;font-size:8px;font-weight:700;padding:1px 4px;border-radius:4px;
+  background:rgba(201,86,118,.94);color:#fff}
+.res-cell.locked img{filter:blur(11px) saturate(.9);transform:scale(1.06)}
+.res-cell-lock{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  background:rgba(22,18,24,.22);color:#fff;text-align:center}
+.res-cell-lock .lk{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.94);color:var(--pink-600);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.22)}
+.res-cell-lock b{font-size:10.5px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.45)}
+.res-cell.locked .res-cell-name{z-index:3}
+.ba-wrap.locked #baAfter{filter:blur(15px) saturate(1.05);transform:scale(1.04)}
+.ba-wrap.locked .ba-clip,.ba-wrap.locked .ba-handle{display:none}
+.ba-wrap.locked .ba-tag.l{display:none}
+.ba-wrap.locked .ba-tag.r{right:auto;left:10px}
+.ba-wrap.no-before .ba-clip,.ba-wrap.no-before .ba-handle{display:none}
+.ba-wrap.no-before .ba-tag.l{display:none}
+.ba-wrap.no-before .ba-tag.r{right:auto;left:10px}
+.ba-lock{position:absolute;inset:0;z-index:4;display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:9px;padding:0 28px;text-align:center;background:linear-gradient(to top,rgba(14,12,16,.36),rgba(14,12,16,.10))}
+.ba-wrap.locked .ba-lock{display:flex}
+.ba-lock .lk{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.95);color:var(--pink-600);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 12px 26px rgba(0,0,0,.24)}
+.ba-lock-t{font-size:14.5px;font-weight:800;color:#fff;letter-spacing:-.2px;text-shadow:0 2px 8px rgba(0,0,0,.45)}
+.ba-lock-d{font-size:10.5px;color:rgba(255,255,255,.8);line-height:1.55;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.ba-lock .btn{padding:9px 20px;font-size:13px;margin-top:2px}
+/* 结果揭晓动效 */
+@keyframes revealIn{from{opacity:0;transform:scale(1.035);filter:blur(7px)}to{opacity:1;transform:none;filter:none}}
+.ba-wrap.reveal{animation:revealIn .5s cubic-bezier(.22,.61,.36,1)}
+/* 解锁横幅 */
+.unlock-bar{display:flex;align-items:center;gap:10px;width:100%;margin-top:12px;padding:11px 12px;border-radius:16px;
+  background:linear-gradient(135deg,#FFF7EE,#FDECEF);border:1px solid #F5DFC9;box-shadow:0 8px 20px rgba(227,163,60,.12);
+  cursor:pointer;text-align:left;transition:transform .12s}
+.unlock-bar:active{transform:scale(.985)}
+.ub-thumbs{display:flex;flex:none}
+.ub-thumb{width:30px;height:38px;border-radius:8px;overflow:hidden;border:1.5px solid #fff;background:#EEE6EA;margin-left:-8px}
+.ub-thumb:first-child{margin-left:0}
+.ub-thumb img{width:100%;height:100%;object-fit:cover;filter:blur(3px) saturate(.9);transform:scale(1.18)}
+.ub-main{flex:1;min-width:0}
+.ub-t{font-size:11.5px;font-weight:800;color:#7A4A16;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ub-d{font-size:9.5px;color:#A5763A;margin-top:2px}
+.ub-btn{flex:none;font-size:11px;font-weight:800;color:#fff;padding:7px 11px;border-radius:99px;
+  background:linear-gradient(135deg,#E3A33C,#D08A22);box-shadow:0 6px 14px rgba(208,138,34,.30)}
+/* 付费成功 */
+.paid-ico{width:58px;height:58px;border-radius:50%;background:#FFF6E8;color:#C68A25;display:flex;align-items:center;justify-content:center;margin:2px auto 12px}
+.paid-thumbs{display:flex;gap:7px;justify-content:center;margin:0 0 16px;flex-wrap:wrap}
+.paid-thumb{width:58px;height:72px;border-radius:10px;overflow:hidden;background:#EEE6EA;box-shadow:var(--sh-sm);position:relative}
+.paid-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.paid-thumb span{position:absolute;right:3px;top:3px;width:15px;height:15px;border-radius:50%;background:var(--pink-500);color:#fff;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+/* 生成进度计数 */
+.gen-count{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:99px;background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.12);font-size:10.5px;color:rgba(255,255,255,.82);font-variant-numeric:tabular-nums}
+.plan-tag{display:inline-block;font-size:9px;line-height:1.4;padding:1px 6px;border-radius:99px;background:var(--pink-500);
+  color:#fff;font-weight:700;margin-left:6px;vertical-align:1px}
+.plan-old{font-size:10.5px;color:var(--muted);text-decoration:line-through;margin-right:4px;font-weight:600}
+/* ============ 讨论区（AI 预览 vs 剪后实拍） ============ */
+.comm-head{display:flex;align-items:center;gap:10px;padding:calc(18px + env(safe-area-inset-top)) 16px 8px}
+.comm-head-t{flex:1;min-width:0}
+.comm-title{font-size:20px;font-weight:800;letter-spacing:-.4px;margin:0;display:flex;align-items:center;gap:6px}
+.comm-sub{font-size:10.5px;color:var(--muted);margin-top:3px}
+.comm-post-btn{flex:none;display:inline-flex;align-items:center;gap:4px;padding:8px 12px;border-radius:999px;border:0;color:#fff;
+  font-size:11.5px;font-weight:700;background:linear-gradient(135deg,var(--pink-400),var(--pink-600));
+  box-shadow:0 8px 18px rgba(181,66,99,.28);cursor:pointer;transition:transform .12s}
+.comm-post-btn:active{transform:scale(.95)}
+.comm-hero{position:relative;margin:4px 16px 12px;padding:16px;border-radius:20px;overflow:hidden;color:#fff;
+  background:linear-gradient(135deg,#3A3033,#5A3B46 58%,#8E4359);box-shadow:0 14px 30px rgba(90,59,70,.22)}
+.comm-hero::after{content:"";position:absolute;width:170px;height:170px;border-radius:50%;right:-54px;top:-64px;background:rgba(255,255,255,.10)}
+.ch-eyebrow{font-size:9.5px;letter-spacing:.24em;color:rgba(255,255,255,.62);font-weight:700}
+.ch-num{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1.1;margin-top:5px}
+.ch-num span{font-size:11.5px;font-weight:600;letter-spacing:0;margin-left:4px;opacity:.75}
+.ch-sub{font-size:10.5px;color:rgba(255,255,255,.7);margin-top:5px}
+.ch-foot{display:flex;align-items:center;gap:8px;margin-top:13px;position:relative;z-index:2}
+.ch-avs{display:flex;flex:none}
+.ch-av{width:24px;height:24px;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);margin-left:-7px;
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff}
+.ch-av:first-child{margin-left:0}
+.ch-note{font-size:9.5px;color:rgba(255,255,255,.66);flex:1;min-width:0;line-height:1.4}
+.ch-cta{flex:none;border:0;background:rgba(255,255,255,.94);color:#8E4359;font-size:10.5px;font-weight:800;
+  padding:7px 11px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.ch-cta.ghost{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.42) inset}
+.ch-cta:active{transform:scale(.95)}
+.comm-filters{display:flex;gap:8px;padding:0 16px 10px;overflow-x:auto;scrollbar-width:none}
+.comm-filters::-webkit-scrollbar{display:none}
+.cf{flex:none;padding:7px 13px;border-radius:999px;background:#fff;border:1px solid var(--line);
+  font-size:11.5px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:all .15s}
+.cf.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+.cf-n{opacity:.55;font-size:10px;margin-left:3px}
+.comm-topics{display:flex;align-items:center;gap:6px;padding:0 16px 10px;overflow-x:auto;scrollbar-width:none}
+.comm-topics::-webkit-scrollbar{display:none}
+.ct-label{flex:none;font-size:9.5px;color:var(--muted);font-weight:700;letter-spacing:.08em;margin-right:1px}
+.ct{flex:none;font-size:10.5px;padding:5px 10px;border-radius:999px;background:#F6F1F2;color:var(--ink-2);
+  border:1px solid transparent;font-weight:600;cursor:pointer;transition:all .15s}
+.ct.on{background:var(--pink-50);color:var(--pink-700);border-color:var(--pink-200);font-weight:700}
+.ct-n{opacity:.5;font-size:9px;margin-left:3px}
+.empty-link{margin-top:8px;background:none;border:0;color:var(--pink-600);font-size:12px;font-weight:700;cursor:pointer}
+.post{background:#fff;border-radius:18px;margin:0 16px 12px;border:1px solid #F4ECEE;box-shadow:var(--sh-sm);overflow:hidden}
+.post-head{display:flex;align-items:center;gap:9px;padding:13px 14px 0}
+.post-ava{width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:12px;font-weight:800;letter-spacing:-.5px}
+.post-wh{flex:1;min-width:0}
+.post-name{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:5px}
+.post-meta{font-size:9.5px;color:var(--muted);margin-top:2px}
+.post-badge{font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--pink-50);color:var(--pink-700);flex:none}
+.post-badge.ask{background:#F2F4F7;color:#66707A}
+.post-body{padding:8px 14px 0;font-size:12px;line-height:1.7;color:var(--ink-2)}
+.post-pair{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 14px 0;position:relative}
+.post-pair.single{grid-template-columns:1fr}
+.pair-cell{position:relative;aspect-ratio:3/3.8;border-radius:12px;overflow:hidden;background:linear-gradient(145deg,#F2E7EA,#EEEAF2)}
+.pair-cell img{width:100%;height:100%;object-fit:cover;display:block}
+.pair-cell.before img{filter:grayscale(.12) brightness(.98)}
+.pair-tag{position:absolute;left:6px;top:6px;z-index:2;font-size:8.5px;font-weight:700;padding:2px 6px;border-radius:99px;
+  background:rgba(0,0,0,.42);color:#fff;backdrop-filter:blur(3px)}
+.pair-tag.after{background:rgba(201,86,118,.92)}
+.pair-arrow{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;width:24px;height:24px;border-radius:50%;
+  background:rgba(255,255,255,.94);color:var(--pink-600);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.pair-score{position:absolute;right:6px;bottom:6px;z-index:3;font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:99px;
+  background:rgba(255,255,255,.92);color:#2F8A5B}
+.pair-score.warn{color:#B5731B}
+.post-tags{display:flex;flex-wrap:wrap;gap:6px;padding:9px 14px 0}
+.post-tag{font-size:9.5px;color:var(--pink-700);background:var(--pink-50);padding:3px 8px;border-radius:99px;font-weight:600}
+.post-actions{display:flex;align-items:center;border-top:1px solid #F7F0F2;margin-top:11px}
+.post-act{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:11px 0;background:none;border:0;
+  font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;transition:color .15s}
+.post-act:active{background:#FCF8F9}
+.post-act.liked{color:var(--pink-600)}
+.post-act.liked .ic{fill:var(--pink-500);stroke:var(--pink-500)}
+.post-act.try{color:var(--pink-700);font-weight:700}
+.comm-empty{text-align:center;padding:38px 20px;color:var(--muted);font-size:12px;line-height:1.8}
+/* 发布作业 */
+.compose-slots{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:4px}
+.cslot{position:relative;aspect-ratio:3/3.8;border-radius:14px;border:1.5px dashed var(--pink-200);background:#FCF7F8;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--pink-600);
+  font-size:10.5px;font-weight:600;cursor:pointer;overflow:hidden;padding:0;transition:border-color .15s,background .15s}
+.cslot:active{background:#FBF2F4}
+.cslot.done{border-style:solid;border-color:var(--pink-200);background:#EEE6EA}
+.cslot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.cslot-hint{font-size:8.5px;font-weight:500;color:var(--muted)}
+.cslot-tag{position:absolute;left:6px;top:6px;z-index:2;font-size:8.5px;font-weight:700;padding:2px 6px;border-radius:99px;
+  background:rgba(0,0,0,.46);color:#fff;backdrop-filter:blur(3px)}
+.cslot-x{position:absolute;right:5px;top:5px;z-index:3;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.5);
+  color:#fff;display:flex;align-items:center;justify-content:center}
+.compose-input{width:100%;border:1px solid var(--line);border-radius:14px;padding:11px 12px;font-size:12.5px;
+  font-family:inherit;outline:none;margin-top:11px;background:#FCFAFB;color:var(--ink)}
+.compose-input:focus{border-color:var(--pink-200);background:#fff}
+textarea.compose-input{resize:none;line-height:1.6}
+.compose-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.compose-row label{font-size:10.5px;color:var(--muted);flex:none}
+#composeScore{flex:1;accent-color:var(--pink-500);min-width:0}
+.compose-score-v{font-size:11px;font-weight:800;color:var(--pink-600);width:36px;text-align:right;flex:none}
+/* AI 效果图：从本机试过的结果里选 */
+.ai-pick{display:none;margin-top:10px}
+.ai-pick.show{display:block}
+.ai-pick-head{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--muted);
+  font-weight:600;margin-bottom:7px}
+.ai-pick-up{border:0;background:var(--pink-50);color:var(--pink-700);font-size:10px;font-weight:700;
+  padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit}
+.ai-pick-list{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ai-pick-list::-webkit-scrollbar{display:none}
+.ai-pick-item{position:relative;flex:none;width:56px;height:72px;border-radius:10px;overflow:hidden;
+  border:1.5px solid var(--line);background:#EEE6EA;padding:0;cursor:pointer}
+.ai-pick-item.on{border-color:var(--pink-500);box-shadow:0 0 0 2px rgba(201,86,118,.16)}
+.ai-pick-item img{width:100%;height:100%;object-fit:cover;display:block}
+/* 作业标签 */
+.ctag-label{font-size:10.5px;color:var(--muted);font-weight:700;margin:14px 0 7px;display:flex;align-items:center;gap:6px}
+.ctag-label span{font-weight:500;font-size:9.5px;opacity:.8}
+.ctag-list{display:flex;flex-wrap:wrap;gap:6px}
+.ctag{font-size:10.5px;padding:6px 11px;border-radius:99px;background:#F6F1F2;color:var(--ink-2);
+  border:1px solid transparent;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.ctag.on{background:var(--pink-50);color:var(--pink-700);border-color:var(--pink-200);font-weight:700}
+.ctag-add{display:flex;gap:7px;margin-top:8px}
+.ctag-add input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 11px;
+  font-size:11.5px;font-family:inherit;outline:none;background:#FCFAFB}
+.ctag-add input:focus{border-color:var(--pink-200);background:#fff}
+.ctag-add button{flex:none;border:1px solid var(--pink-200);background:#fff;color:var(--pink-700);
+  font-size:11px;font-weight:700;padding:0 14px;border-radius:10px;cursor:pointer;font-family:inherit}
+/* 评论 */
+.cm-list{max-height:38vh;overflow-y:auto;margin-top:4px;scrollbar-width:none}
+.cm-list::-webkit-scrollbar{display:none}
+.cm-item{display:flex;gap:9px;padding:10px 0;border-bottom:1px solid #F8F2F4}
+.cm-item:last-child{border-bottom:0}
+.cm-ava{width:27px;height:27px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:10px;font-weight:800}
+.cm-main{flex:1;min-width:0}
+.cm-name{font-size:10.5px;font-weight:700;color:var(--ink)}
+.cm-name span{font-size:9px;color:var(--muted);font-weight:500;margin-left:5px}
+.cm-text{font-size:11.5px;line-height:1.6;color:var(--ink-2);margin-top:3px;word-break:break-word}
+.cm-input{display:flex;gap:8px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid #F8F2F4}
+.cm-input input{flex:1;min-width:0;border:1px solid var(--line);border-radius:999px;padding:10px 14px;font-size:12px;
+  outline:none;font-family:inherit;background:#FCFAFB}
+.cm-input input:focus{border-color:var(--pink-200);background:#fff}
+.cm-send{flex:none;width:38px;height:38px;border-radius:50%;border:0;background:var(--pink-500);color:#fff;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(201,86,118,.28);cursor:pointer;transition:transform .12s}
+.cm-send:active{transform:scale(.92)}
+/* ============ 桌面展示装饰（只在宽屏出现，手机端完全隐藏） ============ */
+.stage{display:none}
+@media(min-width:1000px){
+  body{overflow:hidden}
+  #app{z-index:2}
+  .stage{display:block;position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .stage-orb{position:absolute;border-radius:50%}
+  .stage-orb.o1{width:min(620px,46vw);aspect-ratio:1;left:-13vw;top:-18vh;
+    background:radial-gradient(circle at 40% 40%,rgba(201,86,118,.15),rgba(201,86,118,0) 70%)}
+  .stage-orb.o2{width:min(720px,50vw);aspect-ratio:1;right:-15vw;bottom:-22vh;
+    background:radial-gradient(circle at 55% 45%,rgba(110,105,160,.13),rgba(110,105,160,0) 68%)}
+  .stage-ring{position:absolute;border-radius:50%;border:1px solid rgba(201,86,118,.16)}
+  .stage-ring.r1{width:min(360px,28vw);aspect-ratio:1;left:4vw;bottom:7vh}
+  .stage-ring.r2{width:min(180px,14vw);aspect-ratio:1;right:5vw;top:9vh;border-color:rgba(45,52,54,.1)}
+  .stage-side{position:absolute;top:50%;transform:translateY(-50%)}
+  .stage-side.left{right:calc(50% + 248px);width:clamp(190px,calc(50vw - 300px),330px);text-align:right}
+  .stage-side.right{left:calc(50% + 248px);width:clamp(150px,calc(50vw - 320px),240px)}
+  .st-eyebrow{font-size:10px;letter-spacing:.32em;color:#B08A96;font-weight:700}
+  .st-title{font-size:clamp(26px,2.6vw,42px);line-height:1.18;letter-spacing:-.02em;color:#2D3436;
+    margin:14px 0 0;font-weight:800}
+  .st-desc{font-size:12.5px;line-height:1.9;color:#8B8487;margin:16px 0 0;font-weight:500}
+  .st-stats{display:flex;justify-content:flex-end;gap:22px;margin-top:26px}
+  .st-stats>div{text-align:right}
+  .st-stats b{display:block;font-size:19px;color:#C95676;font-weight:800;letter-spacing:-.02em}
+  .st-stats span{font-size:10px;color:#A79B9F;letter-spacing:.04em}
+  .st-note{margin-top:34px;font-size:9.5px;letter-spacing:.18em;color:#B7ADAF;font-weight:600}
+  .st-label{font-size:9.5px;letter-spacing:.3em;color:#B7ADAF;font-weight:700;margin-bottom:14px}
+  .st-steps{list-style:none;margin:0;padding:0 0 0 34px;position:relative}
+  .st-steps::before{content:"";position:absolute;left:6px;top:10px;bottom:10px;width:1px;
+    background:linear-gradient(180deg,rgba(201,86,118,.38),rgba(201,86,118,.04))}
+  .st-steps li{display:flex;align-items:baseline;gap:10px;padding:11px 0;position:relative}
+  .st-steps li::before{content:"";position:absolute;left:-31px;top:15px;width:7px;height:7px;border-radius:50%;
+    background:#fff;border:1.5px solid #D9A7B4}
+  .st-steps i{font-style:normal;font-size:10px;color:#C95676;font-weight:800;letter-spacing:.06em}
+  .st-steps span{font-size:12px;color:#6E6A6C;font-weight:600}
+}
+/* 小屏手机（≤359px）整体收紧，避免内容溢出 */
+@media(max-width:359px){
+  .hero-title{font-size:32px}
+  .cta{width:168px;height:168px}
+  .grid3{gap:8px;padding:2px 16px 8px}
+  .pad{padding:0 16px}
+  .chip-row,.color-row,.hot-strip,.result-strip{padding-left:16px;padding-right:16px}
+  .home-head,.hero,.sec-head,.result-hint,.result-strip{padding-left:16px;padding-right:16px}
+  .dropzone{margin:14px 16px 0}
+}
+</style>
+</head>
+<body>
+<!-- Lucide 图标精灵（内联 SVG，离线可用） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.287 1.288L3 12l5.8 1.9a2 2 0 0 1 1.288 1.287L12 21l1.9-5.8a2 2 0 0 1 1.287-1.288L21 12l-5.8-1.9a2 2 0 0 1-1.288-1.287Z"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.735H5.81a1 1 0 0 1-.957-.735L2.02 6.02a.5.5 0 0 1 .798-.52l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+</svg>
+
+<!-- 桌面端展示装饰（<1000px 不显示，手机端只有功能界面） -->
+<aside class="stage" aria-hidden="true">
+  <div class="stage-orb o1"></div>
+  <div class="stage-orb o2"></div>
+  <div class="stage-ring r1"></div>
+  <div class="stage-ring r2"></div>
+  <div class="stage-side left">
+    <div class="st-eyebrow">AI HAIR TRY-ON</div>
+    <h1 class="st-title">剪之前<br>先看见</h1>
+    <p class="st-desc">上传一张正脸照，8 秒生成多款发型试镜。<br>拖一拖看前后对比，带着图去找托尼。</p>
+    <div class="st-stats">
+      <div><b>8s</b><span>单张出图</span></div>
+      <div><b>4 款</b><span>一次生成</span></div>
+      <div><b>24h</b><span>照片自动删</span></div>
+    </div>
+    <div class="st-note">H5 产品原型 · 交互演示 v0.1</div>
+  </div>
+  <div class="stage-side right">
+    <div class="st-label">HOW IT WORKS</div>
+    <ol class="st-steps">
+      <li><i>01</i><span>上传正脸照</span></li>
+      <li><i>02</i><span>挑发型与发色</span></li>
+      <li><i>03</i><span>拖动看前后对比</span></li>
+      <li><i>04</i><span>晒作业 / 问建议</span></li>
+    </ol>
+  </div>
+</aside>
+
+<div id="app">
+
+  <!-- ================= 1. 启动页 ================= -->
+  <section class="page active" id="page-splash">
+    <div class="splash-blob" style="width:280px;height:280px;background:rgba(255,255,255,.16);left:-100px;top:-80px"></div>
+    <div class="splash-blob" style="width:200px;height:200px;background:rgba(255,255,255,.12);right:-70px;bottom:80px"></div>
+    <div class="splash-inner">
+      <div class="splash-logo"><svg class="ic" style="width:40px;height:40px"><use href="#i-scissors"/></svg></div>
+      <h1 class="splash-name">发镜 AI</h1>
+      <div class="splash-line"></div>
+      <p class="splash-slogan">剪之前，先看见</p>
+    </div>
+    <div class="splash-skip" id="splashSkip">3 秒后进入 · 点击跳过</div>
+  </section>
+
+  <!-- ================= 2. 首页 ================= -->
+  <section class="page" id="page-home">
+    <div class="scroll" style="padding-bottom:10px">
+      <div class="home-head">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="logo-mark"><svg class="ic ic-sm"><use href="#i-scissors"/></svg></div>
+          <span style="font-weight:800;letter-spacing:-.3px">发镜 AI</span>
+        </div>
+        <button class="pill" onclick="go('profile')"><svg class="ic ic-sm"><use href="#i-user"/></svg>我的</button>
+      </div>
+
+      <div class="hero">
+        <div class="hero-eyebrow">AI HAIR TRY-ON</div>
+        <h1 class="hero-title">换个发型<br><span class="grad-text">换张脸</span></h1>
+        <p class="hero-sub">8 秒 AI 生成 · 4 款同时对比 · 照片 24h 删除</p>
+        <div class="cta-wrap">
+          <button class="cta" onclick="go('upload')">
+            <svg class="ic" style="width:26px;height:26px"><use href="#i-camera"/></svg>
+            <span class="cta-main">上传我的照片</span>
+            <span class="cta-sub" id="ctaSub">今日还剩 1 次免费</span>
+          </button>
+        </div>
+        <div class="sell-row">
+          <div class="sell"><div class="sell-ico"><svg class="ic ic-sm"><use href="#i-timer"/></svg></div>
+            <div class="sell-t">8 秒出图</div><div class="sell-d">不用等太久</div></div>
+          <div class="sell"><div class="sell-ico"><svg class="ic ic-sm"><use href="#i-lock"/></svg></div>
+            <div class="sell-t">用完即删</div><div class="sell-d">24h 自动清空</div></div>
+          <div class="sell"><div class="sell-ico"><svg class="ic ic-sm"><use href="#i-users"/></svg></div>
+            <div class="sell-t">男女都有</div><div class="sell-d">20+ 热门款</div></div>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <h2 class="sec-title">本周热门</h2>
+        <button class="sec-more" onclick="go('styles')">全部发型<svg class="ic ic-xs"><use href="#i-chevron-right"/></svg></button>
+      </div>
+      <div class="hot-strip" id="hotStrip"></div>
+
+      <div style="margin:18px 20px 0;padding:14px 16px;border-radius:18px;background:linear-gradient(135deg,#2D3436,#3F4A4D);color:#fff;display:flex;gap:12px;align-items:center">
+        <svg class="ic" style="color:#E8A9BF"><use href="#i-shield"/></svg>
+        <div style="flex:1">
+          <div style="font-size:12.5px;font-weight:700">人脸照片不留存</div>
+          <div style="font-size:10.5px;color:rgba(255,255,255,.6);margin-top:2px">仅用于本次生成，24 小时后自动删除</div>
+        </div>
+      </div>
+    </div>
+    <nav class="tabbar">
+      <button class="tab on" onclick="go('home')"><svg class="ic"><use href="#i-home"/></svg>首页<span class="tab-dot"></span></button>
+      <button class="tab" onclick="go('community')"><svg class="ic"><use href="#i-message"/></svg>讨论<span class="tab-dot"></span></button>
+      <button class="tab" onclick="go('profile')"><svg class="ic"><use href="#i-user"/></svg>我的<span class="tab-dot"></span></button>
+    </nav>
+  </section>
+  <!-- ================= 3. 上传 + 隐私授权 ================= -->
+  <section class="page" id="page-upload">
+    <div class="topbar">
+      <button class="icon-btn" onclick="back()"><svg class="ic ic-sm"><use href="#i-arrow-left"/></svg></button>
+      <div class="topbar-title">上传照片</div>
+    </div>
+    <div class="scroll">
+      <div class="pad">
+        <h1 class="field-title">上传一张正脸照</h1>
+        <p class="field-sub">AI 需要看清你的脸型和发际线，才能把发型"长"在你头上。</p>
+
+        <div class="dropzone" id="dropzone" onclick="pickPhoto()">
+          <img class="dz-preview" id="dzPreview" alt="我的照片">
+          <div class="dz-empty" style="display:flex;flex-direction:column;align-items:center;gap:8px">
+            <div style="width:56px;height:56px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--sh-sm)">
+              <svg class="ic ic-lg"><use href="#i-scan"/></svg>
+            </div>
+            <div class="dz-title">点击上传正脸照</div>
+            <div class="dz-sub">建议在自然光下拍摄</div>
+          </div>
+          <button class="dz-retake" onclick="event.stopPropagation();pickPhoto()">
+            <svg class="ic ic-xs"><use href="#i-refresh"/></svg>重拍
+          </button>
+        </div>
+        <div class="upload-btns">
+          <button class="btn btn-ghost" onclick="pickPhoto('camera')"><svg class="ic ic-sm"><use href="#i-camera"/></svg>拍照</button>
+          <button class="btn btn-ghost" onclick="pickPhoto()"><svg class="ic ic-sm"><use href="#i-image"/></svg>从相册选</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" style="display:none">
+        <button id="demoPhotoBtn" class="tiny" style="width:100%;margin-top:10px;background:none;border:0;cursor:pointer;color:var(--pink-600);font-weight:600;text-decoration:underline;text-underline-offset:3px">
+          没有合适的照片？用示例照片走一遍流程
+        </button>
+
+        <div class="tips">
+          <div class="tip"><div class="tip-emoji">🙂</div><div class="tip-t">正面朝向</div><div class="tip-d">不要侧脸或低头</div></div>
+          <div class="tip"><div class="tip-emoji">☀️</div><div class="tip-t">光线充足</div><div class="tip-d">避免逆光与阴影</div></div>
+          <div class="tip"><div class="tip-emoji">👀</div><div class="tip-t">露出额头</div><div class="tip-d">别用刘海挡住</div></div>
+        </div>
+
+        <div class="consent" id="consentBox">
+          <div class="cbx" id="consentCbx" onclick="toggleConsent()"><svg class="ic ic-xs"><use href="#i-check"/></svg></div>
+          <div class="consent-t" onclick="toggleConsent()">
+            我已阅读并同意 <b>《隐私政策》</b>，照片<b>仅用于本次生成</b>，24 小时后自动删除，不会用于训练或其他用途。
+          </div>
+        </div>
+        <div class="tiny" style="margin:12px 2px 0;display:flex;gap:6px;align-items:flex-start">
+          <svg class="ic ic-xs" style="margin-top:2px"><use href="#i-shield"/></svg>
+          <span>人脸校验在你的设备上模拟完成，正式版接入火山引擎人脸检测。</span>
+        </div>
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn btn-primary btn-block" id="uploadNext" disabled onclick="doFaceCheck(this)">
+        下一步
+      </button>
+    </div>
+  </section>
+
+  <!-- ================= 4. 模式选择 + 发型库 ================= -->
+  <section class="page" id="page-styles">
+    <div class="topbar">
+      <button class="icon-btn" onclick="back()"><svg class="ic ic-sm"><use href="#i-arrow-left"/></svg></button>
+      <div class="topbar-title">选一款想试的</div>
+    </div>
+
+    <div class="pad" style="padding-top:2px">
+      <div class="seg" id="modeSeg">
+        <button class="seg-item on" data-mode="hair" onclick="setMode('hair')">只换发型</button>
+        <button class="seg-item" data-mode="color" onclick="setMode('color')">发型 + 发色</button>
+      </div>
+      <div class="tiny" id="modeHint" style="margin:8px 2px 14px">保留你原本的发色，只换剪裁和造型。</div>
+
+      <div class="gender-tabs">
+        <button class="gender-tab on" data-g="female" onclick="setGender('female')">
+          <svg class="ic ic-sm"><use href="#i-user"/></svg>女款
+        </button>
+        <button class="gender-tab" data-g="male" onclick="setGender('male')">
+          <svg class="ic ic-sm"><use href="#i-user"/></svg>男款
+        </button>
+      </div>
+
+      <div class="rec-card" id="recCard" style="display:none">
+        <div class="rec-ico"><svg class="ic ic-sm"><use href="#i-sparkles"/></svg></div>
+        <div class="rec-main">
+          <div class="rec-t">AI 识别你的脸型：<b id="recFace">鹅蛋脸</b></div>
+          <div class="rec-d" id="recDesc">这 4 款最修饰你的脸型，先看这几款</div>
+        </div>
+        <button class="rec-btn" onclick="tryRecommended()">一键试</button>
+      </div>
+    </div>
+
+    <div class="chip-row" id="catRow" style="padding-top:14px"></div>
+
+    <div id="colorBlock" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px 2px">
+        <span style="font-size:11.5px;font-weight:700;color:var(--ink-2)">发色（可选 1 种）</span>
+        <span style="font-size:10px;color:var(--muted)" id="colorName">未选择</span>
+      </div>
+      <div class="color-row" id="colorRow"></div>
+    </div>
+
+    <div class="scroll" style="padding-top:12px">
+      <div class="grid3" id="styleGrid"></div>
+      <div class="tiny" style="text-align:center;padding:6px 20px 20px">最多勾选 4 款 · 第 1 款免费出图，其余可解锁高清</div>
+    </div>
+
+    <div class="bottom-bar">
+      <button class="btn btn-primary btn-block" id="generateBtn" onclick="startGenerate()">
+        <span id="genLabel">请先选择发型</span>
+        <svg class="ic ic-sm"><use href="#i-arrow-right"/></svg>
+      </button>
+    </div>
+  </section>
+  <!-- ================= 5. 生成中 ================= -->
+  <section class="page" id="page-generating">
+    <div class="gen-wrap">
+      <div class="ring">
+        <svg width="150" height="150" viewBox="0 0 150 150">
+          <defs>
+            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#E8A0B4"/>
+              <stop offset="55%" stop-color="#C95676"/>
+              <stop offset="100%" stop-color="#D98A63"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-bg" cx="75" cy="75" r="64" fill="none" stroke-width="8"/>
+          <circle class="ring-fg" id="ringFg" cx="75" cy="75" r="64" fill="none" stroke-width="8"
+                  stroke-dasharray="402" stroke-dashoffset="402"/>
+        </svg>
+        <div class="ring-core">
+          <div class="ring-num" id="ringNum">0<span style="font-size:13px">%</span></div>
+          <div class="ring-unit">GENERATING</div>
+        </div>
+      </div>
+
+      <div class="gen-title" id="genTitle">正在识别人脸特征…</div>
+      <div class="gen-count" id="genCount">已出图 0 / 4 张</div>
+      <div class="gen-thumbs" id="genThumbs"></div>
+
+      <div class="gen-steps">
+        <div class="gen-step on" data-step="0">
+          <div class="step-ico">1</div><div class="step-t">识别人脸 · 定位五官与发际线</div>
+        </div>
+        <div class="gen-step" data-step="1">
+          <div class="step-ico">2</div><div class="step-t">匹配发型 · 调整轮廓与发量</div>
+        </div>
+        <div class="gen-step" data-step="2">
+          <div class="step-ico">3</div><div class="step-t">渲染效果 · 融合光影与发丝</div>
+        </div>
+      </div>
+
+      <div class="gen-hint">照片仅用于本次生成，生成结束后<br>原始照片将在 24 小时内自动删除</div>
+    </div>
+  </section>
+
+  <!-- ================= 6. 结果页 ================= -->
+  <section class="page" id="page-result">
+    <div class="topbar">
+      <button class="icon-btn" onclick="back()"><svg class="ic ic-sm"><use href="#i-arrow-left"/></svg></button>
+      <div class="topbar-title">你的新发型</div>
+    </div>
+    <div class="scroll" style="padding-bottom:10px">
+      <div class="result-meta" style="padding-bottom:10px">
+        <div>
+          <div class="meta-name" id="resName">法式波波头</div>
+          <div class="meta-desc" id="resDesc">长度：肩部以上 · 适合圆脸 / 鹅蛋脸</div>
+        </div>
+        <button class="pill" onclick="shuffleBatch()"><svg class="ic ic-xs"><use href="#i-refresh"/></svg>换一批</button>
+      </div>
+
+      <div class="pad">
+        <div class="seg res-view-seg" id="viewSeg">
+          <button class="seg-item on" data-view="compare" onclick="setResultView('compare')">滑动对比</button>
+          <button class="seg-item" data-view="grid" onclick="setResultView('grid')">四宫格</button>
+        </div>
+        <div class="ba-wrap" id="baWrap">
+          <img class="ba-img" id="baAfter" alt="AI 生成效果">
+          <div class="ba-clip" id="baClip">
+            <img class="ba-img" id="baBefore" alt="原始照片">
+          </div>
+          <div class="write-on" id="watermark">发镜 AI · AI 生成</div>
+          <span class="ba-tag l">原图</span>
+          <span class="ba-tag r">AI 效果</span>
+          <div class="ba-handle" id="baHandle">
+            <div class="knob"><svg class="ic ic-sm"><use href="#i-arrow-left"/></svg>
+              <svg class="ic ic-sm" style="margin-left:-4px"><use href="#i-arrow-right"/></svg></div>
+          </div>
+          <div class="ba-lock" id="baLock">
+            <div class="lk"><svg class="ic"><use href="#i-lock"/></svg></div>
+            <div class="ba-lock-t">这款效果已经生成好了</div>
+            <div class="ba-lock-d">解锁后可查看高清大图<br>并保存无水印版本</div>
+            <button class="btn btn-primary" onclick="openPaywall('current')">解锁查看</button>
+          </div>
+        </div>
+        <button class="ba-replay" id="baHint" onclick="replayCompare()">
+          <svg class="ic ic-xs"><use href="#i-refresh"/></svg>拖动滑块对比前后 · 点此重播
+        </button>
+
+        <div class="fit-card" id="fitCard">
+          <div class="fit-score">
+            <svg width="54" height="54" viewBox="0 0 54 54">
+              <defs>
+                <linearGradient id="fitGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#E8A0B4"/>
+                  <stop offset="100%" stop-color="#C95676"/>
+                </linearGradient>
+              </defs>
+              <circle class="fit-score-bg" cx="27" cy="27" r="23" fill="none" stroke-width="5"/>
+              <circle class="fit-score-fg" id="fitRing" cx="27" cy="27" r="23" fill="none"
+                      stroke-width="5" stroke-dasharray="144.5" stroke-dashoffset="144.5"/>
+            </svg>
+            <div class="fit-score-num" id="fitNum">96<small>%</small></div>
+          </div>
+          <div class="fit-main">
+            <div class="fit-t">脸型适配度 <span class="fit-lv" id="fitLv">极高</span></div>
+            <div class="fit-d" id="fitDesc">鹅蛋脸 · 脸型均衡 · 发际线高度适中</div>
+            <div class="fit-tags" id="fitTags"></div>
+          </div>
+        </div>
+
+        <button class="unlock-bar" id="unlockBar" style="display:none" onclick="openPaywall('all')">
+          <div class="ub-thumbs" id="ubThumbs"></div>
+          <div class="ub-main">
+            <div class="ub-t" id="ubTitle">还有 3 款效果已生成</div>
+            <div class="ub-d" id="ubDesc">限时 ¥12 全部解锁 · 高清无水印</div>
+          </div>
+          <span class="ub-btn">解锁</span>
+        </button>
+
+        <div class="res-grid" id="resGrid" style="display:none"></div>
+        <div class="res-grid-tip" id="resGridTip" style="display:none">点任意一张，进入滑动对比</div>
+
+        <button class="barber-entry" id="barberEntry" onclick="openBarberCard()">
+          <div class="be-ico"><svg class="ic ic-sm"><use href="#i-scissors"/></svg></div>
+          <div style="flex:1">
+            <div class="be-t">生成理发师沟通卡</div>
+            <div class="be-d">长度、层次、推剪卡尺写清楚，直接发给托尼</div>
+          </div>
+          <svg class="ic ic-sm" style="color:rgba(255,255,255,.55)"><use href="#i-chevron-right"/></svg>
+        </button>
+      </div>
+
+      <div class="result-strip" id="resultStrip"></div>
+    </div>
+
+    <div class="result-bar">
+      <button class="rb-act" onclick="saveImage()">
+        <svg class="ic"><use href="#i-download"/></svg>保存
+      </button>
+      <button class="rb-act" onclick="openShare()">
+        <svg class="ic"><use href="#i-share"/></svg>分享
+      </button>
+      <button class="rb-primary" id="resultPrimary" onclick="resultPrimary()">
+        <span class="rb-t" id="unlockLabel">解锁剩余 3 款</span>
+        <span class="rb-s" id="unlockSub">高清无水印 · ¥12</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ================= 7. 理发师沟通卡 ================= -->
+  <section class="page" id="page-card">
+    <div class="topbar">
+      <button class="icon-btn" onclick="back()"><svg class="ic ic-sm"><use href="#i-arrow-left"/></svg></button>
+      <div class="topbar-title">理发师沟通卡</div>
+    </div>
+    <div class="scroll" style="padding-bottom:10px">
+      <div class="pad" style="padding-top:2px">
+        <p class="field-sub" style="margin:0 0 12px">把这张卡发给托尼，比"剪短一点"清楚一百倍。</p>
+      </div>
+      <div class="barber-wrap">
+        <div class="barber-card">
+          <div class="bc-head">
+            <div class="bc-brand"><svg class="ic ic-xs"><use href="#i-scissors"/></svg>发镜 AI</div>
+            <div class="bc-tag">理发师沟通卡</div>
+          </div>
+          <div class="bc-photo">
+            <img id="bcImg" alt="发型参考图">
+            <span class="bc-badge" id="bcBadge">参考效果图</span>
+          </div>
+          <div class="bc-body">
+            <div class="bc-name" id="bcName">法式波波头</div>
+            <div class="bc-note" id="bcNote">长度：肩部以上 · 适合圆脸 / 鹅蛋脸</div>
+            <div class="bc-specs" id="bcSpecs"></div>
+            <div class="bc-tip" id="bcTip"></div>
+          </div>
+          <div class="bc-foot">
+            <span>AI 生成参考图 · 仅供沟通</span>
+            <span class="bc-qr">发镜 AI · 剪之前先看见</span>
+          </div>
+        </div>
+      </div>
+      <div class="tiny" style="text-align:center;padding:12px 20px 0">卡片数据为原型 mock，正式版按脸型与发质自动生成</div>
+    </div>
+    <div class="bottom-bar">
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <button class="btn btn-ghost" style="flex:1" onclick="copyBarberText()">
+          <svg class="ic ic-sm"><use href="#i-copy"/></svg>复制文字
+        </button>
+        <button class="btn btn-ghost" style="flex:1" onclick="saveBarberCard()">
+          <svg class="ic ic-sm"><use href="#i-download"/></svg>保存卡片
+        </button>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="sendToBarber()">
+        <svg class="ic ic-sm"><use href="#i-share"/></svg>发给理发师
+      </button>
+    </div>
+  </section>
+
+  <!-- ================= 8. 我的 ================= -->
+  <section class="page" id="page-profile">
+    <div class="topbar">
+      <button class="icon-btn" onclick="back()"><svg class="ic ic-sm"><use href="#i-arrow-left"/></svg></button>
+      <div class="topbar-title">我的</div>
+    </div>
+    <div class="scroll">
+      <div class="profile-hero">
+        <div class="avatar"><svg class="ic" style="width:26px;height:26px"><use href="#i-user"/></svg></div>
+        <div>
+          <div style="font-size:17px;font-weight:800;letter-spacing:-.3px">未登录</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">登录后可跨设备同步试发记录</div>
+        </div>
+        <button class="pill" style="margin-left:auto" onclick="toast('原型演示：微信一键登录')">登录</button>
+      </div>
+
+      <div style="margin:0 20px 18px;display:flex;gap:8px">
+        <div style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)">
+          <div style="font-size:20px;font-weight:800;color:var(--pink-600)" id="statTotal">0</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">试过的发型</div>
+        </div>
+        <div style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)">
+          <div style="font-size:20px;font-weight:800;color:var(--ink)" id="statFree">1<span style="font-size:11px;color:var(--muted)">次</span></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">今日免费次数</div>
+        </div>
+        <div style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)">
+          <div style="font-size:20px;font-weight:800;color:var(--gold)" id="statHd">0</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">已解锁高清</div>
+        </div>
+      </div>
+
+      <div id="histTitle" style="padding:0 20px 10px;font-size:13px;font-weight:800;scroll-margin-top:8px">我的试发记录</div>
+      <div style="padding:0 20px" id="historyList"></div>
+
+      <div class="menu" style="margin-top:18px">
+        <button class="menu-item" onclick="openPrivacy()">
+          <div class="menu-ico"><svg class="ic ic-sm"><use href="#i-shield"/></svg></div>隐私与数据
+          <svg class="ic ic-sm chev"><use href="#i-chevron-right"/></svg>
+        </button>
+        <button class="menu-item" onclick="toast('客服微信：fajing-ai（原型演示）')">
+          <div class="menu-ico"><svg class="ic ic-sm"><use href="#i-message"/></svg></div>联系客服
+          <svg class="ic ic-sm chev"><use href="#i-chevron-right"/></svg>
+        </button>
+        <button class="menu-item" onclick="toast('发镜 AI v0.1 · 剪之前，先看见')">
+          <div class="menu-ico"><svg class="ic ic-sm"><use href="#i-info"/></svg></div>关于我们
+          <svg class="ic ic-sm chev"><use href="#i-chevron-right"/></svg>
+        </button>
+      </div>
+      <div class="tiny" style="text-align:center;padding:20px">发镜 AI v0.1 · 原型演示版本</div>
+    </div>
+    <nav class="tabbar">
+      <button class="tab" onclick="go('home')"><svg class="ic"><use href="#i-home"/></svg>首页<span class="tab-dot"></span></button>
+      <button class="tab" onclick="go('community')"><svg class="ic"><use href="#i-message"/></svg>讨论<span class="tab-dot"></span></button>
+      <button class="tab on" onclick="go('profile')"><svg class="ic"><use href="#i-user"/></svg>我的<span class="tab-dot"></span></button>
+    </nav>
+  </section>
+
+  <!-- ================= 9. 讨论 ================= -->
+  <section class="page" id="page-community">
+    <div class="comm-head">
+      <div class="comm-head-t">
+        <h1 class="comm-title">发型讨论 <span class="post-badge">真实作业</span></h1>
+        <div class="comm-sub">AI 预览 vs 剪后实拍 · 少踩一次雷</div>
+      </div>
+      <button class="comm-post-btn" onclick="openCompose()">
+        <svg class="ic ic-sm"><use href="#i-message"/></svg>发讨论
+      </button>
+    </div>
+    <div class="scroll">
+      <div class="comm-hero">
+        <div class="ch-eyebrow">REAL RESULTS WALL</div>
+        <div class="ch-num">2,847<span>份剪后作业</span></div>
+        <div class="ch-sub">平均还原度 91% · 今日新增 126 份</div>
+        <div class="ch-foot">
+          <div class="ch-avs">
+            <span class="ch-av" style="background:#E28FA6">鹿</span>
+            <span class="ch-av" style="background:#B58BC9">Mo</span>
+            <span class="ch-av" style="background:#7FA6C9">柚</span>
+          </div>
+          <div class="ch-note">真实作业 · 已授权</div>
+          <button class="ch-cta ghost" onclick="openCompose('ask')">还没剪？</button>
+          <button class="ch-cta" onclick="openCompose('real')">交作业 →</button>
+        </div>
+      </div>
+
+      <div class="comm-filters" id="commFilters"></div>
+      <div class="comm-topics" id="commTopics"></div>
+      <div id="commList"></div>
+      <div class="tiny" style="text-align:center;padding:6px 20px 14px">讨论内容为原型 mock 数据，不涉及真实用户隐私</div>
+    </div>
+    <nav class="tabbar">
+      <button class="tab" onclick="go('home')"><svg class="ic"><use href="#i-home"/></svg>首页<span class="tab-dot"></span></button>
+      <button class="tab on" onclick="go('community')"><svg class="ic"><use href="#i-message"/></svg>讨论<span class="tab-dot"></span></button>
+      <button class="tab" onclick="go('profile')"><svg class="ic"><use href="#i-user"/></svg>我的<span class="tab-dot"></span></button>
+    </nav>
+  </section>
+
+  <!-- ================= 全局：Toast / 遮罩 / 弹层 ================= -->
+  <div id="toast"></div>
+  <div class="mask" id="mask" onclick="closeSheets()"></div>
+
+  <!-- 每日免费额度用完 -->
+  <div class="sheet" id="sheetQuota">
+    <div class="sheet-grip"></div>
+    <button class="sheet-close" onclick="closeSheets()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    <div class="quota-ico"><svg class="ic" style="width:24px;height:24px"><use href="#i-clock"/></svg></div>
+    <h3 class="quota-title">今天的免费次数用完了</h3>
+    <p class="quota-sub" id="quotaSub">每天 1 次免费生成。分享好友（限 1 次）或看广告，可再得 1 次。</p>
+    <button class="btn btn-primary btn-block" id="quotaShareBtn" onclick="quotaShare()">
+      <svg class="ic ic-sm"><use href="#i-share"/></svg>分享给好友 · 再得 1 次
+    </button>
+    <button class="btn btn-ghost btn-block" style="margin-top:9px" onclick="quotaAd()">
+      <svg class="ic ic-sm"><use href="#i-eye"/></svg>看广告 · 再得 1 次
+    </button>
+    <div class="tiny" style="text-align:center;margin-top:12px">原型演示：分享与广告均为模拟，不会真实唤起</div>
+  </div>
+
+  <!-- 付费墙 -->
+  <div class="sheet" id="sheetPay">
+    <div class="sheet-grip"></div>
+    <button class="sheet-close" onclick="closeSheets()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="width:34px;height:34px;border-radius:11px;background:#FFF6E8;color:#C68A25;display:flex;align-items:center;justify-content:center;flex:none">
+        <svg class="ic ic-sm"><use href="#i-crown"/></svg>
+      </div>
+      <div>
+        <h3 class="sheet-title" id="payTitle">解锁高清无水印版</h3>
+        <p class="sheet-sub" id="paySub">去掉右下角水印，导出 2K 高清图，可直接打印给理发师看。</p>
+      </div>
+    </div>
+    <div class="pay-sale" id="paySale" style="display:none">
+      <svg class="ic ic-xs"><use href="#i-timer"/></svg>
+      <span id="paySaleText">限时特惠</span>
+      <b id="payTimer">09:59</b>
+      <span id="paySaleSuffix">后恢复原价</span>
+    </div>
+    <div class="plan on" data-plan="one" onclick="pickPlan('one')">
+      <div class="plan-radio"></div>
+      <div><div class="plan-t" id="payOneTitle">单张解锁</div><div class="plan-d" id="payOneDesc">仅解锁当前这 1 张</div></div>
+      <div class="plan-price">¥6<small>/张</small></div>
+    </div>
+    <div class="plan" data-plan="all" onclick="pickPlan('all')">
+      <div class="plan-radio"></div>
+      <div>
+        <div class="plan-t" id="payAllTitle">本次全部 4 款 <span class="plan-tag">限时 5 折</span></div>
+        <div class="plan-d" id="payAllDesc">平均 ¥3.0/张 · 推荐</div>
+      </div>
+      <div class="plan-price"><span class="plan-old" id="payAllOld">¥24</span>¥<span id="payAllPrice">12</span><small>/全部</small></div>
+    </div>
+    <button class="btn btn-primary btn-block" style="margin-top:6px" id="payBtn" onclick="payNow()">微信支付 ¥12</button>
+    <button class="pay-share" id="payShareBtn" onclick="shareUnlock()">
+      <svg class="ic ic-sm"><use href="#i-share"/></svg>分享给好友，免费解锁 1 款
+    </button>
+    <div class="pay-share-note" id="payShareNote">分享后立即解锁下一款，其余款式仍需解锁</div>
+    <div class="tiny" style="text-align:center;margin-top:9px" id="payProof">已有 23,481 人解锁高清 · 好评率 98.6%</div>
+    <div class="tiny" style="text-align:center;margin-top:5px">原型演示，不会发起真实支付</div>
+  </div>
+
+  <!-- 付费成功 -->
+  <div class="sheet" id="sheetPaid">
+    <div class="sheet-grip"></div>
+    <button class="sheet-close" onclick="closeSheets()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    <div class="paid-ico"><svg class="ic" style="width:26px;height:26px"><use href="#i-check-circle"/></svg></div>
+    <h3 class="quota-title" id="paidTitle">解锁成功</h3>
+    <p class="quota-sub" id="paidSub">已解锁高清无水印效果图，可保存到相册或发给理发师。</p>
+    <div class="paid-thumbs" id="paidThumbs"></div>
+    <button class="btn btn-primary btn-block" onclick="saveAllUnlocked()">
+      <svg class="ic ic-sm"><use href="#i-download"/></svg>保存高清图到相册
+    </button>
+    <button class="btn btn-ghost btn-block" style="margin-top:9px" onclick="shareAfterPaid()">
+      <svg class="ic ic-sm"><use href="#i-share"/></svg>分享新发型，问问闺蜜
+    </button>
+    <div class="tiny" style="text-align:center;margin-top:12px">原型演示：模拟支付，不会真实扣款</div>
+  </div>
+
+  <!-- 分享 -->
+  <div class="sheet" id="sheetShare">
+    <div class="sheet-grip"></div>
+    <button class="sheet-close" onclick="closeSheets()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    <h3 class="sheet-title">分享我的新发型</h3>
+    <p class="sheet-sub">带上前后对比图，发朋友圈问问闺蜜像不像。</p>
+
+    <div class="share-card" id="shareCard">
+      <div class="sc-half before">
+        <img id="shareBefore" alt="原图">
+        <span class="sc-tag">原图</span>
+      </div>
+      <div class="sc-half">
+        <img id="shareImg" alt="AI 效果">
+        <span class="sc-tag r">AI 后</span>
+      </div>
+      <div class="sc-divider"></div>
+      <div class="share-card-mask"></div>
+      <div class="share-card-text">
+        <div class="share-brand"><svg class="ic ic-xs"><use href="#i-scissors"/></svg>发镜 AI · 剪之前，先看见</div>
+        <div class="share-title" id="shareTitle">法式波波头</div>
+        <div class="share-slogan" id="shareSlogan" style="font-size:10.5px;opacity:.82;margin-top:3px">同一个人 · 换了个发型</div>
+      </div>
+    </div>
+
+    <div class="copy-box">
+      <div class="copy-text" id="shareCopy">我在「发镜 AI」试了新发型，8 秒出图，帮我看看适不适合？</div>
+      <button class="copy-btn" onclick="copyShareText()"><svg class="ic ic-xs"><use href="#i-copy"/></svg>复制</button>
+    </div>
+
+    <div class="share-channels">
+      <button class="channel" onclick="shareTo('微信好友')"><span class="channel-ico" style="background:#22C35E">微</span>微信</button>
+      <button class="channel" onclick="shareTo('朋友圈')"><span class="channel-ico" style="background:#3DA35A">朋</span>朋友圈</button>
+      <button class="channel" onclick="shareTo('抖音')"><span class="channel-ico" style="background:#161823">抖</span>抖音</button>
+      <button class="channel" onclick="shareTo('小红书')"><span class="channel-ico" style="background:#FF2442">红</span>小红书</button>
+    </div>
+
+    <button class="btn btn-ghost btn-block" style="margin-top:14px" onclick="saveShareCard()">
+      <svg class="ic ic-sm"><use href="#i-download"/></svg>保存分享图到相册
+    </button>
+
+    <div class="share-bonus">
+      <svg class="ic ic-xs"><use href="#i-gift"/></svg>
+      分享后你得 1 次免费生成（每账号限 1 次）· 好友点开也能免费试
+    </div>
+    <div class="tiny" style="text-align:center;margin-top:10px">原型演示，不会真实唤起第三方 App</div>
+  </div>
+
+  <!-- 发布剪后作业 -->
+  <div class="sheet" id="sheetCompose">
+    <div class="sheet-grip"></div>
+    <button class="sheet-close" onclick="closeSheets()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    <h3 class="sheet-title" id="composeTitle">发布到讨论</h3>
+    <p class="sheet-sub" id="composeSub">AI 效果图 + 剪后实拍，帮更多人少踩一次雷。</p>
+
+    <div class="compose-slots">
+      <button class="cslot" id="slotAi" onclick="pickComposeSlot('ai')" aria-label="选择 AI 效果图">
+        <svg class="ic"><use href="#i-sparkles"/></svg>
+        <span>AI 效果图</span>
+        <span class="cslot-hint">用试过的图或上传</span>
+      </button>
+      <button class="cslot" id="slotAfter" onclick="pickComposeSlot('after')" aria-label="选择剪后实拍">
+        <svg class="ic"><use href="#i-camera"/></svg>
+        <span>剪后实拍</span>
+        <span class="cslot-hint">从相册上传</span>
+      </button>
+    </div>
+
+    <!-- AI 效果图来源：本机试过的结果 -->
+    <div class="ai-pick" id="aiPick">
+      <div class="ai-pick-head">
+        <span>用本机试过的效果图</span>
+        <button class="ai-pick-up" onclick="pickComposeFile('ai')">从相册上传</button>
+      </div>
+      <div class="ai-pick-list" id="aiPickList"></div>
+    </div>
+
+    <div class="ctag-label">给作业打标签 <span>可多选，也能自己加</span></div>
+    <div class="ctag-list" id="composeTagList"></div>
+    <div class="ctag-add">
+      <input id="composeTagInput" maxlength="10" placeholder="自定义标签，如：方圆脸友好"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();addComposeTag();}">
+      <button onclick="addComposeTag()">添加</button>
+    </div>
+
+    <input class="compose-input" id="composeStyle" maxlength="20" placeholder="发型名称，如：法式波波头">
+    <textarea class="compose-input" id="composeText" rows="3" maxlength="120" placeholder="说说剪完的感受：还原度怎么样？托尼听懂了吗？"></textarea>
+
+    <div class="compose-row" id="composeScoreRow">
+      <label>还原度</label>
+      <input type="range" min="50" max="100" step="5" value="90" id="composeScore"
+             oninput="document.getElementById('composeScoreV').textContent=this.value+'%'">
+      <span class="compose-score-v" id="composeScoreV">90%</span>
+    </div>
+
+    <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="publishPost()">
+      <svg class="ic ic-sm"><use href="#i-share"/></svg>发布到讨论
+    </button>
+    <input type="file" id="composeFile" accept="image/*" hidden>
+    <div class="tiny" style="text-align:center;margin-top:9px">原型演示：图片仅保存在本机，不会真实上传</div>
+  </div>
+
+  <!-- 评论 -->
+  <div class="sheet" id="sheetComments">
+    <div class="sheet-grip"></div>
+    <button class="sheet-close" onclick="closeSheets()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    <h3 class="sheet-title" id="cmTitle">评论</h3>
+    <p class="sheet-sub" id="cmSub"></p>
+    <div class="cm-list" id="cmList"></div>
+    <div class="cm-input">
+      <input id="cmInput" maxlength="60" placeholder="说点有用的…" onkeydown="if(event.key==='Enter')sendComment()">
+      <button class="cm-send" onclick="sendComment()" aria-label="发送评论">
+        <svg class="ic ic-sm"><use href="#i-arrow-right"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 隐私与数据 -->
+  <div class="sheet" id="sheetPrivacy">
+    <div class="sheet-grip"></div>
+    <button class="sheet-close" onclick="closeSheets()"><svg class="ic ic-sm"><use href="#i-x"/></svg></button>
+    <h3 class="sheet-title">隐私与数据</h3>
+    <p class="sheet-sub">人脸照片属于敏感信息，"用完即删"是我们的默认设置，不是可选项。</p>
+
+    <div class="priv-row">
+      <div class="priv-ico"><svg class="ic ic-sm"><use href="#i-timer"/></svg></div>
+      <div>
+        <div class="priv-t">24 小时自动删除</div>
+        <div class="priv-d">上传的原图仅用于本次生成，生成结束 24 小时内从服务器彻底清除。</div>
+      </div>
+    </div>
+    <div class="priv-row">
+      <div class="priv-ico"><svg class="ic ic-sm"><use href="#i-shield"/></svg></div>
+      <div>
+        <div class="priv-t">不建人脸库 · 不用于训练</div>
+        <div class="priv-d">不会留存人脸特征，也不会把你的照片用于模型训练或提供给第三方。</div>
+      </div>
+    </div>
+    <div class="priv-row">
+      <div class="priv-ico"><svg class="ic ic-sm"><use href="#i-user"/></svg></div>
+      <div>
+        <div class="priv-t">试发记录只存在本机</div>
+        <div class="priv-d">历史记录保存在当前浏览器，换设备或清空浏览器数据即消失。</div>
+      </div>
+    </div>
+
+    <button class="btn btn-danger btn-block" style="margin-top:14px" id="clearDataBtn" onclick="clearMyData(this)">
+      <svg class="ic ic-sm"><use href="#i-trash"/></svg>立即删除我的照片与记录
+    </button>
+    <div class="tiny" style="text-align:center;margin-top:10px">原型演示：点击会清空当前浏览器内的本地数据</div>
+  </div>
+
+  <script>
+  /* =========================================================
+     发镜 AI · H5 原型交互脚本
+     说明：所有数据均为前端 mock；正式版把 api 层换成真实接口即可
+     ========================================================= */
+  'use strict';
+
+  /* ---------- Mock 数据 ---------- */
+  const IMG = (p, size) => `https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(p)}&image_size=${size || 'portrait_4_3'}`;
+  const PORTRAIT = (en, gender) => IMG(`${gender === 'male' ? 'young asian man' : 'young asian woman'}, ${en}, front facing portrait, shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail`);
+  const DEMO_BEFORE = IMG('young asian woman, front facing bare face portrait, hair tied back, no makeup, soft window light, plain light background, photorealistic, 85mm');
+
+  const STYLES = {
+    female: [
+      { id: 'f1', name: '法式波波头', cat: '波波头', len: '肩部以上', face: '圆脸 / 鹅蛋脸', en: 'french bob haircut, chin length, soft inward ends' },
+      { id: 'f2', name: '日系碎短发', cat: '短发', len: '耳下', face: '小脸 / 心形脸', en: 'japanese layered short hair, airy texture' },
+      { id: 'f3', name: '港风大波浪', cat: '卷发', len: '胸上', face: '鹅蛋脸 / 方脸', en: 'hong kong retro big wavy long hair' },
+      { id: 'f4', name: '空气感齐刘海', cat: '齐刘海', len: '肩部', face: '长脸 / 鹅蛋脸', en: 'see-through blunt bangs with medium straight hair' },
+      { id: 'f5', name: '挂耳短发', cat: '短发', len: '耳上', face: '小脸 / 圆脸', en: 'sleek ear-tuck short bob' },
+      { id: 'f6', name: '中长直发', cat: '中长发', len: '锁骨', face: '所有脸型', en: 'glossy medium length straight hair, collarbone length' },
+      { id: 'f7', name: '羊毛卷', cat: '卷发', len: '肩部', face: '圆脸 / 方脸', en: 'tight curly wool perm hair with volume' },
+      { id: 'f8', name: '微分狼尾', cat: '狼尾', len: '肩部', face: '心形脸 / 鹅蛋脸', en: 'shaggy wolf cut with layered texture' },
+      { id: 'f9', name: '水波纹长发', cat: '长直发', len: '腰部', face: '所有脸型', en: 'long hair with soft water wave texture' },
+      { id: 'f10', name: '高中生直发', cat: '长直发', len: '肩下', face: '学生感 / 清纯', en: 'long straight natural black hair, student style' },
+      { id: 'f11', name: '层次锁骨发', cat: '中长发', len: '锁骨', face: '鹅蛋脸 / 长脸', en: 'layered collarbone hair with curtain bangs' },
+      { id: 'f12', name: '公主切', cat: '齐刘海', len: '中长', face: '小脸 / 心形脸', en: 'hime cut with blunt side locks and straight bangs' }
+    ],
+    male: [
+      { id: 'm1', name: '栗子头', cat: '短发', len: '耳上', face: '圆脸 / 学生感', en: 'korean chestnut cut short hair with rounded fringe' },
+      { id: 'm2', name: '微分碎盖', cat: '短发', len: '眉上', face: '鹅蛋脸 / 长脸', en: 'textured fringe korean men hair with see-through bangs' },
+      { id: 'm3', name: '韩式纹理烫', cat: '纹理烫', len: '耳下', face: '所有脸型', en: 'korean texture perm men hair with wavy volume' },
+      { id: 'm4', name: '侧推背头', cat: '背头', len: '短', face: '方脸 / 成熟', en: 'side part slick back men hair with faded sides' },
+      { id: 'm5', name: '法式短寸', cat: '寸头', len: '极短', face: '硬朗 / 方脸', en: 'french crop buzz cut men hair' },
+      { id: 'm6', name: '狼尾鲻鱼头', cat: '狼尾', len: '颈后', face: '心形脸 / 潮男', en: 'mullet wolf cut men hair with shaved sides' },
+      { id: 'm7', name: '三七分毛流', cat: '短发', len: '耳上', face: '长脸 / 鹅蛋脸', en: 'side part men hair with natural hair flow' },
+      { id: 'm8', name: '圆寸', cat: '寸头', len: '极短', face: '所有脸型', en: 'round buzz cut men hair, very short' }
+    ]
+  };
+  const CATS = {
+    female: ['全部', '长直发', '中长发', '波波头', '短发', '卷发', '狼尾', '齐刘海'],
+    male: ['全部', '短发', '寸头', '纹理烫', '背头', '狼尾']
+  };
+  const COLORS = [
+    { id: 'c1', name: '黑茶色', en: 'black tea brown', bg: '#2B2622' },
+    { id: 'c2', name: '栗棕色', en: 'chestnut brown', bg: '#6B4A32' },
+    { id: 'c3', name: '奶茶棕', en: 'milk tea brown', bg: '#A8825F' },
+    { id: 'c4', name: '挂耳染', en: 'dark hair with lavender inner highlights', bg: 'linear-gradient(135deg,#2B2622 52%,#C9A0E8)' },
+    { id: 'c5', name: '巴黎画染', en: 'balayage brown highlights', bg: 'linear-gradient(135deg,#6B4A32,#E3C39B)' },
+    { id: 'c6', name: '粉棕', en: 'dusty pink brown', bg: '#C48A94' },
+    { id: 'c7', name: '雾霾蓝', en: 'hazy blue', bg: '#5F748C' },
+    { id: 'c8', name: '树莓红', en: 'raspberry red', bg: '#8E3350' }
+  ];
+
+  const HIST_KEY = 'fajing_history_v1';
+  let HIST = [];
+  try { HIST = JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch (e) { HIST = []; }
+
+  /* 理发师沟通卡：按发型分类给出可执行的剪发参数（原型 mock） */
+  const BARBER_SPEC = {
+    female: {
+      '长直发': { len: '30-35 cm', layer: '低层次', bangs: '无刘海 / 可选八字刘海', side: '两侧自然修剪，不推剪', tip: '发尾平剪，保留厚度，不要打薄' },
+      '中长发': { len: '锁骨位置（约 25 cm）', layer: '中层次', bangs: '八字刘海', side: '耳前留长，不推剪', tip: '两侧留长修饰脸型，发尾微微内扣' },
+      '波波头': { len: '下巴到肩之间（约 18 cm）', layer: '齐厚，发尾内扣', bangs: '可配空气刘海', side: '不推剪，鬓角留 2 cm', tip: '不要打薄，保留发尾重量感才服帖' },
+      '短发': { len: '耳下 3-5 cm', layer: '高层次', bangs: '碎刘海', side: '鬓角留 2 cm，不推剪', tip: '发根要蓬松，别贴头皮剪太薄' },
+      '卷发': { len: '肩部（约 22 cm）', layer: '中层次', bangs: '无刘海 / 侧分', side: '不推剪', tip: '烫卷直径 2 cm，卷度自然，顶部加高' },
+      '狼尾': { len: '后颈 8-10 cm，前侧齐下颌', layer: '超高层次', bangs: '碎刘海', side: '两侧保留长度，不推剪', tip: '头顶蓬松，发尾打薄做出飘逸感' },
+      '齐刘海': { len: '肩部（约 20 cm）', layer: '齐厚', bangs: '齐眉刘海，厚薄均匀', side: '不推剪', tip: '刘海不要短于眉毛，两侧做公主切过渡' }
+    },
+    male: {
+      '短发': { len: '顶部 4-5 cm', layer: '中层次', bangs: '自然碎刘海', side: '两侧推剪 #2（6 mm）+ 渐变', tip: '顶部留够长度方便抓造型，发际线修干净' },
+      '寸头': { len: '全头 #3（10 mm）', layer: '无层次', bangs: '短碎前刺', side: '两侧 #2（6 mm）渐变', tip: '头顶比两侧略长，发际线保留自然形态' },
+      '纹理烫': { len: '顶部 6-7 cm', layer: '纹理烫 2 号杠', bangs: '微分刘海', side: '两侧 #3（10 mm）', tip: '保持自然流向，不要烫成小卷' },
+      '背头': { len: '顶部 7-8 cm', layer: '中层次', bangs: '后梳，不留刘海', side: '两侧 #1（3 mm）渐变', tip: '侧分线清晰，后颈收紧，用发蜡定型' },
+      '狼尾': { len: '后颈 6 cm，前额齐眉', layer: '高层次', bangs: '碎刘海', side: '两侧 #2（6 mm）推剪', tip: '后侧留长不要削薄，前额做轻盈碎感' }
+    }
+  };
+  const BARBER_FALLBACK = { len: '按参考图比例修剪', layer: '自然层次', bangs: '按参考图保留', side: '两侧自然过渡', tip: '以参考图为准，整体保持蓬松自然' };
+
+  /* ---------- 讨论区 mock 数据（AI 预览 vs 剪后实拍） ---------- */
+  const COMM_AI = (en, gender) => IMG(`${gender === 'male' ? 'young asian man' : 'young asian woman'}, ${en}, front facing portrait, shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail`, 'square');
+  const COMM_REAL = (en, gender) => IMG(`${gender === 'male' ? 'young asian man' : 'young asian woman'} just got a haircut, ${en}, casual smartphone selfie, indoor bathroom lighting, natural unedited look, real photo, slight grain`, 'square');
+  const COMM_POSTS = [
+    {
+      id: 'c1', name: '小鹿', ava: '#E28FA6', meta: '杭州 · 剪后第 2 天', badge: 'real',
+      styleId: 'f1', gender: 'female', styleName: '法式波波头',
+      text: '拿着 AI 图去找托尼，剪完比想象中还服帖！同事都问我在哪家店剪的，圆脸真的可以冲。',
+      ai: COMM_AI('french bob haircut, chin length, soft inward ends', 'female'),
+      after: COMM_REAL('fresh french bob haircut, chin length, soft inward ends', 'female'),
+      score: 96, tags: ['圆脸友好', '显脸小', '好打理'], likes: 128, liked: false,
+      comments: [
+        { n: '莉莉', t: '2 小时前', x: '求问怎么跟托尼描述长度的！' },
+        { n: '小圆', t: '1 小时前', x: '同款脸型，收藏了，周末就去。' }
+      ]
+    },
+    {
+      id: 'c2', name: 'Momo', ava: '#B58BC9', meta: '成都 · 剪后第 1 天', badge: 'real',
+      styleId: 'f2', gender: 'female', styleName: '日系碎短发',
+      text: 'AI 图上是很轻的碎感，剪完层次有点重…算翻车吗？姐妹们帮我看看要不要回去救。',
+      ai: COMM_AI('japanese layered short hair, airy texture', 'female'),
+      after: COMM_REAL('short layered japanese haircut, slightly heavy ends, airy fringe', 'female'),
+      score: 72, tags: ['层次偏重', '求拯救'], likes: 86, liked: false,
+      comments: [
+        { n: '阿柚', t: '3 小时前', x: '不算翻车，吹干的时候用点蓬松喷雾会好很多。' },
+        { n: '托尼老师', t: '2 小时前', x: '发尾再打薄一点就接近了，别自己剪。' },
+        { n: 'Momo', t: '1 小时前', x: '谢谢！明天去店里让师傅修一下发尾。' }
+      ]
+    },
+    {
+      id: 'c3', name: '阿柚', ava: '#7FA6C9', meta: '上海 · 还在纠结', badge: 'ask',
+      styleId: 'f3', gender: 'female', styleName: '港风大波浪',
+      text: '想剪这个港风大波浪，但我的发量偏少，怕烫完撑不起来。有没有同发量的姐妹试过？',
+      ai: COMM_AI('hong kong retro big wavy long hair', 'female'), after: null, score: null,
+      tags: ['发量少', '求建议'], likes: 203, liked: false,
+      comments: [
+        { n: '卷卷', t: '4 小时前', x: '发量少建议先烫根部，卷度选大一号，会蓬很多。' },
+        { n: '小鹿', t: '2 小时前', x: '我发量也少，剪了同款，重点是层次不要太高。' }
+      ]
+    },
+    {
+      id: 'c4', name: '理工男阿哲', ava: '#6E8C7A', meta: '深圳 · 剪后第 3 天', badge: 'real',
+      styleId: 'm2', gender: 'male', styleName: '微分碎盖',
+      text: '第一次拿 AI 效果图去剪，居然没翻车。两侧推了 #2，顶部保留长度，比之前精神多了。',
+      ai: COMM_AI('textured fringe korean men hair with see-through bangs', 'male'),
+      after: COMM_REAL('fresh textured fringe korean men haircut, faded sides, natural fringe', 'male'),
+      score: 93, tags: ['男生可抄', '通勤'], likes: 64, liked: false,
+      comments: [
+        { n: '阿凯', t: '5 小时前', x: '兄弟，理发师沟通卡也发我一份。' }
+      ]
+    },
+    {
+      id: 'c5', name: '一颗糖', ava: '#D9A15F', meta: '广州 · 剪后第 5 天', badge: 'real',
+      styleId: 'f7', gender: 'female', styleName: '羊毛卷',
+      text: 'AI 是慵懒羊毛卷，我剪完像刚被电过…不过洗了两次之后自然多了，放出来给大家避个雷。',
+      ai: COMM_AI('tight curly wool perm hair with volume', 'female'),
+      after: COMM_REAL('fresh tight curly perm hair, voluminous, slightly frizzy', 'female'),
+      score: 68, tags: ['翻车预警', '洗完会好'], likes: 312, liked: false,
+      comments: [
+        { n: '卷毛', t: '昨天', x: '哈哈哈哈真实，羊毛卷前三天真的不能见人。' },
+        { n: '一颗糖', t: '昨天', x: '对！第四天开始才是完全体。' }
+      ]
+    }
+  ];
+  /* 讨论区话题：与帖子 tags 精确匹配，只展示当前有内容的 */
+  const COMM_TOPICS = ['显脸小', '圆脸友好', '翻车预警', '发量少', '男生可抄', '通勤', '好打理'];
+
+  /* ---------- 全局状态 ---------- */
+  const FACE_SHAPES = ['鹅蛋脸', '圆脸', '方脸', '心形脸'];
+  const S = {
+    page: 'splash',
+    photo: null,
+    consent: false,
+    faceShape: null,
+    mode: 'hair',
+    gender: 'female',
+    cat: '全部',
+    selected: [],
+    color: null,
+    results: [],
+    pendingResults: null,
+    active: 0,
+    payTarget: 0,
+    unlockedIds: [],
+    resultView: 'compare',
+    commFilter: 'all',
+    commTopic: '',
+    commentPost: null,
+    composeAi: null,
+    composeAfter: null,
+    composeTags: [],
+    composeMode: 'any'
+  };
+
+  /* ---------- 每日免费额度（1 次/天 + 分享/广告最多 +3） ---------- */
+  const QUOTA_KEY = 'fajing_quota_v1';
+  function dayKey() {
+    const d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  let QUOTA = { date: dayKey(), freeUsed: 0, bonus: 0 };
+  try {
+    const q = JSON.parse(localStorage.getItem(QUOTA_KEY) || 'null');
+    if (q && q.date === dayKey()) QUOTA = q;
+  } catch (e) {}
+
+  /* 分享奖励：每个账号终身仅 1 次（不受每日重置影响） */
+  const SHARE_REWARD_KEY = 'fajing_share_reward_used_v1';
+  let SHARE_REWARD_USED = false;
+  try { SHARE_REWARD_USED = localStorage.getItem(SHARE_REWARD_KEY) === '1'; } catch (e) {}
+  function claimShareReward() {
+    if (SHARE_REWARD_USED) return false;
+    SHARE_REWARD_USED = true;
+    try { localStorage.setItem(SHARE_REWARD_KEY, '1'); } catch (e) {}
+    grantQuota(1);
+    return true;
+  }
+  function saveQuota() {
+    try { localStorage.setItem(QUOTA_KEY, JSON.stringify(QUOTA)); } catch (e) {}
+  }
+  function ensureQuotaDay() {
+    if (QUOTA.date !== dayKey()) {
+      QUOTA = { date: dayKey(), freeUsed: 0, bonus: 0 };
+      saveQuota();
+    }
+  }
+  function quotaRemain() {
+    ensureQuotaDay();
+    return (QUOTA.freeUsed ? 0 : 1) + QUOTA.bonus;
+  }
+  function consumeQuota() {
+    ensureQuotaDay();
+    if (QUOTA.bonus > 0) QUOTA.bonus--;
+    else QUOTA.freeUsed = 1;
+    saveQuota();
+    refreshQuotaUI();
+  }
+  function grantQuota(n) {
+    ensureQuotaDay();
+    QUOTA.bonus = Math.min(3, QUOTA.bonus + n);
+    saveQuota();
+    refreshQuotaUI();
+  }
+  function refreshQuotaUI() {
+    const remain = quotaRemain();
+    const canShare = !SHARE_REWARD_USED;
+    const sub = document.getElementById('ctaSub');
+    if (sub) sub.textContent = remain > 0
+      ? '今日还剩 ' + remain + ' 次免费'
+      : (canShare ? '免费次数用完 · 分享再得 1 次' : '免费次数用完 · 看广告再得 1 次');
+    const sf = document.getElementById('statFree');
+    if (sf) sf.innerHTML = remain + '<span style="font-size:11px;color:var(--muted)">次</span>';
+
+    // 额度弹层：分享奖励只能领 1 次，领过后按钮置灰
+    const qs = document.getElementById('quotaSub');
+    if (qs) qs.textContent = canShare
+      ? '每天 1 次免费生成。分享好友（限 1 次）或看广告，可再得 1 次。'
+      : '每天 1 次免费生成。分享奖励已领过（限 1 次），看广告可再得 1 次。';
+    const qb = document.getElementById('quotaShareBtn');
+    if (qb) {
+      qb.disabled = !canShare;
+      qb.style.opacity = canShare ? '' : '.42';
+      qb.innerHTML = '<svg class="ic ic-sm"><use href="#i-share"/></svg>' +
+        (canShare ? '分享给好友 · 再得 1 次' : '分享奖励已领过（限 1 次）');
+    }
+  }
+  function openQuotaSheet() {
+    refreshQuotaUI();
+    openSheet('sheetQuota');
+  }
+  /* 因额度不足被打断的生成：补齐额度后自动续跑，避免用户再点一次 */
+  let pendingGen = false;
+  function quotaShare() {
+    closeSheets();
+    if (!claimShareReward()) {
+      toast('分享奖励每个账号仅 1 次，已领取过了');
+      return;
+    }
+    const resume = pendingGen;
+    pendingGen = false;
+    toast('分享成功 · 免费次数 +1（分享奖励限 1 次）' + (resume ? '，正在重新生成…' : ''));
+    if (resume) setTimeout(startGenerate, 320);
+  }
+  function quotaAd() {
+    closeSheets();
+    grantQuota(1);
+    const resume = pendingGen;
+    pendingGen = false;
+    toast('原型演示：广告观看完成 · 免费次数 +1' + (resume ? '，正在重新生成…' : ''));
+    if (resume) setTimeout(startGenerate, 320);
+  }
+
+  /* 已付费解锁的发型（同一款不用重复付费） */
+  const UNLOCK_KEY = 'fajing_unlocked_v1';
+  try {
+    const u = JSON.parse(localStorage.getItem(UNLOCK_KEY) || '[]');
+    if (Array.isArray(u)) S.unlockedIds = u.filter(x => typeof x === 'string').slice(0, 60);
+  } catch (e) {}
+  function saveUnlocked() {
+    try { localStorage.setItem(UNLOCK_KEY, JSON.stringify(S.unlockedIds)); } catch (e) {}
+  }
+  /* 精确同步 App 高度 = 可视窗口高度，修复手机浏览器（微信/旧 Safari/安卓 WebView）
+     底部按钮被地址栏或手势条遮挡的问题 */
+  function syncAppHeight() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    if (window.innerWidth < 520) {
+      // 部分无头/内嵌 WebView 在首帧会返回 0 或异常高度，避免把整个 App 压成 0
+      if (!window.innerHeight || window.innerHeight < 360) return;
+      const h = window.innerHeight + 'px';
+      app.style.height = h;
+      app.style.minHeight = h;
+    } else {
+      app.style.height = '';
+      app.style.minHeight = '';
+    }
+  }
+
+  const PAGES = ['splash', 'home', 'upload', 'styles', 'generating', 'result', 'card', 'profile', 'community'];
+  let navStack = [];
+  let splashTimer = null;
+  let hashGuard = false;
+  let genTimer = null;
+
+  /* ---------- 通用工具 ---------- */
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+  function openSheet(id) {
+    // 同一时间只允许一个弹层，避免隐私页/额度页叠在一起互相遮挡
+    document.querySelectorAll('.sheet').forEach(function (s) {
+      if (s.id !== id) s.classList.remove('show');
+    });
+    if (id !== 'sheetPay' && payTick) { clearInterval(payTick); payTick = null; }
+    document.getElementById('mask').classList.add('show');
+    document.getElementById(id).classList.add('show');
+  }
+  function closeSheets() {
+    document.getElementById('mask').classList.remove('show');
+    document.querySelectorAll('.sheet').forEach(s => s.classList.remove('show'));
+    if (payTick) { clearInterval(payTick); payTick = null; }
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  /* ---------- 路由 ---------- */
+  function go(name, opts) {
+    opts = opts || {};
+    const el = document.getElementById('page-' + name);
+    if (!el) return;
+    pendingGen = false; // 离开当前页即作废"额度不足待续跑"的意图
+    // 主动跳转后取消启动页的自动跳首页，避免页面被拽回首页
+    if (name !== 'splash' && splashTimer) {
+      clearTimeout(splashTimer);
+      splashTimer = null;
+    }
+    // 离开生成页时终止进度计时，避免用户中途返回后又被自动跳到结果页
+    if (S.page === 'generating' && name !== 'generating' && genTimer) {
+      clearInterval(genTimer);
+      genTimer = null;
+    }
+    closeSheets();
+    // 记录返回栈：splash / generating 不入栈，避免返回到中间态页面
+    if (!opts.fromBack && name !== S.page && name !== 'generating' &&
+        S.page !== 'generating' && S.page !== 'splash') {
+      // 连续「换一批」会重复进入选款页，去重防止返回键原地打转
+      if (navStack[navStack.length - 1] !== S.page) navStack.push(S.page);
+      if (navStack.length > 20) navStack.shift();
+    }
+    if (name === 'home' && !opts.fromBack) navStack = [];
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    S.page = name;
+    if (!opts.keepScroll) {
+      el.querySelectorAll('.scroll').forEach(s => { s.scrollTop = 0; });
+    }
+    if (name === 'home') renderHome();
+    if (name === 'community') renderCommunity();
+    if (name === 'styles') { renderRec(); renderCats(); renderColors(); renderGrid(); updateGenBar(); }
+    if (name === 'profile') renderProfile();
+    if (name === 'result') renderResult();
+    if (name === 'card') renderCard();
+    if (name === 'upload') syncUploadNext();
+    if (location.hash !== '#' + name) {
+      hashGuard = true;
+      location.hash = name;
+    }
+  }
+  window.addEventListener('hashchange', function () {
+    if (hashGuard) { hashGuard = false; return; }
+    const n = location.hash.replace('#', '');
+    if (PAGES.indexOf(n) > -1 && n !== 'splash') go(n);
+  });
+
+  /* 返回上一页（按真实进入路径回退） */
+  function back() {
+    let prev = navStack.pop();
+    while (prev === 'generating' || prev === 'splash') prev = navStack.pop();
+    go(prev || 'home', { fromBack: true });
+  }
+
+  /* ---------- 首页 ---------- */
+  function renderHome() {
+    const strip = document.getElementById('hotStrip');
+    strip.innerHTML = STYLES.female.slice(0, 6).map((s, i) => `
+      <button class="hot-card" onclick="quickTry('${s.id}')">
+        <div class="hot-thumb">
+          <img src="${PORTRAIT(s.en, 'female')}" alt="${esc(s.name)}" loading="lazy" onerror="this.style.opacity=0">
+          ${i < 2 ? '<span class="hot-tag">本周热门</span>' : ''}
+        </div>
+        <div class="hot-name">${esc(s.name)}</div>
+      </button>`).join('');
+    refreshQuotaUI();
+  }
+  function quickTry(id) {
+    const s = STYLES.female.find(x => x.id === id) || STYLES.male.find(x => x.id === id);
+    if (!s) return;
+    S.gender = 'female';
+    document.querySelectorAll('.gender-tab').forEach(b => b.classList.toggle('on', b.dataset.g === 'female'));
+    S.selected = [s.id];
+    S.mode = 'hair';
+    S.color = null;
+    if (!S.photo) {
+      go('upload');
+      toast('先上传一张正脸照，已为你预选「' + s.name + '」');
+      return;
+    }
+    go('styles');
+    toast('已为你选中「' + s.name + '」，可继续加选');
+  }
+
+  /* ---------- 讨论区 ---------- */
+  function commPosts(filter) {
+    if (filter === 'real') return COMM_POSTS.filter(p => !!p.after);
+    if (filter === 'ask') return COMM_POSTS.filter(p => !p.after);
+    return COMM_POSTS;
+  }
+  function renderCommunity() {
+    const counts = { all: COMM_POSTS.length, real: commPosts('real').length, ask: commPosts('ask').length };
+    const filters = [{ k: 'all', n: '全部' }, { k: 'real', n: '剪后实拍' }, { k: 'ask', n: '还在纠结' }];
+    document.getElementById('commFilters').innerHTML = filters.map(f =>
+      `<button class="cf ${S.commFilter === f.k ? 'on' : ''}" onclick="setCommFilter('${f.k}')">${f.n}<span class="cf-n">${counts[f.k]}</span></button>`
+    ).join('');
+
+    // 话题筛选：只展示有内容的话题，并显示帖子数
+    const topicList = COMM_TOPICS.map(t => ({
+      t: t,
+      n: COMM_POSTS.filter(p => (p.tags || []).indexOf(t) > -1).length
+    })).filter(x => x.n > 0);
+    if (S.commTopic && !topicList.some(x => x.t === S.commTopic)) S.commTopic = '';
+    document.getElementById('commTopics').innerHTML =
+      '<span class="ct-label">话题</span>' +
+      `<button class="ct ${S.commTopic ? '' : 'on'}" onclick="setCommTopic('')">全部</button>` +
+      topicList.map(x =>
+        `<button class="ct ${S.commTopic === x.t ? 'on' : ''}" onclick="setCommTopic('${x.t}')">#${x.t}<span class="ct-n">${x.n}</span></button>`
+      ).join('');
+
+    let posts = commPosts(S.commFilter);
+    if (S.commTopic) posts = posts.filter(p => (p.tags || []).indexOf(S.commTopic) > -1);
+    const list = document.getElementById('commList');
+    if (!posts.length) {
+      list.innerHTML = `<div class="comm-empty">这个${S.commTopic ? '话题' : '分类'}还没有作业<br>` +
+        '<button class="empty-link" onclick="resetCommFilters()">查看全部作业 →</button></div>';
+      return;
+    }
+    list.innerHTML = posts.map(commPostHTML).join('');
+  }
+  function setCommTopic(t) {
+    S.commTopic = t;
+    renderCommunity();
+  }
+  function resetCommFilters() {
+    S.commFilter = 'all';
+    S.commTopic = '';
+    renderCommunity();
+  }
+  function commPostHTML(p) {
+    const isReal = !!p.after;
+    const badge = isReal
+      ? '<span class="post-badge">剪后实拍</span>'
+      : '<span class="post-badge ask">还没剪</span>';
+    const scoreHtml = (isReal && p.score)
+      ? `<span class="pair-score ${p.score < 85 ? 'warn' : ''}">还原 ${p.score}%</span>` : '';
+    let media;
+    if (isReal && p.ai) {
+      media = `<div class="post-pair">
+        <div class="pair-cell before">
+          <img src="${p.ai}" alt="AI 预览" loading="lazy" onerror="this.style.opacity=0">
+          <span class="pair-tag">AI 预览</span>
+        </div>
+        <div class="pair-cell">
+          <img src="${p.after}" alt="剪后实拍" loading="lazy" onerror="this.style.opacity=0">
+          <span class="pair-tag after">剪后实拍</span>
+          ${scoreHtml}
+        </div>
+        <div class="pair-arrow"><svg class="ic ic-xs"><use href="#i-arrow-right"/></svg></div>
+      </div>`;
+    } else {
+      const img = p.after || p.ai || '';
+      media = `<div class="post-pair single">
+        <div class="pair-cell">
+          <img src="${img}" alt="${isReal ? '剪后实拍' : 'AI 效果图'}" loading="lazy" onerror="this.style.opacity=0">
+          <span class="pair-tag ${isReal ? 'after' : ''}">${isReal ? '剪后实拍' : 'AI 效果图'}</span>
+          ${scoreHtml}
+        </div>
+      </div>`;
+    }
+    const tags = (p.tags || []).map(t => `<span class="post-tag">${esc(t)}</span>`).join('');
+    return `<article class="post">
+      <div class="post-head">
+        <div class="post-ava" style="background:${p.ava || '#C95676'}">${esc(String(p.name || '我').slice(0, 1))}</div>
+        <div class="post-wh">
+          <div class="post-name">${esc(p.name)} ${badge}</div>
+          <div class="post-meta">${esc(p.meta || '')} · ${esc(p.styleName || '')}</div>
+        </div>
+      </div>
+      <div class="post-body">${esc(p.text)}</div>
+      ${media}
+      ${tags ? `<div class="post-tags">${tags}</div>` : ''}
+      <div class="post-actions">
+        <button class="post-act ${p.liked ? 'liked' : ''}" onclick="togglePostLike('${p.id}')">
+          <svg class="ic ic-sm"><use href="#i-heart"/></svg><span>${p.likes}</span>
+        </button>
+        <button class="post-act" onclick="openComments('${p.id}')">
+          <svg class="ic ic-sm"><use href="#i-message"/></svg><span>${p.comments.length}</span>
+        </button>
+        <button class="post-act try" onclick="communityTry('${p.styleId}','${p.gender}')">
+          <svg class="ic ic-sm"><use href="#i-scissors"/></svg>试同款
+        </button>
+      </div>
+    </article>`;
+  }
+  function setCommFilter(k) {
+    S.commFilter = k;
+    renderCommunity();
+  }
+  function togglePostLike(id) {
+    const p = COMM_POSTS.find(x => x.id === id);
+    if (!p) return;
+    p.liked = !p.liked;
+    p.likes = Math.max(0, p.likes + (p.liked ? 1 : -1));
+    renderCommunity();
+    if (p.liked) toast('已点赞 · 去评论区聊聊还原度');
+  }
+  function openComments(id) {
+    const p = COMM_POSTS.find(x => x.id === id);
+    if (!p) return;
+    S.commentPost = id;
+    document.getElementById('cmInput').value = '';
+    renderComments();
+    openSheet('sheetComments');
+    setTimeout(function () {
+      const list = document.getElementById('cmList');
+      if (list) list.scrollTop = list.scrollHeight;
+    }, 60);
+  }
+  function renderComments() {
+    const p = COMM_POSTS.find(x => x.id === S.commentPost);
+    if (!p) return;
+    document.getElementById('cmTitle').textContent = '评论 · ' + p.comments.length;
+    document.getElementById('cmSub').textContent = p.styleName + ' · ' + p.name + ' 的' + (p.after ? '剪后作业' : '纠结贴');
+    const list = document.getElementById('cmList');
+    if (!p.comments.length) {
+      list.innerHTML = '<div class="comm-empty" style="padding:24px 10px">还没有评论，来当第一个给建议的人</div>';
+      return;
+    }
+    list.innerHTML = p.comments.map(c => `<div class="cm-item">
+      <div class="cm-ava" style="background:${c.c || '#C9A0B4'}">${esc(String(c.n || '网').slice(0, 1))}</div>
+      <div class="cm-main">
+        <div class="cm-name">${esc(c.n)}<span>${esc(c.t || '刚刚')}</span></div>
+        <div class="cm-text">${esc(c.x)}</div>
+      </div>
+    </div>`).join('');
+  }
+  function sendComment() {
+    const p = COMM_POSTS.find(x => x.id === S.commentPost);
+    if (!p) return;
+    const input = document.getElementById('cmInput');
+    const val = (input.value || '').trim();
+    if (!val) return toast('先写点想说的内容');
+    p.comments.push({ n: '我', t: '刚刚', x: val, c: '#C95676' });
+    input.value = '';
+    renderComments();
+    renderCommunity();
+    const list = document.getElementById('cmList');
+    if (list) list.scrollTop = list.scrollHeight;
+    toast('评论已发布（原型演示）');
+  }
+  function communityTry(id, gender) {
+    let g = gender === 'male' ? 'male' : 'female';
+    let s = STYLES[g].find(x => x.id === id);
+    if (!s) {
+      g = g === 'female' ? 'male' : 'female';
+      s = STYLES[g].find(x => x.id === id);
+    }
+    if (!s) return toast('这款发型暂时下架了');
+    S.gender = g;
+    document.querySelectorAll('.gender-tab').forEach(b => b.classList.toggle('on', b.dataset.g === g));
+    S.selected = [s.id];
+    S.mode = 'hair';
+    S.color = null;
+    if (!S.photo) {
+      go('upload');
+      toast('先上传一张正脸照，已为你预选「' + s.name + '」');
+      return;
+    }
+    go('styles');
+    toast('已为你选中「' + s.name + '」，可继续加选');
+  }
+  function composeStyleObj() {
+    const name = (document.getElementById('composeStyle').value || '').trim();
+    const all = STYLES.female.map(s => ({ s: s, g: 'female' }))
+      .concat(STYLES.male.map(s => ({ s: s, g: 'male' })));
+    return all.find(x => x.s.name === name) || all[0];
+  }
+  function openCompose(mode) {
+    const r = S.results && S.results[S.active];
+    const askMode = mode === 'ask';
+    S.composeMode = askMode ? 'ask' : (mode === 'real' ? 'real' : 'any');
+    S.composeAi = r ? r.img : null;
+    S.composeAfter = null;
+    document.getElementById('composeStyle').value = r ? r.name : '';
+    document.getElementById('composeText').value = '';
+    document.getElementById('composeScore').value = 90;
+    document.getElementById('composeScoreV').textContent = '90%';
+    document.getElementById('composeScoreRow').style.display = askMode ? 'none' : 'flex';
+    document.getElementById('composeTitle').textContent = askMode
+      ? '还没剪？先听听建议'
+      : (S.composeMode === 'real' ? '晒出你的新发型' : '发布到讨论');
+    document.getElementById('composeText').placeholder = askMode
+      ? '说说你在纠结什么：脸型、发量、还是怕托尼听不懂？'
+      : '说说剪完的感受：还原度怎么样？托尼听懂了吗？';
+    document.getElementById('composeSub').textContent = askMode
+      ? '贴一张你纠结的 AI 效果图，让剪过的姐妹帮你参谋。'
+      : (S.composeMode === 'real'
+          ? (r ? '已带入你最近一次 AI 效果图，补一张剪后实拍就能发布。'
+               : 'AI 效果图 + 剪后实拍，帮更多人少踩一次雷。')
+          : '晒剪后实拍交作业，或贴 AI 效果图问问大家。');
+    S.composeTags = askMode ? ['还在纠结', '求建议'] : [];
+    document.getElementById('composeTagInput').value = '';
+    document.getElementById('aiPick').classList.remove('show');
+    renderComposeTags();
+    renderComposeSlots();
+    openSheet('sheetCompose');
+  }
+  function renderComposeSlots() {
+    const ai = document.getElementById('slotAi');
+    const af = document.getElementById('slotAfter');
+    ai.classList.toggle('done', !!S.composeAi);
+    af.classList.toggle('done', !!S.composeAfter);
+    ai.innerHTML = S.composeAi
+      ? `<img src="${S.composeAi}" alt="AI 效果图"><span class="cslot-tag">AI 效果</span><span class="cslot-x" onclick="event.stopPropagation();clearComposeSlot('ai')"><svg class="ic ic-xs"><use href="#i-x"/></svg></span>`
+      : `<svg class="ic"><use href="#i-sparkles"/></svg><span>AI 效果图</span><span class="cslot-hint">点击模拟选择</span>`;
+    af.innerHTML = S.composeAfter
+      ? `<img src="${S.composeAfter}" alt="剪后实拍"><span class="cslot-tag">剪后实拍</span><span class="cslot-x" onclick="event.stopPropagation();clearComposeSlot('after')"><svg class="ic ic-xs"><use href="#i-x"/></svg></span>`
+      : `<svg class="ic"><use href="#i-camera"/></svg><span>剪后实拍</span><span class="cslot-hint">点击模拟选择</span>`;
+  }
+  function clearComposeSlot(which) {
+    if (which === 'ai') S.composeAi = null;
+    else S.composeAfter = null;
+    renderComposeSlots();
+  }
+  /* ---- 交作业：图片选择 ---- */
+  let composePickTarget = 'after';
+  let AI_PICK_IMAGES = [];
+
+  /* 本机可用的 AI 效果图：本次结果优先，其次历史记录 */
+  function localAiImages() {
+    const out = [];
+    (S.results || []).forEach(r => { if (r.img) out.push(r.img); });
+    HIST.forEach(h => (h.items || []).forEach(it => { if (it.img) out.push(it.img); }));
+    if (HIST[0] && HIST[0].img) out.push(HIST[0].img);
+    return out.filter((v, i, a) => a.indexOf(v) === i).slice(0, 12);
+  }
+
+  function pickComposeSlot(which) {
+    if (which === 'ai') {
+      // 先给本机试过的效果图，也可以从相册上传
+      const list = localAiImages();
+      if (list.length) {
+        AI_PICK_IMAGES = list;
+        document.getElementById('aiPickList').innerHTML = list.map((src, i) =>
+          `<button class="ai-pick-item${S.composeAi === src ? ' on' : ''}" onclick="useAiPick(${i})" aria-label="使用这张效果图">
+             <img src="${src}" alt="" onerror="this.style.opacity=0">
+           </button>`).join('');
+        document.getElementById('aiPick').classList.add('show');
+        return;
+      }
+    }
+    pickComposeFile(which);
+  }
+
+  function pickComposeFile(which) {
+    composePickTarget = which;
+    const inp = document.getElementById('composeFile');
+    inp.value = '';
+    inp.click();
+  }
+
+  function useAiPick(i) {
+    const src = AI_PICK_IMAGES[i];
+    if (!src) return;
+    S.composeAi = src;
+    document.getElementById('aiPick').classList.remove('show');
+    renderComposeSlots();
+    toast('已使用这张 AI 效果图');
+  }
+
+  function onComposeFileChange(e) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      if (composePickTarget === 'ai') S.composeAi = reader.result;
+      else S.composeAfter = reader.result;
+      document.getElementById('aiPick').classList.remove('show');
+      renderComposeSlots();
+      toast(composePickTarget === 'ai' ? 'AI 效果图已添加' : '剪后实拍已添加');
+    };
+    reader.readAsDataURL(f);
+  }
+
+  /* ---- 交作业：标签（模板 + 自定义） ---- */
+  const COMPOSE_TAGS_DEFAULT = ['剪后实拍', '还在纠结', '圆脸友好', '显脸小', '好打理', '还原度高', '翻车预警', '求建议'];
+  let COMPOSE_TAGS_CUSTOM = [];
+
+  function composeTagPool() { return COMPOSE_TAGS_DEFAULT.concat(COMPOSE_TAGS_CUSTOM); }
+
+  function renderComposeTags() {
+    const el = document.getElementById('composeTagList');
+    if (!el) return;
+    el.innerHTML = composeTagPool().map((t, i) =>
+      `<button class="ctag${S.composeTags.indexOf(t) > -1 ? ' on' : ''}" onclick="toggleComposeTag(${i})">${esc(t)}</button>`
+    ).join('');
+  }
+
+  function toggleComposeTag(i) {
+    const t = composeTagPool()[i];
+    if (!t) return;
+    const k = S.composeTags.indexOf(t);
+    if (k > -1) S.composeTags.splice(k, 1);
+    else if (S.composeTags.length >= 4) return toast('最多选 4 个标签');
+    else S.composeTags.push(t);
+    renderComposeTags();
+  }
+
+  function addComposeTag() {
+    const el = document.getElementById('composeTagInput');
+    const v = (el.value || '').trim().replace(/\s+/g, '').slice(0, 10);
+    if (!v) return;
+    if (composeTagPool().indexOf(v) === -1) COMPOSE_TAGS_CUSTOM.push(v);
+    if (S.composeTags.indexOf(v) === -1) {
+      if (S.composeTags.length >= 4) return toast('最多选 4 个标签');
+      S.composeTags.push(v);
+    }
+    el.value = '';
+    renderComposeTags();
+    toast('已添加标签「' + v + '」');
+  }
+  function publishPost() {
+    const ai = S.composeAi;
+    const after = S.composeAfter;
+    if (!ai && !after) return toast('先添加至少一张图片');
+    const picked = composeStyleObj();
+    const styleVal = (document.getElementById('composeStyle').value || '').trim();
+    const styleName = styleVal || picked.s.name;
+    const text = (document.getElementById('composeText').value || '').trim() || '刚剪完，来交个作业。';
+    const score = parseInt(document.getElementById('composeScore').value, 10) || 90;
+    const real = !!after;
+    // 用户选的标签优先，没选则按作业类型给默认标签
+    const tags = S.composeTags.length
+      ? S.composeTags.slice(0, 4)
+      : (real ? ['剪后实拍', '还原度 ' + score + '%'] : ['还在纠结', '求建议']);
+    COMM_POSTS.unshift({
+      id: 'my' + Date.now(),
+      name: '我', ava: '#C95676', meta: '刚刚 · 我的作业', badge: real ? 'real' : 'ask',
+      styleId: picked.s.id, gender: picked.g, styleName: styleName,
+      text: text, ai: ai, after: after, score: real ? score : null,
+      tags: tags,
+      likes: 0, liked: false, comments: []
+    });
+    closeSheets();
+    S.commFilter = 'all';
+    S.commTopic = '';
+    renderCommunity();
+    const sc = document.querySelector('#page-community .scroll');
+    if (sc) sc.scrollTop = 0;
+    toast(real ? '作业已发布，去讨论区看看大家的反馈' : '已发布，等姐妹们来支招');
+  }
+
+  /* ---------- 上传页 ---------- */
+  function pickPhoto(mode) {
+    const input = document.getElementById('fileInput');
+    input.value = '';
+    if (mode === 'camera') input.setAttribute('capture', 'user');
+    else input.removeAttribute('capture');
+    input.click();
+  }
+  function setPhoto(src) {
+    S.photo = src;
+    const dz = document.getElementById('dropzone');
+    const img = document.getElementById('dzPreview');
+    img.src = src;
+    dz.classList.add('has-img');
+    syncUploadNext();
+  }
+  function toggleConsent() {
+    S.consent = !S.consent;
+    document.getElementById('consentCbx').classList.toggle('on', S.consent);
+    syncUploadNext();
+  }
+  function syncUploadNext() {
+    const btn = document.getElementById('uploadNext');
+    btn.disabled = !(S.photo && S.consent);
+  }
+  function doFaceCheck(btn) {
+    if (!S.photo) return toast('请先上传一张正脸照');
+    if (!S.consent) return toast('请先勾选隐私授权');
+    if (btn.disabled) return;
+    const old = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '正在校验人脸…';
+    setTimeout(function () { btn.textContent = '正在分析脸型…'; }, 850);
+    setTimeout(function () {
+      btn.disabled = false;
+      btn.textContent = old.trim() || '下一步';
+      // 原型：前端模拟脸型识别，同一张照片返回稳定结果，正式版由 AI 人脸检测接口返回
+      let hash = 0;
+      for (let i = 0; i < S.photo.length; i += 97) hash = (hash * 31 + S.photo.charCodeAt(i)) >>> 0;
+      S.faceShape = FACE_SHAPES[hash % FACE_SHAPES.length];
+      S.cat = '推荐';
+      go('styles');
+      toast('识别到你的脸型：' + S.faceShape + ' · 已为你推荐 ' + recList().length + ' 款');
+    }, 1750);
+  }
+
+  /* ---------- 模式 / 性别 / 分类 / 选款 ---------- */
+  function setMode(mode) {
+    S.mode = mode;
+    document.querySelectorAll('#modeSeg .seg-item').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    document.getElementById('colorBlock').style.display = mode === 'color' ? 'block' : 'none';
+    document.getElementById('modeHint').textContent = mode === 'color'
+      ? '同时更换发型与发色，染发效果也能提前看到。'
+      : '保留你原本的发色，只换剪裁和造型。';
+    updateGenBar();
+  }
+  function setGender(g) {
+    if (S.gender === g) return;
+    S.gender = g;
+    S.cat = S.faceShape ? '推荐' : '全部';
+    S.selected = [];
+    document.querySelectorAll('.gender-tab').forEach(b => b.classList.toggle('on', b.dataset.g === g));
+    renderRec();
+    renderCats();
+    renderGrid();
+    updateGenBar();
+  }
+  function renderCats() {
+    const row = document.getElementById('catRow');
+    const cats = (S.faceShape ? ['推荐'] : []).concat(CATS[S.gender]);
+    if (cats.indexOf(S.cat) < 0) S.cat = '全部';
+    row.innerHTML = cats.map(c =>
+      `<button class="chip ${c === S.cat ? 'on' : ''}" onclick="setCat('${c}')">${c === '推荐' ? '为你推荐' : c}</button>`).join('');
+    const active = row.querySelector('.chip.on');
+    if (active) row.scrollLeft = Math.max(0, active.offsetLeft - 20);
+  }
+  function setCat(c) {
+    S.cat = c;
+    renderCats();
+    renderGrid();
+  }
+  /* 脸型匹配：发型的适合脸型包含用户脸型，或标注「所有脸型」 */
+  function matchesFace(s, shape) {
+    const f = String((s && s.face) || '');
+    return !!shape && (f.indexOf(shape) > -1 || f.indexOf('所有脸型') > -1);
+  }
+  function isRecommended(s) {
+    return matchesFace(s, S.faceShape);
+  }
+  /* 推荐队列：命中的排前面，不足 4 款用同性别其他款补足（参考 YouCam 个性化推荐） */
+  function recList() {
+    const all = STYLES[S.gender];
+    if (!S.faceShape) return all.slice(0, 4);
+    const hit = all.filter(s => matchesFace(s, S.faceShape));
+    const rest = all.filter(s => !matchesFace(s, S.faceShape));
+    return hit.concat(rest).slice(0, 4);
+  }
+  function renderRec() {
+    const card = document.getElementById('recCard');
+    if (!card) return;
+    if (!S.faceShape) { card.style.display = 'none'; return; }
+    card.style.display = 'flex';
+    document.getElementById('recFace').textContent = S.faceShape;
+    const matched = STYLES[S.gender].filter(s => matchesFace(s, S.faceShape)).length;
+    document.getElementById('recDesc').textContent = matched
+      ? '这 ' + Math.min(4, matched) + ' 款最修饰你的脸型，先看这几款'
+      : '你的脸型很百搭，这 4 款最近很火';
+  }
+  /* 一键试推荐：选中 4 款并直接进入生成（缺发色时先停在选色） */
+  function tryRecommended() {
+    if (!S.faceShape) return toast('先上传一张正脸照，AI 才能分析脸型');
+    S.selected = recList().map(function (s) { return s.id; }).slice(0, 4);
+    S.cat = '推荐';
+    renderCats();
+    renderGrid();
+    updateGenBar();
+    if (!S.photo) { go('upload'); return; }
+    if (S.mode === 'color' && !S.color) {
+      document.getElementById('colorBlock').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return toast('已选好 4 款推荐，选一个发色就能生成');
+    }
+    startGenerate();
+  }
+  function currentList() {
+    const all = STYLES[S.gender];
+    if (S.cat === '推荐') return recList();
+    return S.cat === '全部' ? all : all.filter(s => s.cat === S.cat);
+  }
+  function renderGrid() {
+    const grid = document.getElementById('styleGrid');
+    const list = currentList();
+    if (!list.length) {
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">这个分类还没有发型，换一个看看？</div>';
+      return;
+    }
+    grid.innerHTML = list.map(s => `
+      <button class="style-card ${S.selected.indexOf(s.id) > -1 ? 'on' : ''}" onclick="toggleStyle('${s.id}')">
+        <div class="style-thumb">
+          <img src="${PORTRAIT(s.en, S.gender)}" alt="${esc(s.name)}" loading="lazy" onerror="this.style.opacity=0">
+          ${isRecommended(s) ? '<span class="style-rec">适你</span>' : ''}
+          <div class="style-badge"><svg class="ic ic-xs"><use href="#i-check"/></svg></div>
+        </div>
+        <div class="style-name">${esc(s.name)}</div>
+        <div class="style-tagline">${esc(s.len)} · ${esc(s.face)}</div>
+      </button>`).join('');
+  }
+  function toggleStyle(id) {
+    const i = S.selected.indexOf(id);
+    if (i > -1) S.selected.splice(i, 1);
+    else if (S.selected.length >= 4) return toast('最多选 4 款，先取消一款吧');
+    else S.selected.push(id);
+    renderGrid();
+    updateGenBar();
+  }
+  function updateGenBar() {
+    const btn = document.getElementById('generateBtn');
+    const label = document.getElementById('genLabel');
+    const n = S.selected.length;
+    if (n === 0) {
+      label.textContent = '请先选择发型';
+      btn.disabled = true;
+    } else if (S.mode === 'color' && !S.color) {
+      label.textContent = `已选 ${n} 款 · 请选一个发色`;
+      btn.disabled = true;
+    } else {
+      label.textContent = `已选 ${n} 款 · 生成我的新发型`;
+      btn.disabled = false;
+    }
+  }
+  function renderColors() {
+    const row = document.getElementById('colorRow');
+    row.innerHTML = COLORS.map(c => `
+      <button class="color-dot ${S.color && S.color.id === c.id ? 'on' : ''}" onclick="pickColor('${c.id}')">
+        <div class="color-swatch" style="background:${c.bg}">${S.color && S.color.id === c.id ? '<svg class="ic ic-xs"><use href="#i-check"/></svg>' : ''}</div>
+        <div class="color-name">${c.name}</div>
+      </button>`).join('');
+    document.getElementById('colorName').textContent = S.color ? S.color.name : '未选择';
+  }
+  function pickColor(id) {
+    const c = COLORS.find(x => x.id === id);
+    S.color = (S.color && S.color.id === id) ? null : c;
+    renderColors();
+    updateGenBar();
+  }
+
+  /* ---------- 生成流程 ---------- */
+  function styleImgFor(s) {
+    return PORTRAIT(s.en + (S.color ? ', ' + (S.color.en || S.color.name) + ' hair color' : ''), S.gender);
+  }
+  function buildPendingResults() {
+    S.pendingResults = S.selected.map(function (id) {
+      const s = STYLES[S.gender].find(x => x.id === id);
+      return { id: s.id, name: s.name, cat: s.cat, len: s.len, face: s.face, img: styleImgFor(s) };
+    });
+    return S.pendingResults;
+  }
+  /* 生成期间预加载结果图：避免「进度 100% 后还要等图片加载」的白屏 */
+  let preload = { total: 0, loaded: 0, imgs: [] };
+  function preloadResultImages(list) {
+    preload = { total: list.length, loaded: 0, imgs: [] };
+    list.forEach(function (r) {
+      const im = new Image();
+      const done = function () { preload.loaded = Math.min(preload.total, preload.loaded + 1); };
+      im.onload = done;
+      im.onerror = done;
+      im.src = r.img;
+      preload.imgs.push(im);
+    });
+    const el = document.getElementById('genCount');
+    if (el) el.textContent = '已出图 0 / ' + list.length + ' 张';
+  }
+  /* 生成中缩略图：先铺模糊占位，进度推进时逐张显影 */
+  function renderGenThumbs(list) {
+    const el = document.getElementById('genThumbs');
+    if (!el) return;
+    el.innerHTML = (list || []).map(function (r, i) {
+      return '<div class="gen-thumb">' +
+        '<img src="' + r.img + '" alt="" onerror="this.style.opacity=0">' +
+        '<span class="gen-thumb-n">' + (i + 1) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+  function startGenerate() {
+    if (S.page === 'generating') return;
+    if (!S.selected.length) return toast('先选 1 款想试的发型');
+    if (S.mode === 'color' && !S.color) return toast('先选一个发色，或切回「只换发型」');
+    if (!S.photo) {
+      toast('先上传一张正脸照，AI 才能把发型放到你头上');
+      go('upload');
+      return;
+    }
+    if (!S.consent) {
+      toast('请先勾选隐私授权，照片仅用于本次生成');
+      go('upload');
+      return;
+    }
+    if (quotaRemain() <= 0) { pendingGen = true; return openQuotaSheet(); }
+    consumeQuota();
+    const batch = buildPendingResults();
+    preloadResultImages(batch);
+    // 结果页返回时直接回到选发型，而不是上传页（重复换一批时避免返回栈重复）
+    if (navStack[navStack.length - 1] !== 'styles') navStack.push('styles');
+    renderGenThumbs(batch);
+    go('generating');
+    const total = 8000;
+    const t0 = performance.now();
+    const ring = document.getElementById('ringFg');
+    const num = document.getElementById('ringNum');
+    const title = document.getElementById('genTitle');
+    const steps = Array.prototype.slice.call(document.querySelectorAll('.gen-step'));
+    const titles = ['正在识别人脸特征…', '匹配最适合你的发型…', '渲染效果中…'];
+    clearInterval(genTimer);
+    genTimer = setInterval(function () {
+      const t = performance.now() - t0;
+      const p = Math.min(1, t / total);
+      ring.setAttribute('stroke-dashoffset', String(402 * (1 - p)));
+      num.innerHTML = Math.round(p * 100) + '<span style="font-size:13px">%</span>';
+      const idx = t < 2000 ? 0 : (t < 5000 ? 1 : 2);
+      title.textContent = titles[idx];
+      const byTime = Math.floor(p * (preload.total + 1));
+      const shown = Math.min(preload.loaded, Math.min(preload.total, byTime));
+      const gc = document.getElementById('genCount');
+      if (gc) gc.textContent = '已出图 ' + shown + ' / ' + preload.total + ' 张';
+      document.querySelectorAll('#genThumbs .gen-thumb').forEach(function (el, i) {
+        el.classList.toggle('on', i < shown);
+      });
+      steps.forEach(function (el, i) {
+        el.classList.toggle('on', i === idx);
+        el.classList.toggle('done', i < idx);
+        el.querySelector('.step-ico').innerHTML = i < idx ? '<svg class="ic ic-xs"><use href="#i-check"/></svg>' : String(i + 1);
+      });
+      if (p >= 1) {
+        clearInterval(genTimer);
+        genTimer = null;
+        document.querySelectorAll('#genThumbs .gen-thumb').forEach(function (el) { el.classList.add('on'); });
+        buildResults();
+        go('result');
+      }
+    }, 80);
+  }
+  function buildResults() {
+    S.results = (S.pendingResults && S.pendingResults.length)
+      ? S.pendingResults
+      : S.selected.map(function (id) {
+          const s = STYLES[S.gender].find(x => x.id === id);
+          return {
+            id: s.id, name: s.name, cat: s.cat, len: s.len, face: s.face,
+            img: styleImgFor(s)
+          };
+        });
+    S.pendingResults = null;
+    S.active = 0;
+    // 写入本地历史（模拟“试过的”）
+    const rec = {
+      t: Date.now(),
+      gender: S.gender,
+      color: S.color,
+      title: S.results.map(r => r.name).join(' / '),
+      img: S.results[0].img,
+      items: S.results
+    };
+    HIST.unshift(rec);
+    HIST = HIST.slice(0, 12);
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(HIST)); } catch (e) {}
+  }
+
+  /* ---------- 结果页 ---------- */
+  /* 脸型适配度：原型 mock，按发型 id 稳定生成，保证同一款每次一致 */
+  function fitOf(r) {
+    const seed = String(r.id || '').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
+    const userFace = S.faceShape;
+    const faces = String(r.face || '鹅蛋脸').split('/').map(function (s) { return s.trim(); }).filter(Boolean);
+    const face = userFace || faces[0] || '鹅蛋脸';
+    // 用户脸型与发型适配时加权，保证结果页描述与选款页的识别结果一致
+    let score = 88 + (seed % 9);
+    if (userFace && matchesFace(r, userFace)) score += 2;
+    score = Math.max(85, Math.min(98, score));
+    const lv = score >= 96 ? '极高' : (score >= 92 ? '很高' : '较高');
+    const BASES = {
+      '圆脸': ['下颌线柔和', '发长修饰脸宽'],
+      '方脸': ['下颌角明显', '侧分柔化轮廓'],
+      '长脸': ['脸部偏长', '刘海平衡比例'],
+      '鹅蛋脸': ['脸型均衡', '发际线高度适中'],
+      '心形脸': ['额头偏宽', '两侧留长收窄'],
+      '小脸': ['脸型紧凑', '发量提升存在感'],
+      '所有脸型': ['脸型百搭', '不挑五官'],
+      '学生感': ['气质干净', '厚度自然不夸张'],
+      '成熟': ['轮廓硬朗', '侧分提升精神度'],
+      '硬朗': ['骨骼感强', '短寸更利落'],
+      '潮男': ['风格外放', '层次感更出挑']
+    };
+    const basis = BASES[face] || ['轮廓协调', '发流自然'];
+    return {
+      score: score,
+      lv: lv,
+      desc: face + ' · ' + basis.join(' · '),
+      tags: [r.cat || '热门款', userFace && matchesFace(r, userFace) ? '与脸型很搭' : basis[0], '好打理']
+    };
+  }
+  function applyFit(r) {
+    if (!r) return;
+    const f = fitOf(r);
+    const C = 144.5;
+    const ring = document.getElementById('fitRing');
+    if (ring) {
+      ring.style.strokeDashoffset = String(C);
+      requestAnimationFrame(function () {
+        ring.style.strokeDashoffset = String(C * (1 - f.score / 100));
+      });
+    }
+    document.getElementById('fitNum').innerHTML = f.score + '<small>%</small>';
+    document.getElementById('fitLv').textContent = f.lv;
+    document.getElementById('fitDesc').textContent = f.desc;
+    document.getElementById('fitTags').innerHTML = f.tags.map(function (t) {
+      return '<span class="fit-tag">' + esc(t) + '</span>';
+    }).join('');
+  }
+
+  function activeUnlocked() {
+    const r = S.results[S.active];
+    return !!(r && S.unlockedIds.indexOf(r.id) > -1);
+  }
+  /* 免费策略：第 1 款免费含水印，第 2-4 款需解锁（参考 HairTry / lockpeek） */
+  function isLocked(i) {
+    const r = S.results[i];
+    return !!(i > 0 && r && S.unlockedIds.indexOf(r.id) < 0);
+  }
+  function lockedCount() {
+    let n = 0;
+    S.results.forEach(function (r, i) {
+      if (i > 0 && S.unlockedIds.indexOf(r.id) < 0) n++;
+    });
+    return n;
+  }
+  /* 付费墙限时优惠：默认展示折扣价，首次打开付费墙开始 10 分钟倒计时 */
+  const PAY_SALE_MS = 10 * 60 * 1000;
+  let paySaleEnd = 0;
+  let payTick = null;
+  let payExpiredHandled = false;
+  function saleActive() {
+    return !paySaleEnd || Date.now() < paySaleEnd;
+  }
+  function startPaySale() {
+    if (!paySaleEnd) paySaleEnd = Date.now() + PAY_SALE_MS;
+  }
+  function allPlanPrice() {
+    const lk = lockedCount();
+    if (lk <= 1) return 6;
+    return saleActive() ? Math.min(12, lk * 4) : lk * 6;
+  }
+  function fmtClock(ms) {
+    const left = Math.max(0, ms);
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+  function renderPaySale(lk) {
+    const pill = document.getElementById('paySale');
+    if (!pill) return;
+    if (lk <= 1) { pill.style.display = 'none'; return; }
+    pill.style.display = 'flex';
+    const text = document.getElementById('paySaleText');
+    const timer = document.getElementById('payTimer');
+    const suffix = document.getElementById('paySaleSuffix');
+    if (!saleActive()) {
+      pill.classList.add('over');
+      text.textContent = '限时特惠已结束';
+      timer.style.display = 'none';
+      suffix.textContent = '· 已恢复原价';
+      return;
+    }
+    pill.classList.remove('over');
+    text.textContent = '限时特惠';
+    timer.style.display = '';
+    suffix.textContent = '后恢复原价';
+    timer.textContent = fmtClock(paySaleEnd - Date.now());
+  }
+  function renderAllPlan(lk) {
+    const allPlan = document.querySelector('#sheetPay .plan[data-plan="all"]');
+    if (!allPlan) return;
+    const showAll = lk > 1;
+    allPlan.style.display = showAll ? '' : 'none';
+    if (!showAll) return;
+    const price = allPlanPrice();
+    const full = lk * 6;
+    const saved = full - price;
+    document.getElementById('payAllTitle').innerHTML = '解锁剩余 ' + lk + ' 款' +
+      (saved > 0 ? ' <span class="plan-tag">限时特惠</span>' : '');
+    document.getElementById('payAllDesc').textContent = saved > 0
+      ? '比单张省 ¥' + saved + ' · 推荐'
+      : '一次解锁，免重复付费';
+    document.getElementById('payAllOld').style.display = saved > 0 ? '' : 'none';
+    document.getElementById('payAllOld').textContent = '¥' + full;
+    document.getElementById('payAllPrice').textContent = String(price);
+  }
+  function startPayTick() {
+    clearInterval(payTick);
+    payTick = setInterval(function () {
+      const lk = lockedCount();
+      renderPaySale(lk);
+      if (!saleActive() && !payExpiredHandled) {
+        payExpiredHandled = true;
+        renderAllPlan(lk);
+        const cur = document.querySelector('#sheetPay .plan.on');
+        pickPlan(cur ? cur.dataset.plan : 'one');
+        syncUnlockUI();
+        syncUnlockBanner();
+      }
+    }, 1000);
+  }
+  function syncUnlockUI() {
+    const unlocked = activeUnlocked();
+    const locked = isLocked(S.active);
+    const lk = lockedCount();
+    document.getElementById('watermark').style.display = (unlocked || locked) ? 'none' : 'block';
+
+    const primary = document.getElementById('resultPrimary');
+    const label = document.getElementById('unlockLabel');
+    const sub = document.getElementById('unlockSub');
+    if (primary && label && sub) {
+      primary.classList.remove('done');
+      if (lk > 0) {
+        label.textContent = '解锁剩余 ' + lk + ' 款';
+        sub.textContent = '高清无水印 · ¥' + allPlanPrice();
+      } else if (unlocked) {
+        primary.classList.add('done');
+        label.textContent = '保存高清无水印图';
+        sub.textContent = '可直接发给理发师';
+      } else {
+        label.textContent = '解锁这张高清图';
+        sub.textContent = '¥6 · 去水印 2K';
+      }
+    }
+  }
+  /* 底部主 CTA：有未解锁款 → 解锁；已解锁 → 直接保存 */
+  function resultPrimary() {
+    if (lockedCount() > 0) return openPaywall('all');
+    if (activeUnlocked()) return saveImage();
+    return openPaywall('current');
+  }
+  function renderResultStrip() {
+    const strip = document.getElementById('resultStrip');
+    strip.innerHTML = S.results.map((x, i) => {
+      const locked = isLocked(i);
+      return `
+      <button class="r-thumb ${i === S.active ? 'on' : ''} ${locked ? 'locked' : ''}" onclick="switchResult(${i})">
+        <img src="${x.img}" alt="${esc(x.name)}" onerror="this.style.opacity=0">
+        <span class="r-thumb-idx">${i + 1}</span>
+        ${i === 0 ? '<span class="r-thumb-free">免费</span>' : ''}
+        ${locked ? '<span class="r-thumb-lock"><svg class="ic"><use href="#i-lock"/></svg></span>' : ''}
+      </button>`;
+    }).join('');
+  }
+  function renderResultGrid() {
+    const grid = document.getElementById('resGrid');
+    grid.classList.toggle('single', S.results.length === 1);
+    grid.innerHTML = S.results.map((x, i) => {
+      const locked = isLocked(i);
+      return `
+      <button class="res-cell ${i === S.active ? 'on' : ''} ${locked ? 'locked' : ''}" onclick="openFromGrid(${i})">
+        <img src="${x.img}" alt="${esc(x.name)}" onerror="this.style.opacity=0">
+        <span class="res-cell-idx">${i + 1}</span>
+        ${locked ? '<span class="res-cell-lock"><span class="lk"><svg class="ic ic-sm"><use href="#i-lock"/></svg></span><b>解锁查看</b></span>' : ''}
+        <span class="res-cell-name">${esc(x.name)}${S.color ? ' · ' + esc(S.color.name) : ''}</span>
+      </button>`;
+    }).join('');
+  }
+  function syncUnlockBanner() {
+    const bar = document.getElementById('unlockBar');
+    if (!bar) return;
+    const lk = lockedCount();
+    if (!lk) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    document.getElementById('ubThumbs').innerHTML = S.results.filter(function (r, i) {
+      return i > 0 && S.unlockedIds.indexOf(r.id) < 0;
+    }).map(function (r) {
+      return '<div class="ub-thumb"><img src="' + r.img + '" alt=""></div>';
+    }).join('');
+    document.getElementById('ubTitle').textContent = '还有 ' + lk + ' 款效果已生成';
+    document.getElementById('ubDesc').textContent = lk > 1
+      ? '限时 ¥' + allPlanPrice() + ' 解锁剩余 ' + lk + ' 款'
+      : '解锁高清无水印 · ¥6';
+  }
+  function resultDescText(r, locked) {
+    return '长度：' + r.len + ' · 适合' + r.face + (locked ? ' · 解锁后查看' : ' · AI 生成耗时 8s');
+  }
+  function syncBAHint(hasBefore, locked) {
+    const hint = document.getElementById('baHint');
+    if (locked) {
+      hint.innerHTML = '<svg class="ic ic-xs"><use href="#i-lock"/></svg>解锁后可滑动对比原图';
+      hint.style.pointerEvents = 'none';
+    } else if (!hasBefore) {
+      hint.innerHTML = '<svg class="ic ic-xs"><use href="#i-shield"/></svg>原图已按隐私承诺删除 · 仅保留 AI 效果图';
+      hint.style.pointerEvents = 'none';
+    } else {
+      hint.innerHTML = '<svg class="ic ic-xs"><use href="#i-refresh"/></svg>拖动滑块对比前后 · 点此重播';
+      hint.style.pointerEvents = '';
+    }
+  }
+  function renderResult() {
+    const r = S.results[S.active];
+    if (!r) return;
+    const wrap = document.getElementById('baWrap');
+    const before = document.getElementById('baBefore');
+    const after = document.getElementById('baAfter');
+    const hasBefore = !!S.photo;
+    const locked = isLocked(S.active);
+    if (hasBefore) before.src = S.photo;
+    else before.removeAttribute('src');
+    after.src = r.img;
+    wrap.classList.toggle('no-before', !hasBefore);
+    wrap.classList.toggle('locked', locked);
+    document.getElementById('resName').textContent = r.name + (S.color ? ' · ' + S.color.name : '');
+    document.getElementById('resDesc').textContent = resultDescText(r, locked);
+    syncBAHint(hasBefore, locked);
+    renderResultStrip();
+    renderResultGrid();
+    syncUnlockUI();
+    syncUnlockBanner();
+    setResultView(S.resultView || 'compare');
+    setBA(50);
+    applyFit(r);
+    if (!locked && hasBefore) animateCompare();
+    wrap.classList.remove('reveal');
+    void wrap.offsetWidth;
+    wrap.classList.add('reveal');
+  }
+  function switchResult(i) {
+    S.active = i;
+    const r = S.results[i];
+    if (!r) return;
+    const wrap = document.getElementById('baWrap');
+    const locked = isLocked(i);
+    wrap.classList.toggle('locked', locked);
+    const after = document.getElementById('baAfter');
+    after.style.opacity = '0';
+    setTimeout(function () {
+      after.src = r.img;
+      after.style.opacity = '1';
+      if (!locked && S.photo) animateCompare();
+      else setBA(50);
+    }, 120);
+    document.getElementById('resName').textContent = r.name + (S.color ? ' · ' + S.color.name : '');
+    document.getElementById('resDesc').textContent = resultDescText(r, locked);
+    syncBAHint(!!S.photo, locked);
+    syncUnlockUI();
+    syncUnlockBanner();
+    applyFit(r);
+    document.querySelectorAll('#resultStrip .r-thumb').forEach((el, idx) => el.classList.toggle('on', idx === i));
+    document.querySelectorAll('#resGrid .res-cell').forEach((el, idx) => el.classList.toggle('on', idx === i));
+    const stripEl = document.getElementById('resultStrip');
+    const child = stripEl && stripEl.children[i];
+    if (child && stripEl.offsetParent) child.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }
+  /* 结果视图：滑动对比 / 四宫格总览（参考 HairTry 一次看多款） */
+  function setResultView(view) {
+    S.resultView = view === 'grid' ? 'grid' : 'compare';
+    const isCompare = S.resultView === 'compare';
+    document.querySelectorAll('#viewSeg .seg-item').forEach(b =>
+      b.classList.toggle('on', b.dataset.view === S.resultView));
+    const show = (id, on, display) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = on ? (display || '') : 'none';
+    };
+    show('baWrap', isCompare, '');
+    show('baHint', isCompare, '');
+    show('fitCard', isCompare, '');
+    show('resultStrip', isCompare, 'flex');
+    show('barberEntry', isCompare, 'flex');
+    document.getElementById('resGrid').style.display = isCompare ? 'none' : 'grid';
+    show('resGridTip', !isCompare, 'block');
+  }
+  function openFromGrid(i) {
+    setResultView('compare');
+    switchResult(i);
+  }
+
+  /* 换一批：真正换一组没试过的发型（HairTry 式 4 款批量出图） */
+  function shuffleBatch() {
+    const pool = STYLES[S.gender].filter(s => !S.results.some(r => r.id === s.id));
+    if (!pool.length) return toast('这个性别的发型都试过了，换个性别看看？');
+    const picked = pool.slice().sort(() => Math.random() - 0.5).slice(0, 4).map(s => s.id);
+    if (quotaRemain() <= 0) { pendingGen = true; return openQuotaSheet(); }
+    S.selected = picked;
+    S.cat = '全部';
+    setResultView('compare');
+    startGenerate();
+  }
+
+  /* 前后对比滑杆 */
+  let baPct = 50, baDragging = false, baAnim = null;
+  function setBA(p) {
+    baPct = Math.max(3, Math.min(97, p));
+    const clip = document.getElementById('baClip');
+    const handle = document.getElementById('baHandle');
+    if (!clip) return;
+    clip.style.clipPath = 'inset(0 ' + (100 - baPct) + '% 0 0)';
+    handle.style.left = baPct + '%';
+  }
+  /* 进入结果页自动"扫一遍"前后对比（FaceApp / Lensa 式揭晓，提升第一眼爽感） */
+  function animateCompare() {
+    if (baAnim) { cancelAnimationFrame(baAnim); baAnim = null; }
+    const t0 = performance.now();
+    const start = 12, mid = 88, dur1 = 820, dur2 = 480;
+    function frame(t) {
+      const dt = t - t0;
+      if (dt < dur1) {
+        const k = 1 - Math.pow(1 - dt / dur1, 3);
+        setBA(start + (mid - start) * k);
+      } else if (dt < dur1 + dur2) {
+        const k = (dt - dur1) / dur2;
+        setBA(mid + (50 - mid) * (k * k * (3 - 2 * k)));
+      } else {
+        setBA(50);
+        baAnim = null;
+        return;
+      }
+      baAnim = requestAnimationFrame(frame);
+    }
+    baAnim = requestAnimationFrame(frame);
+  }
+  function replayCompare() {
+    if (isLocked(S.active) || !S.photo) return;
+    animateCompare();
+  }
+  function initBA() {
+    const wrap = document.getElementById('baWrap');
+    function move(e) {
+      const rect = wrap.getBoundingClientRect();
+      setBA((e.clientX - rect.left) / rect.width * 100);
+    }
+    wrap.addEventListener('pointerdown', function (e) {
+      if (baAnim) { cancelAnimationFrame(baAnim); baAnim = null; }
+      baDragging = true;
+      if (wrap.setPointerCapture) { try { wrap.setPointerCapture(e.pointerId); } catch (err) {} }
+      move(e);
+    });
+    wrap.addEventListener('pointermove', function (e) { if (baDragging) move(e); });
+    wrap.addEventListener('pointerup', function () { baDragging = false; });
+    wrap.addEventListener('pointercancel', function () { baDragging = false; });
+    wrap.addEventListener('pointerleave', function () { baDragging = false; });
+  }
+
+  /* ---------- 保存 / 付费 ---------- */
+  function saveImage() {
+    if (isLocked(S.active)) {
+      toast('这张还没解锁，先解锁再保存');
+      return openPaywall('current');
+    }
+    toast(activeUnlocked() ? '原型演示：已模拟保存高清无水印图到相册' : '原型演示：已模拟保存带水印图到相册');
+  }
+  function openPaywall(mode) {
+    if (!S.results.length) return toast('先生成一张效果图');
+    const lk = lockedCount();
+    if (!lk && activeUnlocked()) return toast('这张已解锁高清，可直接保存到相册');
+    const n = S.results.length;
+    const activeLocked = isLocked(S.active);
+    // all：从「还有 N 款」横幅进入；current：从某张图/保存/分享进入；默认按当前状态推荐
+    const preferAll = mode === 'all' || (!mode && !activeLocked && lk > 0);
+    let focus = S.active;
+    if (preferAll) {
+      const idx = S.results.findIndex(function (x, i) { return i > 0 && S.unlockedIds.indexOf(x.id) < 0; });
+      if (idx > -1) focus = idx;
+    }
+    S.payTarget = focus;
+    document.getElementById('payTitle').textContent = preferAll
+      ? (lk ? '解锁剩下 ' + lk + ' 款效果' : '解锁高清无水印版')
+      : (activeLocked ? '解锁这张效果图' : '解锁高清无水印版');
+    document.getElementById('paySub').textContent = preferAll
+      ? '剩下 ' + lk + ' 款已经生成好了，解锁后可看高清大图、保存无水印版本。'
+      : (activeLocked
+          ? '这张已经生成好了，解锁后可查看高清大图、保存无水印版本。'
+          : '去掉右下角水印，导出 2K 高清图，可直接打印给理发师看。');
+    document.getElementById('payOneDesc').textContent = '仅解锁第 ' + (focus + 1) + ' 款「' + ((S.results[focus] || {}).name || '当前款') + '」';
+    startPaySale();
+    renderAllPlan(lk);
+    renderPaySale(lk);
+    document.getElementById('payProof').textContent = '已有 23,481 人解锁高清 · 好评率 98.6%';
+    pickPlan(preferAll && n > 1 && lk > 1 ? 'all' : 'one');
+    syncPayShare();
+    openSheet('sheetPay');
+    startPayTick();
+  }
+  /* 分享免费解锁：付费墙的第二条路。每批限 1 次，剩下的仍需付费，既能裂变又不击穿付费墙 */
+  let shareFreeKey = '';
+  function shareUnlockAvailable() {
+    const key = S.results.map(function (r) { return r.id; }).join('|');
+    return lockedCount() > 0 && shareFreeKey !== key;
+  }
+  function syncPayShare() {
+    const btn = document.getElementById('payShareBtn');
+    const note = document.getElementById('payShareNote');
+    if (!btn) return;
+    const ok = shareUnlockAvailable();
+    btn.style.display = ok ? '' : 'none';
+    if (note) note.style.display = ok ? '' : 'none';
+  }
+  function shareUnlock() {
+    if (!shareUnlockAvailable()) return toast('这一批已经用分享解锁过 1 款了');
+    const key = S.results.map(function (r) { return r.id; }).join('|');
+    // 优先解锁当前正在看的这张；从「解锁剩余 N 款」进入时，解锁下一张待解锁的
+    const idx = isLocked(S.active)
+      ? S.active
+      : S.results.findIndex(function (r, i) { return i > 0 && S.unlockedIds.indexOf(r.id) < 0; });
+    if (idx < 0) return toast('没有待解锁的款式了');
+    closeSheets();
+    toast('正在唤起微信分享…');
+    setTimeout(function () {
+      const r = S.results[idx];
+      if (!r) return;
+      if (S.unlockedIds.indexOf(r.id) < 0) S.unlockedIds.push(r.id);
+      saveUnlocked();
+      shareFreeKey = key;
+      if (S.page === 'result') {
+        S.active = idx;
+        renderResult();
+      }
+      toast('分享成功 · 已免费解锁「' + r.name + '」');
+    }, 720);
+  }
+  function pickPlan(plan) {
+    document.querySelectorAll('#sheetPay .plan').forEach(p => p.classList.toggle('on', p.dataset.plan === plan));
+    const price = plan === 'all' ? allPlanPrice() : 6;
+    const btn = document.getElementById('payBtn');
+    if (btn) btn.textContent = '微信支付 ¥' + price;
+  }
+  function payNow() {
+    if (!S.results.length) return;
+    const planEl = document.querySelector('#sheetPay .plan.on');
+    const plan = planEl ? planEl.dataset.plan : 'one';
+    const price = plan === 'all' ? allPlanPrice() : 6;
+    const targets = plan === 'all' ? S.results.slice() : [S.results[S.payTarget || 0]];
+    const newly = [];
+    targets.forEach(function (r) {
+      if (r && S.unlockedIds.indexOf(r.id) < 0) { S.unlockedIds.push(r.id); newly.push(r); }
+    });
+    saveUnlocked();
+    if (plan !== 'all') S.active = Math.min(S.results.length - 1, S.payTarget || 0);
+    document.getElementById('sheetPay').classList.remove('show');
+    if (payTick) { clearInterval(payTick); payTick = null; }
+    if (S.page === 'result') renderResult();
+    showPaidSheet(newly.length ? newly : targets, price);
+  }
+  function showPaidSheet(targets, price) {
+    const n = targets.length;
+    document.getElementById('paidTitle').textContent = n > 1 ? '已解锁 ' + n + ' 款高清' : '已解锁高清无水印';
+    document.getElementById('paidSub').textContent = '已模拟支付 ¥' + price + '，可保存无水印高清图，也可以发给理发师或朋友看看。';
+    document.getElementById('paidThumbs').innerHTML = targets.slice(0, 4).map(function (r) {
+      return '<div class="paid-thumb"><img src="' + r.img + '" alt=""><span><svg class="ic" style="width:9px;height:9px"><use href="#i-check"/></svg></span></div>';
+    }).join('');
+    openSheet('sheetPaid');
+    toast('原型演示：模拟支付 ¥' + price + ' 成功');
+  }
+  function saveAllUnlocked() {
+    closeSheets();
+    toast('原型演示：已模拟保存解锁后的高清无水印图片');
+  }
+  function shareAfterPaid() {
+    closeSheets();
+    setTimeout(function () { openShare(); }, 220);
+  }
+
+  /* ---------- 分享 ---------- */
+  function shareCopyLine() {
+    const r = S.results[S.active] || {};
+    return '我在「发镜 AI」试了「' + (r.name || '新发型') + '」，8 秒生成前后对比，剪之前先看见。你也免费试 1 次 👉 fajing.ai';
+  }
+  function openShare() {
+    const r = S.results[S.active];
+    if (!r) return toast('先生成一张效果图再分享');
+    if (isLocked(S.active)) {
+      toast('解锁后就能生成分享图');
+      return openPaywall('current');
+    }
+    const card = document.getElementById('shareCard');
+    const before = document.getElementById('shareBefore');
+    const hasBefore = !!S.photo;
+    // 双拼「原图 / AI 后」；历史记录已删原图时自动降级为单张效果图
+    card.classList.toggle('single', !hasBefore);
+    if (hasBefore) before.src = S.photo;
+    else before.removeAttribute('src');
+    document.getElementById('shareSlogan').textContent = hasBefore ? '同一个人 · 换了个发型' : 'AI 生成 · 仅供试镜参考';
+    document.getElementById('shareImg').src = r.img;
+    document.getElementById('shareTitle').textContent = r.name + (S.color ? ' · ' + S.color.name : '');
+    document.getElementById('shareCopy').textContent = shareCopyLine();
+    openSheet('sheetShare');
+  }
+  function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (ok) done();
+    else toast('复制失败，请长按上方文案手动复制');
+  }
+  function copyShareText() {
+    const text = shareCopyLine();
+    const done = () => {
+      const gained = claimShareReward();
+      toast('文案已复制，去微信粘贴给闺蜜吧' + (gained ? ' · 免费次数 +1（分享奖励限 1 次）' : ''));
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+  function shareTo(name) {
+    closeSheets();
+    const gained = claimShareReward();
+    toast('原型演示：已唤起「' + name + '」分享' +
+      (gained ? ' · 免费次数 +1（分享奖励限 1 次）' : ' · 分享奖励已领过'));
+  }
+  function saveShareCard() {
+    closeSheets();
+    const gained = claimShareReward();
+    toast('前后对比图已保存到相册，带发镜 AI 水印' +
+      (gained ? ' · 免费次数 +1（分享奖励限 1 次）' : ''));
+  }
+
+  /* ---------- 理发师沟通卡 ---------- */
+  function currentSpec() {
+    const r = S.results[S.active];
+    if (!r) return BARBER_FALLBACK;
+    const s = STYLES[S.gender].find(x => x.id === r.id);
+    const table = BARBER_SPEC[S.gender] || {};
+    return table[r.cat || (s && s.cat)] || BARBER_FALLBACK;
+  }
+  function openBarberCard() {
+    if (!S.results.length) return toast('先生成一张效果图');
+    if (isLocked(S.active)) {
+      toast('解锁这张后才能生成沟通卡');
+      return openPaywall('current');
+    }
+    go('card');
+  }
+  function renderCard() {
+    const r = S.results[S.active];
+    if (!r) return;
+    const spec = currentSpec();
+    document.getElementById('bcImg').src = r.img;
+    document.getElementById('bcName').textContent = r.name + (S.color ? ' · ' + S.color.name : '');
+    document.getElementById('bcNote').textContent = '长度：' + r.len + ' · 适合' + r.face;
+    document.getElementById('bcSpecs').innerHTML = [
+      ['长度', spec.len],
+      ['层次', spec.layer],
+      ['刘海', spec.bangs],
+      ['两侧', spec.side],
+      ['发色', S.color ? S.color.name : '保持原本发色']
+    ].map(function (x) {
+      return '<div class="bc-row"><div class="bc-k">' + x[0] + '</div><div class="bc-v">' + esc(x[1]) + '</div></div>';
+    }).join('');
+    document.getElementById('bcTip').textContent = '给理发师的提醒：' + spec.tip;
+    document.getElementById('bcBadge').textContent = S.color ? '参考效果图 · 含发色' : '参考效果图';
+  }
+  function barberText() {
+    const r = S.results[S.active];
+    if (!r) return '';
+    const spec = currentSpec();
+    return [
+      '【发镜 AI · 理发师沟通卡】',
+      '发型：' + r.name,
+      '长度：' + spec.len,
+      '层次：' + spec.layer,
+      '刘海：' + spec.bangs,
+      '两侧：' + spec.side,
+      '发色：' + (S.color ? S.color.name : '保持原本发色'),
+      '提醒：' + spec.tip,
+      '参考图见聊天图（AI 生成，仅供沟通）'
+    ].join('\n');
+  }
+  function copyBarberText() {
+    const text = barberText();
+    if (!text) return toast('先生成一张效果图');
+    const done = () => toast('沟通卡文字已复制，粘贴发给理发师即可');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+  function saveBarberCard() {
+    toast('沟通卡已保存到相册（原型演示）');
+  }
+  function sendToBarber() {
+    toast('原型演示：已生成沟通卡，可发微信给理发师');
+  }
+
+  /* ---------- 隐私与数据 ---------- */
+  let privArmed = false;
+  function resetClearBtn(btn) {
+    if (btn) btn.innerHTML = '<svg class="ic ic-sm"><use href="#i-trash"/></svg>立即删除我的照片与记录';
+  }
+  function openPrivacy() {
+    privArmed = false;
+    resetClearBtn(document.getElementById('clearDataBtn'));
+    openSheet('sheetPrivacy');
+  }
+  function clearMyData(btn) {
+    if (!privArmed) {
+      privArmed = true;
+      btn.textContent = '再次点击确认删除';
+      toast('删除后不可恢复，请再点一次确认');
+      clearTimeout(clearMyData._t);
+      clearMyData._t = setTimeout(function () {
+        privArmed = false;
+        resetClearBtn(btn);
+      }, 4000);
+      return;
+    }
+    privArmed = false;
+    clearTimeout(clearMyData._t);
+    resetClearBtn(btn);
+    HIST = [];
+    S.photo = null;
+    S.unlockedIds = [];
+    S.results = [];
+    S.selected = [];
+    S.color = null;
+    S.consent = false;
+    S.faceShape = null;
+    S.cat = '全部';
+    paySaleEnd = 0;
+    payExpiredHandled = false;
+    QUOTA = { date: dayKey(), freeUsed: 0, bonus: 0 };
+    SHARE_REWARD_USED = false;
+    try {
+      localStorage.removeItem(HIST_KEY);
+      localStorage.removeItem(UNLOCK_KEY);
+      localStorage.removeItem(QUOTA_KEY);
+      localStorage.removeItem(SHARE_REWARD_KEY);
+    } catch (e) {}
+    const dz = document.getElementById('dropzone');
+    const preview = document.getElementById('dzPreview');
+    if (dz) dz.classList.remove('has-img');
+    if (preview) preview.removeAttribute('src');
+    const cbx = document.getElementById('consentCbx');
+    if (cbx) cbx.classList.remove('on');
+    syncUploadNext();
+    closeSheets();
+    renderProfile();
+    refreshQuotaUI();
+    toast('已删除照片引用与全部本地记录');
+  }
+
+  /* ---------- 我的 ---------- */
+  function renderProfile() {
+    document.getElementById('statTotal').textContent = HIST.length;
+    document.getElementById('statHd').textContent = String(S.unlockedIds.length);
+    refreshQuotaUI();
+    const list = document.getElementById('historyList');
+    if (!HIST.length) {
+      list.innerHTML = '<div class="empty" onclick="go(\'upload\')" style="background:#fff;border-radius:16px;box-shadow:var(--sh-sm);cursor:pointer">' +
+        '还没有试发记录<br><span style="color:var(--pink-600);font-weight:700">去试第一款发型 →</span></div>';
+      return;
+    }
+    list.innerHTML = HIST.map(function (h, i) {
+      const d = new Date(h.t);
+      const time = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      return `<div class="hist-item" onclick="openHistory(${i})" style="cursor:pointer">
+        <div class="hist-img"><img src="${h.img}" alt="" onerror="this.style.opacity=0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(h.title)}</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:4px">${time} · ${(h.items || []).length} 款结果</div>
+          <div style="font-size:10.5px;color:var(--pink-600);margin-top:6px;font-weight:600">查看结果 →</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  function openHistory(i) {
+    const h = HIST[i];
+    if (!h || !h.items || !h.items.length) return toast('这条记录已失效');
+    S.results = h.items;
+    S.pendingResults = null;
+    S.active = 0;
+    S.photo = null; // 原图按隐私承诺不保留，历史只回看 AI 效果图
+    if (h.gender) S.gender = h.gender;
+    S.color = h.color || null;
+    go('result');
+  }
+  /* ---------- 初始化 ---------- */
+  function init() {
+    renderHome();
+    renderCats();
+    renderColors();
+    renderGrid();
+    updateGenBar();
+    syncUploadNext();
+    initBA();
+    renderComposeTags();
+    document.getElementById('composeFile').addEventListener('change', onComposeFileChange);
+    refreshQuotaUI();
+
+    // 同步可视高度：初始化 + 窗口变化 + iOS 可视视口变化
+    syncAppHeight();
+    window.addEventListener('resize', syncAppHeight);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', syncAppHeight);
+
+    // 桌面端预览时：鼠标纵向滚轮 → 横向滚动（手机上手指滑动本身就可以滚）
+    document.querySelectorAll('.chip-row,.color-row,.hot-strip,.result-strip,.ai-pick-list').forEach(function (el) {
+      el.addEventListener('wheel', function (e) {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) {
+          el.scrollLeft += e.deltaY;
+          e.preventDefault();
+        }
+      }, { passive: false });
+    });
+
+    document.getElementById('fileInput').addEventListener('change', function (e) {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      if (!f.type || f.type.indexOf('image/') !== 0) {
+        e.target.value = '';
+        return toast('请选择 JPG / PNG 格式的图片');
+      }
+      if (f.size > 15 * 1024 * 1024) {
+        e.target.value = '';
+        return toast('图片超过 15MB，请压缩后再上传');
+      }
+      setPhoto(URL.createObjectURL(f));
+      toast('照片已上传，记得勾选隐私授权');
+    });
+
+    // 历史记录不保留原图，若引用失效则自动切换为「仅效果图」视图
+    document.getElementById('baBefore').addEventListener('error', function () {
+      if (!this.getAttribute('src')) return;
+      document.getElementById('baWrap').classList.add('no-before');
+      const hint = document.getElementById('baHint');
+      hint.innerHTML = '<svg class="ic ic-xs"><use href="#i-shield"/></svg>原图已按隐私承诺删除 · 仅保留 AI 效果图';
+      hint.style.pointerEvents = 'none';
+    });
+
+    // Esc 关闭弹层（桌面端）
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeSheets();
+    });
+
+    document.getElementById('splashSkip').addEventListener('click', function () { go('home'); });
+    document.getElementById('page-splash').addEventListener('click', function () {
+      clearTimeout(splashTimer);
+      go('home');
+    });
+    splashTimer = setTimeout(function () { go('home'); }, 3000);
+
+    // 允许用示例照片快速走通流程
+    const demoBtn = document.getElementById('demoPhotoBtn');
+    if (demoBtn) demoBtn.addEventListener('click', function () {
+      setPhoto(DEMO_BEFORE);
+      if (!S.consent) toggleConsent();
+      toast('已使用示例照片，可直接下一步');
+    });
+  }
+  init();
+  window.go = go; window.toast = toast; window.pickPhoto = pickPhoto; window.toggleConsent = toggleConsent;
+  window.doFaceCheck = doFaceCheck; window.setMode = setMode; window.setGender = setGender;
+  window.setCat = setCat; window.toggleStyle = toggleStyle; window.pickColor = pickColor;
+  window.startGenerate = startGenerate; window.switchResult = switchResult; window.saveImage = saveImage;
+  window.openPaywall = openPaywall; window.pickPlan = pickPlan; window.payNow = payNow;
+  window.shareUnlock = shareUnlock;
+  window.resultPrimary = resultPrimary;
+  window.openShare = openShare; window.copyShareText = copyShareText;
+  window.shareTo = shareTo; window.saveShareCard = saveShareCard;
+  window.openBarberCard = openBarberCard; window.copyBarberText = copyBarberText;
+  window.saveBarberCard = saveBarberCard; window.sendToBarber = sendToBarber;
+  window.openHistory = openHistory;
+  window.quickTry = quickTry; window.closeSheets = closeSheets;
+  window.tryRecommended = tryRecommended;
+  window.back = back;
+  window.shuffleBatch = shuffleBatch; window.setResultView = setResultView; window.openFromGrid = openFromGrid;
+  window.quotaShare = quotaShare; window.quotaAd = quotaAd;
+  window.replayCompare = replayCompare;
+  window.openPrivacy = openPrivacy; window.clearMyData = clearMyData;
+  window.saveAllUnlocked = saveAllUnlocked; window.shareAfterPaid = shareAfterPaid;
+  window.setCommFilter = setCommFilter; window.togglePostLike = togglePostLike;
+  window.setCommTopic = setCommTopic; window.resetCommFilters = resetCommFilters;
+  window.openComments = openComments; window.sendComment = sendComment;
+  window.communityTry = communityTry; window.openCompose = openCompose;
+  window.pickComposeSlot = pickComposeSlot; window.clearComposeSlot = clearComposeSlot;
+  window.publishPost = publishPost;
+  window.pickComposeFile = pickComposeFile; window.useAiPick = useAiPick;
+  window.toggleComposeTag = toggleComposeTag; window.addComposeTag = addComposeTag;
+  </script>
+</div>
+</body>
+</html>
