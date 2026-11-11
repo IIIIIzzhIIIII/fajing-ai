@@ -1,0 +1,92 @@
+html:root {
+  --el-color-primary: #c95676;
+  --el-color-primary-light-3: #d9899f;
+  --el-color-primary-light-5: #e4aaba;
+  --el-color-primary-light-7: #efccd5;
+  --el-color-primary-light-8: #f4dce3;
+  --el-color-primary-light-9: #faedf1;
+  --el-color-primary-dark-2: #a1455e;
+
+  --el-text-color-primary: #2b2628;
+  --el-text-color-regular: #5c5157;
+  --el-border-color-lighter: #f0e9ec;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: #2b2628;
+  background-color: #f5f3f5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #d9d0d5;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.el-button {
+  font-weight: 500;
+}
+
+.el-table {
+  --el-table-border-color: #f2ebee;
+  --el-table-header-bg-color: #faf7f8;
+  --el-table-row-hover-bg-color: #fdf4f7;
+}
+
+.el-table th.el-table__cell {
+  background-color: #faf7f8;
+  color: #6f636a;
+  font-weight: 600;
+}
+
+.el-table .cell {
+  line-height: 1.6;
+}
+
+.el-dialog {
+  border-radius: 12px;
+}
+
+.el-dialog__header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f2ebee;
+}
+
+.el-dialog__title {
+  font-weight: 600;
+}
+
+.el-menu {
+  border-right: none;
+}
+
+.el-message-box {
+  border-radius: 12px;
+}
