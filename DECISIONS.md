@@ -55,7 +55,23 @@ toast、遮罩、额度、付费、支付成功、分享、发布、评论、隐
 `/api/admin/**` 由 `AdminInterceptor` 校验 `X-Admin-Token: admin-token`。
 前端管理后台固定账号 `admin/admin123`，仅做路由守卫，不构成真实安全边界（阶段约定，后续接 RuoYi 权限）。
 
-## 10. 遗留 TODO
+## 10. 对比滑杆与水印抽成独立组件
+
+`FjCompareSlider`：负责测量容器、拖拽/鼠标事件、裁剪比例与重播动画，父级只传 `before` / `after` / `unlocked` 并通过 `v-model:pct` 同步位置。
+`FjWatermarkMask`：未解锁时在图片右下角叠加 "AI 生成 · 发镜 AI"，预留 `position` 以便沟通卡、讨论区复用。
+抽出的动机：原型里这套逻辑同时出现在结果页、沟通卡与社区帖子里，内联会导致三份重复代码与三套拖拽 bug。
+
+## 11. 接口地址可被环境变量覆盖
+
+`src/api/request.js` 的 `BASE_URL` 读取 `VITE_API_BASE`，缺省仍是 `http://localhost:8080`（与约定一致）。
+原因是本机 8080 可能被其它程序占用，开发时可用 `VITE_API_BASE` 指向 8090 等端口，无需改代码、避免误提交本地端口。
+
+## 12. 图片兜底样式
+
+Uniapp H5 的 `<image>` 渲染为 `uni-image`，加载失败时默认是空白块。
+全局给 `img / uni-image / image` 加设计语言底色渐变，失败时呈现柔和的粉灰占位而非白块，减少"图裂"观感。
+
+## 13. 遗留 TODO
 
 - 微信登录（JWT）替换写死的 `userId = 1L`
 - 接入真实 AI 出图服务

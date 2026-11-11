@@ -48,6 +48,28 @@ npm install
 npm run dev                    # http://localhost:8081  admin / admin123
 ```
 
+### 端口被占用 / 需要改接口地址
+
+- 8080 被其它程序占用时，后端可临时换端口启动：
+  `mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8090 --fajing.base-url=http://localhost:8090"`
+- 前端接口地址默认 `http://localhost:8080`，可用环境变量覆盖（无需改代码）：
+
+  ```bash
+  # PowerShell
+  $env:VITE_API_BASE='http://127.0.0.1:8090'; npm run dev:h5
+  ```
+
+- 5173 被占用时 Vite 会自动 +1，请以终端打印的地址为准；后端 CORS 已放行 5173 / 5180 / 8081。
+- 首次启动后端会自动执行 `db/schema.sql` 与 `db/data.sql`（幂等），无需手动导入。
+
+### 构建验证
+
+```bash
+cd fajing-uniapp && npm run build:h5 && npm run build:mp-weixin
+cd fajing-server && mvn compile
+cd fajing-admin  && npm run build
+```
+
 ## 接口速览
 
 | 方法 | 路径 | 说明 |
