@@ -145,6 +145,10 @@
     </view>
 
     <fj-sheet />
+
+    <!-- #ifdef MP-WEIXIN -->
+    <canvas canvas-id="fajing-wm" class="wm-canvas" />
+    <!-- #endif -->
   </view>
 </template>
 
@@ -327,6 +331,15 @@ onShow(() => {
 </script>
 
 <style lang="scss" scoped>
+/* 小程序水印合成画布：移出可视区，尺寸与 utils/save.js 中 750×1000 一致 */
+.wm-canvas {
+  position: fixed;
+  left: -2000px;
+  top: 0;
+  width: 750px;
+  height: 1000px;
+  pointer-events: none;
+}
 .meta-main {
   flex: 1;
   min-width: 0;

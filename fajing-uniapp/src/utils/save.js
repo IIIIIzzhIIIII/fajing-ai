@@ -40,7 +40,74 @@ function ensureAlbumAuth() {
   })
 }
 
-function saveMp(url) {
+function saveAlbum(filePath) {
+  return new Promise((resolve, reject) => {
+    uni.saveImageToPhotosAlbum({
+      filePath,
+      success: resolve,
+      fail: reject
+    })
+  })
+}
+
+/**
+ * 小程序端 Canvas 水印：固定 750×1000 画布等比铺满，右下角叠加品牌水印。
+ * 画布节点由结果页提供（canvas-id="fajing-wm"），其它页面找不到时回退原图。
+ */
+function drawMpWatermark(src) {
+  return new Promise((resolve, reject) => {
+    const W = 750
+    const H = 1000
+    let ctx = null
+    try {
+      ctx = uni.createCanvasContext('fajing-wm')
+    } catch (e) {
+      reject(e)
+      return
+    }
+    if (!ctx) {
+      reject(new Error('canvas not found'))
+      return
+    }
+    uni.getImageInfo({
+      src,
+      success: (info) => {
+        const scale = Math.min(W / info.width, H / info.height)
+        const dw = Math.round(info.width * scale)
+        const dh = Math.round(info.height * scale)
+        ctx.setFillStyle('#FFFFFF')
+        ctx.fillRect(0, 0, W, H)
+        ctx.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh)
+
+        const text = 'AI 生成 · 发镜 AI'
+        const fontSize = 26
+        const pad = 16
+        ctx.setFontSize(fontSize)
+        ctx.setTextBaseline('normal')
+        const tw = ctx.measureText(text).width
+        ctx.setFillStyle('rgba(0,0,0,0.32)')
+        ctx.fillRect(W - tw - pad * 2 - 12, H - fontSize - pad * 2.4, tw + pad * 2, fontSize + pad * 1.4)
+        ctx.setFillStyle('rgba(255,255,255,0.92)')
+        ctx.fillText(text, W - tw - pad * 1.4 - 12, H - fontSize - pad * 1.6)
+
+        ctx.draw(false, () => {
+          uni.canvasToTempFilePath({
+            canvasId: 'fajing-wm',
+            width: W,
+            height: H,
+            destWidth: W,
+            destHeight: H,
+            success: (res) => resolve(res.tempFilePath),
+            fail: reject
+          })
+        })
+      },
+      fail: reject
+    })
+  })
+}
+
+function saveMp(url, watermark) {
   return new Promise((resolve, reject) => {
     uni.downloadFile({
       url,
@@ -49,11 +116,14 @@ function saveMp(url) {
           reject(new Error('download failed'))
           return
         }
-        uni.saveImageToPhotosAlbum({
-          filePath: res.tempFilePath,
-          success: resolve,
-          fail: reject
-        })
+        if (!watermark) {
+          saveAlbum(res.tempFilePath).then(resolve, reject)
+          return
+        }
+        drawMpWatermark(res.tempFilePath)
+          .then((out) => saveAlbum(out || res.tempFilePath))
+          .then(resolve)
+          .catch(() => saveAlbum(res.tempFilePath).then(resolve, reject))
       },
       fail: reject
     })
@@ -111,6 +181,6 @@ export async function saveRemoteImage(url, watermark = false) {
   return saveH5(url, watermark)
   // #endif
   // #ifndef H5
-  return saveMp(url)
+  return saveMp(url, watermark)
   // #endif
 }
