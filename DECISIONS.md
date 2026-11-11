@@ -71,10 +71,17 @@ toast、遮罩、额度、付费、支付成功、分享、发布、评论、隐
 Uniapp H5 的 `<image>` 渲染为 `uni-image`，加载失败时默认是空白块。
 全局给 `img / uni-image / image` 加设计语言底色渐变，失败时呈现柔和的粉灰占位而非白块，减少"图裂"观感。
 
-## 13. 遗留 TODO
+## 13. 小程序端水印合成
+
+微信小程序没有 H5 的 `<canvas>` + `toDataURL` 能力，且 `saveImageToPhotosAlbum` 只接受本地文件。
+做法：结果页放置一个移出可视区的 `canvas canvas-id="fajing-wm"`（750×1000），
+保存时先用 `uni.getImageInfo` 拿原图尺寸、等比铺满画布，再 `draw` → `canvasToTempFilePath` → 存入相册。
+任何一步失败（画布不存在、绘图异常）都回退保存原图，保证"保存"这个动作不失败。
+该路径需在微信开发者工具 / 真机上最终确认，H5 已用 Playwright 验证下载成功。
+
+## 14. 遗留 TODO
 
 - 微信登录（JWT）替换写死的 `userId = 1L`
 - 接入真实 AI 出图服务
 - 接入微信支付与订单对账
-- 小程序端水印合成
 - 上传文件接入对象存储（当前落本机 `uploads/`）
