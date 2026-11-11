@@ -24,9 +24,11 @@ page {
   display: flex;
 }
 
-/* 图片兜底：加载失败显示中性底色 */
-img {
-  background-color: #F1ECEC;
+/* 图片兜底：加载失败显示中性底色（H5 渲染为 uni-image，小程序为 image） */
+img,
+uni-image,
+image {
+  background: linear-gradient(145deg, #f5e7ea, #eee9f2);
 }
 
 /* #ifdef H5 */
