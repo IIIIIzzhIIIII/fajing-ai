@@ -4,7 +4,9 @@
     "custom": {
       "^fj-icon$": "@/components/FjIcon.vue",
       "^fj-tabbar$": "@/components/FjTabBar.vue",
-      "^fj-sheet$": "@/components/FjSheet.vue"
+      "^fj-sheet$": "@/components/FjSheet.vue",
+      "^fj-compare-slider$": "@/components/FjCompareSlider.vue",
+      "^fj-watermark-mask$": "@/components/FjWatermarkMask.vue"
     }
   },
   "pages": [

@@ -26,42 +26,15 @@
         </view>
 
         <view v-if="view === 'compare'">
-          <view
-            class="ba-wrap"
-            :class="{ locked: !unlocked, 'no-before': !hasBefore }"
-            @touchstart="onDragStart"
-            @touchmove.stop="onDragMove"
-            @touchend="onDragEnd"
-            @touchcancel="onDragEnd"
-            @mousedown.stop="onDragStart"
-            @mousemove.stop="onDragMove"
-            @mouseup="onDragEnd"
-            @mouseleave="onDragEnd"
-          >
-            <image class="ba-img" :src="current.img" mode="aspectFill" style="width:100%;height:100%" />
-            <view class="ba-clip" :style="clipStyle">
-              <image class="ba-img" :src="beforeImg" mode="aspectFill" style="width:100%;height:100%" />
-            </view>
-
-            <text v-if="!unlocked" class="write-on">AI 生成 · 发镜 AI</text>
-            <text class="ba-tag l">原图</text>
-            <text class="ba-tag r">AI 效果</text>
-            <view class="ba-handle" :style="{ left: baPct + '%' }">
-              <view class="knob">
-                <fj-icon name="arrow-left" :size="16" />
-                <fj-icon name="arrow-right" :size="16" style="margin-left:-4px" />
-              </view>
-            </view>
-
-            <view v-if="!unlocked" class="ba-lock">
-              <view class="lk">
-                <fj-icon name="lock" :size="20" color="#C95676" />
-              </view>
-              <view class="ba-lock-t">这款效果已经生成好了</view>
-              <view class="ba-lock-d">解锁后可查看高清大图，并保存无水印版本</view>
-              <view class="btn btn-primary" @click.stop="ui.openSheet('pay')">解锁查看</view>
-            </view>
-          </view>
+          <fj-compare-slider
+            ref="sliderRef"
+            v-model:pct="baPct"
+            :before="beforeImg"
+            :after="current.img"
+            :unlocked="unlocked"
+            @lock="ui.openSheet('pay')"
+            @dragstart="stopReplay"
+          />
 
           <view class="ba-replay" @click="replayCompare">
             <fj-icon name="refresh" :size="13" color="#8B9295" />
@@ -176,7 +149,7 @@
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, nextTick, onUnmounted, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { onLoad, onReady, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
@@ -186,7 +159,6 @@ import { DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
 const ui = useUiStore()
-const instance = getCurrentInstance()
 
 const view = ref('compare')
 const activeIndex = ref(0)
@@ -197,7 +169,6 @@ const current = computed(
   () => styles.value[activeIndex.value] || { styleId: '', name: '', len: '', face: '', cat: '', img: '' }
 )
 const beforeImg = computed(() => (app.result && app.result.before) || app.photoPath || DEMO_BEFORE)
-const hasBefore = computed(() => !!beforeImg.value)
 const unlocked = computed(() => !!current.value.styleId && app.unlocks.includes(current.value.styleId))
 const lockedList = computed(() => styles.value.filter((item) => !isUnlocked(item)))
 const remaining = computed(() => lockedList.value.length)
@@ -234,30 +205,15 @@ const ringStyle = computed(() => {
   return `background: conic-gradient(from -90deg, #C95676 0% ${p}%, #F1DDE2 ${p}% 100%)`
 })
 
-const clipStyle = computed(() => `clip-path: inset(0 ${100 - baPct.value}% 0 0)`)
-
 const primaryTitle = computed(() =>
   remaining.value > 0 ? `解锁剩余 ${remaining.value} 款` : '已解锁全部 · 保存高清图'
 )
 const primarySub = computed(() => (remaining.value > 0 ? '高清无水印 · ¥12' : '高清无水印 · 可直接保存'))
 
-let rectLeft = 0
-let rectWidth = 0
-let dragging = false
-let replayTimer = null
+const sliderRef = ref(null)
 
 function measure() {
-  uni
-    .createSelectorQuery()
-    .in(instance.proxy)
-    .select('.ba-wrap')
-    .boundingClientRect((res) => {
-      if (res) {
-        rectLeft = res.left
-        rectWidth = res.width
-      }
-    })
-    .exec()
+  if (sliderRef.value) sliderRef.value.measure()
 }
 
 function isUnlocked(item) {
@@ -267,7 +223,6 @@ function isUnlocked(item) {
 function setView(next) {
   view.value = next === 'grid' ? 'grid' : 'compare'
   if (view.value === 'compare') {
-    dragging = false
     nextTick(measure)
   }
 }
@@ -275,8 +230,6 @@ function setView(next) {
 function selectStyle(i) {
   if (i < 0 || i >= styles.value.length) return
   activeIndex.value = i
-  baPct.value = 50
-  dragging = false
   stopReplay()
 }
 
@@ -285,57 +238,13 @@ function openFromGrid(i) {
   setView('compare')
 }
 
-function pointerX(e) {
-  const touch = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e
-  return touch.clientX !== undefined ? touch.clientX : touch.pageX
-}
-
-function applyPointer(e) {
-  if (!rectWidth) return
-  const x = pointerX(e) - rectLeft
-  baPct.value = Math.max(3, Math.min(97, (x / rectWidth) * 100))
-}
-
-function onDragStart(e) {
-  if (!unlocked.value) return
-  stopReplay()
-  dragging = true
-  measure()
-  applyPointer(e)
-}
-
-function onDragMove(e) {
-  if (!dragging) return
-  applyPointer(e)
-}
-
-function onDragEnd() {
-  dragging = false
-}
-
 function stopReplay() {
-  if (replayTimer) {
-    clearInterval(replayTimer)
-    replayTimer = null
-  }
+  baPct.value = 50
+  if (sliderRef.value) sliderRef.value.reset()
 }
 
 function replayCompare() {
-  if (!unlocked.value) return
-  stopReplay()
-  const start = Date.now()
-  replayTimer = setInterval(() => {
-    const dt = Date.now() - start
-    if (dt < 820) {
-      baPct.value = 12 + (88 - 12) * (1 - Math.pow(1 - dt / 820, 3))
-    } else if (dt < 1300) {
-      const k = (dt - 820) / 480
-      baPct.value = 88 + (50 - 88) * (k * k * (3 - 2 * k))
-    } else {
-      baPct.value = 50
-      stopReplay()
-    }
-  }, 16)
+  if (sliderRef.value) sliderRef.value.replay()
 }
 
 async function saveImage() {
@@ -415,10 +324,6 @@ onReady(() => {
 onShow(() => {
   syncUnlocks()
 })
-
-onUnmounted(() => {
-  stopReplay()
-})
 </script>
 
 <style lang="scss" scoped>
@@ -445,10 +350,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.ba-wrap.locked .ba-img {
-  filter: blur(15px) saturate(1.05);
-  transform: scale(1.04);
 }
 .r-thumb.locked .thumb-img {
   filter: blur(6px) saturate(0.9);
