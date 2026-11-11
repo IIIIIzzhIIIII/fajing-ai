@@ -1,0 +1,50 @@
+package com.fajing.controller;
+
+import com.fajing.common.BizException;
+import com.fajing.common.Result;
+import com.fajing.dto.GenerateRequest;
+import com.fajing.entity.GenerationTask;
+import com.fajing.mapper.GenerationTaskMapper;
+import com.fajing.service.GenerationProcessor;
+import com.fajing.service.GenerationService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api")
+@RequiredArgsConstructor
+public class GenerateController {
+
+    private final GenerationService generationService;
+    private final GenerationProcessor processor;
+    private final GenerationTaskMapper taskMapper;
+
+    @PostMapping("/generate")
+    public Result<Map<String, Object>> generate(@Valid @RequestBody GenerateRequest req) {
+        GenerationTask task = generationService.create(
+                req.getPhotoUrl(), req.getGender(), req.getMode(), req.getStyleIds(), req.getColorId());
+        processor.process(task.getId());
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("taskId", task.getId());
+        data.put("status", task.getStatus());
+        return Result.ok(data);
+    }
+
+    @GetMapping("/generate/{taskId}")
+    public Result<Map<String, Object>> task(@PathVariable Long taskId) {
+        GenerationTask task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BizException("生成任务不存在");
+        }
+        return Result.ok(generationService.toMap(task));
+    }
+}

@@ -1,0 +1,82 @@
+package com.fajing.service;
+
+import com.fajing.common.BizException;
+import com.fajing.entity.UserQuota;
+import com.fajing.mapper.UserQuotaMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class QuotaService {
+
+    /** TODO: 后续从 JWT 取用户 ID */
+    public static final Long USER_ID = 1L;
+
+    private final UserQuotaMapper quotaMapper;
+
+    public UserQuota get() {
+        UserQuota quota = quotaMapper.selectById(USER_ID);
+        LocalDate today = LocalDate.now();
+        if (quota == null) {
+            quota = new UserQuota();
+            quota.setUserId(USER_ID);
+            quota.setFreeLeft(1);
+            quota.setQuotaDate(today);
+            quota.setShareClaimed(false);
+            quota.setAdUsed(false);
+            quota.setUpdatedAt(LocalDateTime.now());
+            quotaMapper.insert(quota);
+            return quota;
+        }
+        // 每日重置免费次数；分享奖励标记终身只领一次，不随日期重置
+        if (!today.equals(quota.getQuotaDate())) {
+            quota.setFreeLeft(1);
+            quota.setQuotaDate(today);
+            quota.setAdUsed(false);
+            quota.setUpdatedAt(LocalDateTime.now());
+            quotaMapper.updateById(quota);
+        }
+        return quota;
+    }
+
+    public UserQuota consume(String type) {
+        UserQuota quota = get();
+        switch (type == null ? "" : type) {
+            case "free" -> {
+                if (quota.getFreeLeft() == null || quota.getFreeLeft() <= 0) {
+                    throw new BizException("今日免费次数已用完");
+                }
+                quota.setFreeLeft(quota.getFreeLeft() - 1);
+            }
+            case "share" -> {
+                if (Boolean.TRUE.equals(quota.getShareClaimed())) {
+                    throw new BizException("分享奖励已领取（每账号限 1 次）");
+                }
+                quota.setShareClaimed(true);
+                quota.setFreeLeft((quota.getFreeLeft() == null ? 0 : quota.getFreeLeft()) + 1);
+            }
+            case "ad" -> {
+                quota.setAdUsed(true);
+                quota.setFreeLeft((quota.getFreeLeft() == null ? 0 : quota.getFreeLeft()) + 1);
+            }
+            default -> throw new BizException("未知的额度类型");
+        }
+        quota.setUpdatedAt(LocalDateTime.now());
+        quotaMapper.updateById(quota);
+        return quota;
+    }
+
+    public Map<String, Object> toMap(UserQuota quota) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("freeLeft", quota.getFreeLeft() == null ? 0 : quota.getFreeLeft());
+        map.put("shareClaimed", Boolean.TRUE.equals(quota.getShareClaimed()));
+        map.put("adUsed", Boolean.TRUE.equals(quota.getAdUsed()));
+        return map;
+    }
+}
