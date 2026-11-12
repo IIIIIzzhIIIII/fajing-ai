@@ -1,0 +1,19 @@
+[Unit]
+Description=Fajing AI Server
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=fajing
+Group=fajing
+WorkingDirectory=/opt/fajing
+EnvironmentFile=/opt/fajing/.env
+ExecStart=/usr/bin/java -Xms256m -Xmx512m -jar /opt/fajing/fajing-server-1.0.0.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/fajing/logs/app.log
+StandardError=append:/opt/fajing/logs/app.err.log
+
+[Install]
+WantedBy=multi-user.target

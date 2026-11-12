@@ -1,20 +1,29 @@
 package com.fajing.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Arrays;
+
 /**
- * 允许 H5 前端（5173）与管理后台（8081）跨域访问
+ * 跨域白名单从配置读取：dev 放行 localhost，prod 只放正式域名
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
+    @Value("${app.cors.allowed-origins:http://localhost:*,http://127.0.0.1:*}")
+    private String allowedOrigins;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        String[] patterns = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
         registry.addMapping("/**")
-                // 本地开发：H5 预览、管理后台可能运行在任意端口，统一放行 localhost
-                .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*")
+                .allowedOriginPatterns(patterns.length == 0 ? new String[]{"http://localhost:*"} : patterns)
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)

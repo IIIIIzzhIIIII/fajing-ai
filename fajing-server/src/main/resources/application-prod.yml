@@ -1,0 +1,16 @@
+# 生产环境：关闭 mock 登录与旧管理端 token，跨域只放正式域名
+auth:
+  mock-enabled: false
+
+admin:
+  legacy-token-enabled: false
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+storage:
+  type: ${STORAGE_TYPE:local}
+
+content-security:
+  enabled: true

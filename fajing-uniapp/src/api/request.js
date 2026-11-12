@@ -1,18 +1,32 @@
 import { clearToken, getToken, setToken } from '@/utils/auth'
 
-const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || 'http://localhost:8081'
+const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || ''
 
 /** 统一 toast（避免各处重复 import 组件） */
 function fail(msg) {
   uni.showToast({ title: msg || '网络异常，请稍后重试', icon: 'none', duration: 2200 })
 }
 
+/** 接口地址必须由环境变量提供，缺配置时直接给出可读错误 */
+function apiBase() {
+  if (!BASE_URL) {
+    fail('接口地址未配置（VITE_API_BASE）')
+    return ''
+  }
+  return BASE_URL
+}
+
 /** 登录：小程序用 wx.login 的 code 换 token；H5 走演示登录 */
 export function login() {
   return new Promise((resolve, reject) => {
+    const base = apiBase()
+    if (!base) {
+      reject(new Error('no api base'))
+      return
+    }
     // #ifdef H5
     uni.request({
-      url: BASE_URL + '/api/auth/login/mock',
+      url: base + '/api/auth/login/mock',
       method: 'POST',
       timeout: 15000,
       success: (res) => {
@@ -38,7 +52,7 @@ export function login() {
           return
         }
         uni.request({
-          url: BASE_URL + '/api/auth/login',
+          url: base + '/api/auth/login',
           method: 'POST',
           data: { code },
           header: { 'Content-Type': 'application/json' },
@@ -74,9 +88,14 @@ function ensureLogin() {
 
 export function request({ url, method = 'GET', data = {}, header = {}, retry = true }) {
   return new Promise((resolve, reject) => {
+    const base = apiBase()
+    if (!base) {
+      reject(new Error('no api base'))
+      return
+    }
     const token = getToken()
     uni.request({
-      url: BASE_URL + url,
+      url: base + url,
       method,
       data,
       header: {
@@ -127,9 +146,14 @@ export function request({ url, method = 'GET', data = {}, header = {}, retry = t
 
 export function upload(filePath) {
   return new Promise((resolve, reject) => {
+    const base = apiBase()
+    if (!base) {
+      reject(new Error('no api base'))
+      return
+    }
     const token = getToken()
     uni.uploadFile({
-      url: BASE_URL + '/api/upload',
+      url: base + '/api/upload',
       filePath,
       name: 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
