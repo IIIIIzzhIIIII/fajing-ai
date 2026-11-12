@@ -12,6 +12,8 @@ import com.fajing.mapper.PostMapper;
 import com.fajing.mapper.ReportMapper;
 import com.fajing.service.WeChatContentSecurity;
 import com.fajing.util.UserContext;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Tag(name = "讨论区", description = "帖子、评论、点赞与举报")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -39,6 +42,7 @@ public class PostController {
     private final ReportMapper reportMapper;
     private final WeChatContentSecurity contentSecurity;
 
+    @Operation(summary = "帖子列表（支持筛选）")
     @GetMapping("/posts")
     public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String filter) {
         QueryWrapper<Post> wrapper = new QueryWrapper<Post>().orderByDesc("created_at");
@@ -56,6 +60,7 @@ public class PostController {
         return Result.ok(posts.stream().map(this::toMap).collect(Collectors.toList()));
     }
 
+    @Operation(summary = "发布帖子")
     @PostMapping("/posts")
     public Result<Map<String, Object>> create(@RequestBody PostRequest req) {
         if (req.getContent() == null || req.getContent().isBlank()) {
@@ -83,6 +88,7 @@ public class PostController {
         return Result.ok(toMap(post));
     }
 
+    @Operation(summary = "点赞/取消点赞")
     @PostMapping("/posts/{id}/like")
     public Result<Map<String, Object>> like(@PathVariable Long id) {
         Post post = postMapper.selectById(id);
@@ -100,6 +106,7 @@ public class PostController {
         return Result.ok(data);
     }
 
+    @Operation(summary = "评论列表")
     @GetMapping("/posts/{id}/comments")
     public Result<List<Map<String, Object>>> comments(@PathVariable Long id) {
         List<Comment> list = commentMapper.selectList(new QueryWrapper<Comment>()
@@ -107,6 +114,7 @@ public class PostController {
         return Result.ok(list.stream().map(this::commentMap).collect(Collectors.toList()));
     }
 
+    @Operation(summary = "发表评论（含内容安全校验）")
     @PostMapping("/posts/{id}/comments")
     public Result<Map<String, Object>> addComment(@PathVariable Long id, @RequestBody Map<String, String> body) {
         Post post = postMapper.selectById(id);
@@ -128,6 +136,7 @@ public class PostController {
     }
 
     /** 举报帖子：进入管理端待处理列表 */
+    @Operation(summary = "举报帖子")
     @PostMapping("/posts/{id}/report")
     public Result<Void> report(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
         Post post = postMapper.selectById(id);

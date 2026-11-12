@@ -14,6 +14,8 @@ import com.fajing.mapper.OrderMapper;
 import com.fajing.mapper.PostMapper;
 import com.fajing.mapper.ReportMapper;
 import com.fajing.service.AdminLogService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +39,7 @@ import java.util.stream.Collectors;
  * 管理端接口（由 AdminInterceptor 校验 X-Admin-Token）
  * TODO: 接入 RuoYi 权限体系
  */
+@Tag(name = "管理端 · 内容与订单", description = "发型管理、帖子/评论审核、举报处理与订单查看")
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -49,6 +52,7 @@ public class AdminController {
     private final ReportMapper reportMapper;
     private final AdminLogService adminLogService;
 
+    @Operation(summary = "发型列表（管理端）")
     @GetMapping("/hairstyles")
     public Result<List<Hairstyle>> hairstyles(@RequestParam(required = false) String gender) {
         QueryWrapper<Hairstyle> wrapper = new QueryWrapper<Hairstyle>().orderByAsc("sort");
@@ -58,6 +62,7 @@ public class AdminController {
         return Result.ok(hairstyleMapper.selectList(wrapper));
     }
 
+    @Operation(summary = "新增发型")
     @PostMapping("/hairstyles")
     public Result<Hairstyle> create(@RequestBody Hairstyle hairstyle) {
         if (hairstyle.getName() == null || hairstyle.getName().isBlank()) {
@@ -79,6 +84,7 @@ public class AdminController {
         return Result.ok(hairstyle);
     }
 
+    @Operation(summary = "编辑发型")
     @PutMapping("/hairstyles/{id}")
     public Result<Hairstyle> update(@PathVariable String id, @RequestBody Hairstyle hairstyle) {
         Hairstyle exists = hairstyleMapper.selectById(id);
@@ -92,6 +98,7 @@ public class AdminController {
         return Result.ok(hairstyleMapper.selectById(id));
     }
 
+    @Operation(summary = "上架/下架发型")
     @PatchMapping("/hairstyles/{id}/status")
     public Result<Hairstyle> status(@PathVariable String id, @RequestParam Integer status) {
         Hairstyle exists = hairstyleMapper.selectById(id);
@@ -104,6 +111,7 @@ public class AdminController {
         return Result.ok(exists);
     }
 
+    @Operation(summary = "帖子列表（含评论明细）")
     @GetMapping("/posts")
     public Result<List<Map<String, Object>>> posts() {
         List<Post> posts = postMapper.selectList(new QueryWrapper<Post>().orderByDesc("created_at"));
@@ -142,6 +150,7 @@ public class AdminController {
         return map;
     }
 
+    @Operation(summary = "删除帖子")
     @DeleteMapping("/posts/{id}")
     public Result<Void> deletePost(@PathVariable Long id) {
         postMapper.deleteById(id);
@@ -150,6 +159,7 @@ public class AdminController {
     }
 
     /** 举报列表（含被举报帖子的标题与内容） */
+    @Operation(summary = "举报列表")
     @GetMapping("/reports")
     public Result<List<Map<String, Object>>> reports() {
         List<Report> list = reportMapper.selectList(new QueryWrapper<Report>().orderByDesc("created_at"));
@@ -168,6 +178,7 @@ public class AdminController {
     }
 
     /** 处理举报：handled=已处理，ignored=忽略 */
+    @Operation(summary = "处理举报（handled/ignored）")
     @PatchMapping("/reports/{id}/status")
     public Result<Void> handleReport(@PathVariable Long id, @RequestParam String status) {
         Report report = reportMapper.selectById(id);
@@ -180,6 +191,7 @@ public class AdminController {
         return Result.ok();
     }
 
+    @Operation(summary = "删除评论")
     @DeleteMapping("/comments/{id}")
     public Result<Void> deleteComment(@PathVariable Long id) {
         commentMapper.deleteById(id);
@@ -187,6 +199,7 @@ public class AdminController {
         return Result.ok();
     }
 
+    @Operation(summary = "订单列表")
     @GetMapping("/orders")
     public Result<List<Order>> orders() {
         return Result.ok(orderMapper.selectList(new QueryWrapper<Order>().orderByDesc("created_at")));

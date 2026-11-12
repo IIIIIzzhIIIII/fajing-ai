@@ -6,6 +6,8 @@ import com.fajing.common.Result;
 import com.fajing.entity.AdminUser;
 import com.fajing.mapper.AdminUserMapper;
 import com.fajing.util.JwtUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +21,7 @@ import java.util.Map;
 /**
  * 管理端登录：账号密码 → JWT（role=ADMIN），后续请求走 Authorization: Bearer
  */
+@Tag(name = "管理端 · 登录", description = "账号密码登录换取 JWT（role=ADMIN）")
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -28,6 +31,7 @@ public class AdminAuthController {
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    @Operation(summary = "管理员登录")
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody Map<String, String> body) {
         String username = body == null ? null : body.get("username");

@@ -3,6 +3,8 @@ package com.fajing.controller;
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.service.storage.StorageService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+@Tag(name = "上传", description = "图片上传（本地或 S3 对象存储）")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -25,6 +28,7 @@ public class UploadController {
 
     private final StorageService storageService;
 
+    @Operation(summary = "上传图片，返回可访问 URL")
     @PostMapping("/upload")
     public Result<Map<String, Object>> upload(@RequestParam("file") MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {

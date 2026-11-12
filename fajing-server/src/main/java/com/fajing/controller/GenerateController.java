@@ -8,6 +8,8 @@ import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.service.GenerationProcessor;
 import com.fajing.service.GenerationService;
 import com.fajing.util.UserContext;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@Tag(name = "生成", description = "创建换发任务并轮询生成结果")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -31,6 +34,7 @@ public class GenerateController {
     private final GenerationProcessor processor;
     private final GenerationTaskMapper taskMapper;
 
+    @Operation(summary = "创建换发任务")
     @PostMapping("/generate")
     public Result<Map<String, Object>> generate(@Valid @RequestBody GenerateRequest req) {
         GenerationTask task = generationService.create(
@@ -42,6 +46,7 @@ public class GenerateController {
         return Result.ok(data);
     }
 
+    @Operation(summary = "查询任务状态与结果（仅本人任务）")
     @GetMapping("/generate/{taskId}")
     public Result<Map<String, Object>> task(@PathVariable Long taskId) {
         GenerationTask task = taskMapper.selectById(taskId);

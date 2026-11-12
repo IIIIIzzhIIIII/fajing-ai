@@ -8,6 +8,8 @@ import com.fajing.entity.UserRecord;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.UserRecordMapper;
 import com.fajing.util.UserContext;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Tag(name = "试发记录", description = "当前用户的试发记录")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -31,6 +34,7 @@ public class RecordController {
     private final GenerationTaskMapper taskMapper;
     private final ObjectMapper objectMapper;
 
+    @Operation(summary = "我的试发记录")
     @GetMapping("/records")
     public Result<List<Map<String, Object>>> records() {
         List<UserRecord> list = recordMapper.selectList(new QueryWrapper<UserRecord>()
@@ -41,6 +45,7 @@ public class RecordController {
     }
 
     /** 删除单条试发记录 */
+    @Operation(summary = "删除单条试发记录")
     @DeleteMapping("/records/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         UserRecord record = recordMapper.selectById(id);
@@ -51,6 +56,7 @@ public class RecordController {
     }
 
     /** 清空当前用户的试发记录，用于从下一次生成开始重新记录 */
+    @Operation(summary = "清空我的试发记录")
     @DeleteMapping("/records")
     public Result<Void> clear() {
         recordMapper.delete(new QueryWrapper<UserRecord>().eq("user_id", UserContext.require()));

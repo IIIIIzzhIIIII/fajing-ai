@@ -13,6 +13,8 @@ import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.mapper.UserRecordMapper;
 import com.fajing.mapper.UserUnlockMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -30,6 +32,7 @@ import java.util.Map;
 /**
  * 管理端 · 用户管理
  */
+@Tag(name = "管理端 · 用户", description = "用户列表与启用/停用")
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -42,6 +45,7 @@ public class AdminUserController {
     private final OrderMapper orderMapper;
     private final com.fajing.service.AdminLogService adminLogService;
 
+    @Operation(summary = "用户列表（含生成/解锁/付费统计）")
     @GetMapping("/users")
     public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String keyword,
                                                   @RequestParam(required = false) Integer status) {
@@ -82,6 +86,7 @@ public class AdminUserController {
         }).collect(java.util.stream.Collectors.toList()));
     }
 
+    @Operation(summary = "启用/停用用户")
     @PatchMapping("/users/{id}/status")
     public Result<AppUser> status(@PathVariable Long id, @RequestParam Integer status) {
         AppUser user = userMapper.selectById(id);

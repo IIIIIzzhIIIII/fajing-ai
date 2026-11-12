@@ -8,6 +8,8 @@ import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.service.GenerationService;
 import com.fajing.util.UserContext;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -31,6 +33,7 @@ import java.util.Map;
  * 未配置微信支付商户信息时走 mock 分支（创建即视为支付成功），便于本地联调。
  * 解锁判定的唯一依据在服务端 user_unlock 表。
  */
+@Tag(name = "订单", description = "创建订单、支付回调与查询；解锁以 user_unlock 为准")
 @Slf4j
 @RestController
 @RequestMapping("/api/order")
@@ -42,6 +45,7 @@ public class OrderController {
     private final GenerationService generationService;
 
     /** 创建订单；wxpay 未配置时直接 mock 支付成功并写解锁 */
+    @Operation(summary = "创建解锁订单（未接微信支付时走 mock 并直接解锁）")
     @PostMapping("/create")
     public Result<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
         List<String> styleIds = styleIdsOf(body);
@@ -86,12 +90,14 @@ public class OrderController {
     }
 
     /** 兼容老前端：等同 create 的 mock 分支 */
+    @Operation(summary = "兼容接口：等同创建订单")
     @PostMapping("/mock")
     public Result<Map<String, Object>> mockPay(@RequestBody Map<String, Object> body) {
         return create(body);
     }
 
     /** 微信支付回调骨架：验签待接入，收到成功才置 paid 并写解锁 */
+    @Operation(summary = "微信支付回调（骨架，验签待接入）")
     @PostMapping("/notify")
     public Map<String, String> notify(@RequestBody(required = false) Map<String, Object> body) {
         Map<String, String> resp = new LinkedHashMap<>();
@@ -115,6 +121,7 @@ public class OrderController {
         return resp;
     }
 
+    @Operation(summary = "查询订单状态")
     @GetMapping("/{id}")
     public Result<Map<String, Object>> status(@PathVariable Long id) {
         Order order = orderMapper.selectById(id);
@@ -131,6 +138,7 @@ public class OrderController {
     }
 
     /** 退款：骨架，未接入微信支付 */
+    @Operation(summary = "申请退款（未接入）")
     @PostMapping("/refund")
     public Result<Void> refund() {
         throw new BizException("退款功能未接入");

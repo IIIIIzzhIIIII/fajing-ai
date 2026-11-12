@@ -7,6 +7,8 @@ import com.fajing.entity.HairColor;
 import com.fajing.entity.Hairstyle;
 import com.fajing.mapper.HairColorMapper;
 import com.fajing.mapper.HairstyleMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Tag(name = "发型与发色", description = "发型库浏览与发色列表")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -28,6 +31,7 @@ public class HairstyleController {
     private final HairstyleMapper hairstyleMapper;
     private final HairColorMapper hairColorMapper;
 
+    @Operation(summary = "发型列表")
     @GetMapping("/hairstyles")
     public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String gender,
                                                   @RequestParam(required = false) String cat) {
@@ -44,6 +48,7 @@ public class HairstyleController {
         return Result.ok(list.stream().map(this::toMap).collect(Collectors.toList()));
     }
 
+    @Operation(summary = "发色列表")
     @GetMapping("/colors")
     public Result<List<HairColor>> colors() {
         return Result.ok(hairColorMapper.selectList(new QueryWrapper<HairColor>().orderByAsc("sort")));
