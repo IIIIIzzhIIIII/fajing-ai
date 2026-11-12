@@ -14,6 +14,10 @@ token:
 pay:
   mock-enabled: true
 
+# 测试库多次运行会累积当天任务，放宽上限避免用例被限流
+quota:
+  daily-max: 100
+
 content-security:
   enabled: true
 
