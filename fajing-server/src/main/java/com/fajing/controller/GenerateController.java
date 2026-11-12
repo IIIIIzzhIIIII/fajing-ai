@@ -7,14 +7,17 @@ import com.fajing.entity.GenerationTask;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.service.GenerationProcessor;
 import com.fajing.service.GenerationService;
+import com.fajing.util.UserContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,8 +45,9 @@ public class GenerateController {
     @GetMapping("/generate/{taskId}")
     public Result<Map<String, Object>> task(@PathVariable Long taskId) {
         GenerationTask task = taskMapper.selectById(taskId);
-        if (task == null) {
-            throw new BizException("生成任务不存在");
+        // 不是自己的任务统一按不存在处理，避免探测他人任务
+        if (task == null || !Long.valueOf(UserContext.require()).equals(task.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         }
         return Result.ok(generationService.toMap(task));
     }

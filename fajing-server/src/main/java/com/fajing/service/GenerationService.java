@@ -10,6 +10,7 @@ import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.UserRecordMapper;
 import com.fajing.mapper.UserUnlockMapper;
+import com.fajing.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,9 +29,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class GenerationService {
 
-    /** TODO: 后续从 JWT 取用户 ID */
-    public static final Long USER_ID = 1L;
-
     private final GenerationTaskMapper taskMapper;
     private final HairstyleMapper hairstyleMapper;
     private final UserRecordMapper recordMapper;
@@ -45,7 +43,7 @@ public class GenerationService {
             throw new BizException("最多同时生成 4 款");
         }
         GenerationTask task = new GenerationTask();
-        task.setUserId(USER_ID);
+        task.setUserId(UserContext.require());
         task.setPhotoUrl(photoUrl == null ? "" : photoUrl);
         task.setGender("male".equals(gender) ? "male" : "female");
         task.setMode(colorId == null || colorId.isEmpty() ? "hair" : mode);
@@ -103,7 +101,7 @@ public class GenerationService {
 
             if (!styles.isEmpty()) {
                 UserRecord record = new UserRecord();
-                record.setUserId(USER_ID);
+                record.setUserId(task.getUserId());
                 record.setTaskId(taskId);
                 record.setTitle(styles.size() > 1 ? styles.get(0).getName() + " 等 " + styles.size() + " 款" : styles.get(0).getName());
                 record.setBeforeUrl(task.getPhotoUrl());
@@ -113,8 +111,8 @@ public class GenerationService {
                 record.setCreatedAt(LocalDateTime.now());
                 recordMapper.insert(record);
 
-                // 第 1 款默认免费解锁
-                unlock(styles.get(0).getId(), taskId);
+                // 第 1 款默认免费解锁（按任务维度）
+                unlock(task.getUserId(), styles.get(0).getId(), taskId);
             }
         } catch (Exception e) {
             log.error("生成结果写入失败 taskId={}", taskId, e);
@@ -127,15 +125,15 @@ public class GenerationService {
         return taskMapper.selectById(taskId);
     }
 
-    public void unlock(String styleId, Long taskId) {
+    public void unlock(Long userId, String styleId, Long taskId) {
         Long exists = unlockMapper.selectCount(
                 new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserUnlock>()
-                        .eq("user_id", USER_ID).eq("style_id", styleId));
+                        .eq("user_id", userId).eq("style_id", styleId));
         if (exists != null && exists > 0) {
             return;
         }
         UserUnlock unlock = new UserUnlock();
-        unlock.setUserId(USER_ID);
+        unlock.setUserId(userId);
         unlock.setTaskId(taskId == null ? 0L : taskId);
         unlock.setStyleId(styleId);
         unlock.setCreatedAt(LocalDateTime.now());

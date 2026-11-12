@@ -17,6 +17,9 @@ public class AppUser {
     private String gender;
     private String openid;
     private String phone;
+    private String role;
+    private String sessionKey;
+    private String passwordHash;
     private Integer status;
     private LocalDateTime registerAt;
     private LocalDateTime lastActiveAt;

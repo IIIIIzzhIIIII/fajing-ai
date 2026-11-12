@@ -7,7 +7,7 @@ import com.fajing.entity.GenerationTask;
 import com.fajing.entity.UserRecord;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.UserRecordMapper;
-import com.fajing.service.GenerationService;
+import com.fajing.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,7 +34,7 @@ public class RecordController {
     @GetMapping("/records")
     public Result<List<Map<String, Object>>> records() {
         List<UserRecord> list = recordMapper.selectList(new QueryWrapper<UserRecord>()
-                .eq("user_id", GenerationService.USER_ID)
+                .eq("user_id", UserContext.require())
                 .orderByDesc("created_at")
                 .last("limit 30"));
         return Result.ok(list.stream().map(this::toMap).collect(Collectors.toList()));
@@ -44,7 +44,7 @@ public class RecordController {
     @DeleteMapping("/records/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         UserRecord record = recordMapper.selectById(id);
-        if (record != null && GenerationService.USER_ID.equals(record.getUserId())) {
+        if (record != null && Long.valueOf(UserContext.require()).equals(record.getUserId())) {
             recordMapper.deleteById(id);
         }
         return Result.ok();
@@ -53,7 +53,7 @@ public class RecordController {
     /** 清空当前用户的试发记录，用于从下一次生成开始重新记录 */
     @DeleteMapping("/records")
     public Result<Void> clear() {
-        recordMapper.delete(new QueryWrapper<UserRecord>().eq("user_id", GenerationService.USER_ID));
+        recordMapper.delete(new QueryWrapper<UserRecord>().eq("user_id", UserContext.require()));
         return Result.ok();
     }
 

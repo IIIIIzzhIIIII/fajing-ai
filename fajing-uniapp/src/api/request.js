@@ -1,3 +1,5 @@
+import { clearToken, getToken, setToken } from '@/utils/auth'
+
 const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || 'http://localhost:8081'
 
 /** 统一 toast（避免各处重复 import 组件） */
@@ -5,15 +7,103 @@ function fail(msg) {
   uni.showToast({ title: msg || '网络异常，请稍后重试', icon: 'none', duration: 2200 })
 }
 
-export function request({ url, method = 'GET', data = {}, header = {} }) {
+/** 登录：小程序用 wx.login 的 code 换 token；H5 走演示登录 */
+export function login() {
   return new Promise((resolve, reject) => {
+    // #ifdef H5
+    uni.request({
+      url: BASE_URL + '/api/auth/login/mock',
+      method: 'POST',
+      timeout: 15000,
+      success: (res) => {
+        const body = res.data || {}
+        if (res.statusCode === 200 && body.code === 0 && body.data && body.data.token) {
+          setToken(body.data.token)
+          resolve(body.data)
+        } else {
+          reject(new Error((body && body.msg) || '登录失败'))
+        }
+      },
+      fail: reject
+    })
+    // #endif
+
+    // #ifndef H5
+    uni.login({
+      provider: 'weixin',
+      success: (loginRes) => {
+        const code = loginRes.code
+        if (!code) {
+          reject(new Error('微信登录失败'))
+          return
+        }
+        uni.request({
+          url: BASE_URL + '/api/auth/login',
+          method: 'POST',
+          data: { code },
+          header: { 'Content-Type': 'application/json' },
+          timeout: 15000,
+          success: (res) => {
+            const body = res.data || {}
+            if (res.statusCode === 200 && body.code === 0 && body.data && body.data.token) {
+              setToken(body.data.token)
+              resolve(body.data)
+            } else {
+              fail((body && body.msg) || '登录失败')
+              reject(new Error((body && body.msg) || 'login failed'))
+            }
+          },
+          fail: reject
+        })
+      },
+      fail: reject
+    })
+    // #endif
+  })
+}
+
+let loginPromise = null
+function ensureLogin() {
+  if (!loginPromise) {
+    loginPromise = login().finally(() => {
+      loginPromise = null
+    })
+  }
+  return loginPromise
+}
+
+export function request({ url, method = 'GET', data = {}, header = {}, retry = true }) {
+  return new Promise((resolve, reject) => {
+    const token = getToken()
     uni.request({
       url: BASE_URL + url,
       method,
       data,
-      header: { 'Content-Type': 'application/json', ...header },
+      header: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...header
+      },
       timeout: 15000,
-      success: (res) => {
+      success: async (res) => {
+        if (res.statusCode === 401) {
+          clearToken()
+          if (!retry) {
+            fail('登录已过期，请重新登录')
+            reject(new Error('unauthorized'))
+            return
+          }
+          // 只自动重登并重试一次，避免死循环
+          try {
+            await ensureLogin()
+            const result = await request({ url, method, data, header, retry: false })
+            resolve(result)
+          } catch (e) {
+            fail('登录失败，请稍后重试')
+            reject(e)
+          }
+          return
+        }
         const body = res.data
         if (res.statusCode !== 200) {
           fail(`服务异常（${res.statusCode}）`)
@@ -37,10 +127,12 @@ export function request({ url, method = 'GET', data = {}, header = {} }) {
 
 export function upload(filePath) {
   return new Promise((resolve, reject) => {
+    const token = getToken()
     uni.uploadFile({
       url: BASE_URL + '/api/upload',
       filePath,
       name: 'file',
+      header: token ? { Authorization: `Bearer ${token}` } : {},
       success: (res) => {
         let body = null
         try {
@@ -66,6 +158,8 @@ export function upload(filePath) {
 }
 
 export const API = {
+  me: () => request({ url: '/api/auth/me' }),
+  logout: () => request({ url: '/api/auth/logout', method: 'POST' }),
   hairstyles: (gender, cat) =>
     request({
       url: `/api/hairstyles?gender=${encodeURIComponent(gender || '')}&cat=${encodeURIComponent(cat || '')}`

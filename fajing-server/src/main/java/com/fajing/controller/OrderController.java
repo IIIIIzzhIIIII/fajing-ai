@@ -5,6 +5,7 @@ import com.fajing.common.Result;
 import com.fajing.entity.Order;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.service.GenerationService;
+import com.fajing.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -62,7 +63,7 @@ public class OrderController {
                 : new BigDecimal(styleIds.size() * 3).setScale(2);
 
         Order order = new Order();
-        order.setUserId(GenerationService.USER_ID);
+        order.setUserId(UserContext.require());
         order.setTaskId(taskId);
         order.setPlan(plan);
         order.setAmount(amount);
@@ -72,7 +73,7 @@ public class OrderController {
         orderMapper.insert(order);
 
         for (String id : styleIds) {
-            generationService.unlock(id, taskId);
+            generationService.unlock(UserContext.require(), id, taskId);
         }
 
         Map<String, Object> data = new LinkedHashMap<>();

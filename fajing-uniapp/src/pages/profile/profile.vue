@@ -7,12 +7,14 @@
 
     <scroll-view scroll-y class="scroll" style="padding-bottom:10px">
       <view class="profile-hero">
-        <view class="avatar"><fj-icon name="user" :size="26" color="#C95676" /></view>
-        <view>
-          <view style="font-size:17px;font-weight:800;letter-spacing:-.3px">未登录</view>
-          <view style="font-size:11px;color:var(--muted);margin-top:3px">登录后可跨设备同步试发记录</view>
+        <view class="avatar">
+          <image v-if="me.avatar" :src="me.avatar" mode="aspectFill" style="width:100%;height:100%" />
+          <fj-icon v-else name="user" :size="26" color="#C95676" />
         </view>
-        <view class="pill" style="margin-left:auto" @click="login">登录</view>
+        <view>
+          <view style="font-size:17px;font-weight:800;letter-spacing:-.3px">{{ me.nickname || '发型试镜用户' }}</view>
+          <view style="font-size:11px;color:var(--muted);margin-top:3px">微信登录 · 试发记录已同步</view>
+        </view>
       </view>
 
       <view style="margin:0 20px 18px;display:flex;gap:8px">
@@ -56,6 +58,8 @@
         </view>
       </view>
 
+      <view class="logout-btn" @click="logout">退出登录</view>
+
       <view class="tiny" style="text-align:center;padding:20px">发镜 AI v0.1 · 原型演示版本</view>
     </scroll-view>
 
@@ -70,13 +74,24 @@ import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
+import { clearToken } from '@/utils/auth'
 
 const app = useAppStore()
 const ui = useUiStore()
 
+const me = ref({ nickname: '', avatar: '' })
 /** 试发记录条数 / 试过的发型款数：以服务端记录为准，生成后回到本页会刷新 */
 const recordCount = ref(0)
 const styleCount = ref(0)
+
+async function loadMe() {
+  try {
+    const data = await API.me()
+    if (data) me.value = data
+  } catch (e) {
+    // 未登录时保持默认昵称
+  }
+}
 
 async function refreshQuota() {
   try {
@@ -108,6 +123,7 @@ async function loadStats() {
 onShow(() => {
   refreshQuota()
   loadStats()
+  loadMe()
 })
 
 function back() {
@@ -118,6 +134,13 @@ function back() {
 
 function login() {
   ui.toast('原型演示：微信一键登录')
+}
+
+function logout() {
+  clearToken()
+  app.resetAll()
+  ui.close()
+  uni.reLaunch({ url: '/pages/login/login' })
 }
 
 function openHistory() {
@@ -138,6 +161,17 @@ function about() {
 </script>
 
 <style lang="scss" scoped>
+.logout-btn {
+  margin: 18px 20px 0;
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8b9295;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: var(--sh-sm);
+}
 .menu-count {
   margin-left: auto;
   font-size: 11px;

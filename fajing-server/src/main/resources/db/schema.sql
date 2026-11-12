@@ -119,11 +119,22 @@ CREATE TABLE IF NOT EXISTS app_user (
   gender VARCHAR(8) NOT NULL DEFAULT 'unknown',
   openid VARCHAR(64) NOT NULL DEFAULT '',
   phone VARCHAR(20) NOT NULL DEFAULT '',
+  role VARCHAR(20) NOT NULL DEFAULT 'USER',
+  session_key VARCHAR(128) NOT NULL DEFAULT '',
+  password_hash VARCHAR(100) NOT NULL DEFAULT '',
   status TINYINT NOT NULL DEFAULT 1,
   register_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_active_at DATETIME NULL,
+  UNIQUE KEY uk_openid (openid),
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 已有库的增量字段（重复执行会报已存在，continue-on-error=true 会跳过）
+ALTER TABLE app_user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'USER';
+ALTER TABLE app_user ADD COLUMN session_key VARCHAR(128) NOT NULL DEFAULT '';
+ALTER TABLE app_user ADD COLUMN password_hash VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE app_user ADD UNIQUE KEY uk_openid (openid);
+ALTER TABLE comment ADD COLUMN user_id BIGINT NOT NULL DEFAULT 1;
 
 -- 管理员账号：账号密码登录，密码 BCrypt 存储
 CREATE TABLE IF NOT EXISTS admin_user (

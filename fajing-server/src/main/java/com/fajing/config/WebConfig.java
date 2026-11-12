@@ -1,6 +1,7 @@
 package com.fajing.config;
 
 import com.fajing.interceptor.AdminInterceptor;
+import com.fajing.interceptor.AuthInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +14,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
 
     private final AdminInterceptor adminInterceptor;
+    private final AuthInterceptor authInterceptor;
 
     @Value("${fajing.upload-dir}")
     private String uploadDir;
@@ -22,6 +24,9 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(adminInterceptor)
                 .addPathPatterns("/api/admin/**")
                 .excludePathPatterns("/api/admin/login");
+        registry.addInterceptor(authInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/auth/login", "/api/auth/login/mock", "/api/auth/logout", "/api/admin/**");
     }
 
     @Override

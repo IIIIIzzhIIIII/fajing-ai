@@ -5,7 +5,7 @@ import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.entity.UserUnlock;
 import com.fajing.mapper.UserUnlockMapper;
-import com.fajing.service.GenerationService;
+import com.fajing.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,7 +27,7 @@ public class UnlockController {
     @GetMapping("/unlocks")
     public Result<List<Map<String, Object>>> unlocks() {
         List<UserUnlock> list = unlockMapper.selectList(new QueryWrapper<UserUnlock>()
-                .eq("user_id", GenerationService.USER_ID));
+                .eq("user_id", UserContext.require()));
         if (list == null) {
             throw new BizException("查询解锁记录失败");
         }

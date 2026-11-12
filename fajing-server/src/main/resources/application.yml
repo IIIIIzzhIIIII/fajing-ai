@@ -61,6 +61,10 @@ admin:
   init-password: ${ADMIN_INIT_PASSWORD:}
   legacy-token-enabled: ${ADMIN_LEGACY_TOKEN_ENABLED:false}
 
+# 演示用登录接口（/api/auth/login/mock），生产置 false 后该路由不存在
+auth:
+  mock-enabled: ${AUTH_MOCK_ENABLED:false}
+
 # 微信登录（P0-1 使用；未配置时走 mock 登录）
 wechat:
   appid: ${WECHAT_APPID:}

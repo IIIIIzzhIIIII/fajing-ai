@@ -68,6 +68,8 @@
 <script setup>
 import { computed } from 'vue'
 import { useAppStore } from '@/store/app'
+import { login } from '@/api/request'
+import { getToken } from '@/utils/auth'
 import { PORTRAIT, STYLES } from '@/mock/constants'
 
 const app = useAppStore()
@@ -88,7 +90,14 @@ const hotList = computed(() => {
 })
 
 function goUpload() {
-  uni.navigateTo({ url: '/pages/upload/upload' })
+  if (getToken()) {
+    uni.navigateTo({ url: '/pages/upload/upload' })
+    return
+  }
+  // 登录态失效时再重试一次登录，仍失败则去登录页
+  login()
+    .then(() => uni.navigateTo({ url: '/pages/upload/upload' }))
+    .catch(() => uni.navigateTo({ url: '/pages/login/login' }))
 }
 function goStyles() {
   // 首页「全部发型 / 热门款」只做图鉴浏览，不能直接发起生成

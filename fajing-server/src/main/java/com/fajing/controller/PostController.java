@@ -10,8 +10,8 @@ import com.fajing.entity.Report;
 import com.fajing.mapper.CommentMapper;
 import com.fajing.mapper.PostMapper;
 import com.fajing.mapper.ReportMapper;
-import com.fajing.service.GenerationService;
 import com.fajing.service.WeChatContentSecurity;
+import com.fajing.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -64,7 +64,7 @@ public class PostController {
         contentSecurity.check(req.getContent(), "");
         Post post = new Post();
         boolean ask = "ask".equals(req.getBadge());
-        post.setUserId(GenerationService.USER_ID);
+        post.setUserId(UserContext.require());
         post.setName("我");
         post.setAvatarColor("#C95676");
         post.setMeta(ask ? "刚刚 · 还没剪" : "刚刚 · 我的作业");
@@ -137,7 +137,7 @@ public class PostController {
         String reason = body == null ? null : body.get("reason");
         Report report = new Report();
         report.setPostId(id);
-        report.setUserId(GenerationService.USER_ID);
+        report.setUserId(UserContext.require());
         report.setReason(reason == null || reason.isBlank() ? "用户举报" : reason.trim());
         report.setStatus("pending");
         report.setCreatedAt(LocalDateTime.now());

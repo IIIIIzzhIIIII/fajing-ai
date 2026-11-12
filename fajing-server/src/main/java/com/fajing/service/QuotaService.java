@@ -3,6 +3,7 @@ package com.fajing.service;
 import com.fajing.common.BizException;
 import com.fajing.entity.UserQuota;
 import com.fajing.mapper.UserQuotaMapper;
+import com.fajing.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,17 +16,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class QuotaService {
 
-    /** TODO: 后续从 JWT 取用户 ID */
-    public static final Long USER_ID = 1L;
-
     private final UserQuotaMapper quotaMapper;
 
     public UserQuota get() {
-        UserQuota quota = quotaMapper.selectById(USER_ID);
+        Long userId = UserContext.require();
+        UserQuota quota = quotaMapper.selectById(userId);
         LocalDate today = LocalDate.now();
         if (quota == null) {
             quota = new UserQuota();
-            quota.setUserId(USER_ID);
+            quota.setUserId(userId);
             quota.setFreeLeft(1);
             quota.setQuotaDate(today);
             quota.setShareClaimed(false);
