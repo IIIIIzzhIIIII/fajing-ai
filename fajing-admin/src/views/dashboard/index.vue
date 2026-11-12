@@ -41,6 +41,21 @@ onMounted(load)
         <div class="stat-value">¥{{ stats.costYuan || '0.00' }}</div>
         <div class="stat-sub">{{ stats.aiCalls || 0 }} 次 AI 调用</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">生成成功率</div>
+        <div class="stat-value">{{ stats.successRate || 0 }}%</div>
+        <div class="stat-sub">成功 {{ stats.successCount || 0 }} · 失败 {{ stats.failedCount || 0 }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">付费订单数</div>
+        <div class="stat-value">{{ stats.paidOrders || 0 }}</div>
+        <div class="stat-sub">付费用户 {{ stats.payingUsers || 0 }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">付费转化率</div>
+        <div class="stat-value">{{ stats.conversionRate || 0 }}%</div>
+        <div class="stat-sub">付费用户 / 生成用户（{{ stats.generateUsers || 0 }}）</div>
+      </div>
     </div>
   </div>
 </template>

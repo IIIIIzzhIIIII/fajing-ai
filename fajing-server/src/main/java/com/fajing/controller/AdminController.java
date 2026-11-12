@@ -3,6 +3,7 @@ package com.fajing.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
+import com.fajing.entity.AdminLog;
 import com.fajing.entity.AiCallLog;
 import com.fajing.entity.Comment;
 import com.fajing.entity.GenerationTask;
@@ -10,6 +11,7 @@ import com.fajing.entity.Hairstyle;
 import com.fajing.entity.Order;
 import com.fajing.entity.Post;
 import com.fajing.entity.Report;
+import com.fajing.mapper.AdminLogMapper;
 import com.fajing.mapper.AiCallLogMapper;
 import com.fajing.mapper.CommentMapper;
 import com.fajing.mapper.GenerationTaskMapper;
@@ -58,6 +60,15 @@ public class AdminController {
     private final AdminLogService adminLogService;
     private final GenerationTaskMapper taskMapper;
     private final AiCallLogMapper aiCallLogMapper;
+    private final AdminLogMapper adminLogMapper;
+
+    @Operation(summary = "操作日志")
+    @GetMapping("/logs")
+    public Result<List<AdminLog>> logs(@RequestParam(required = false) Integer limit) {
+        int size = limit == null ? 100 : Math.max(1, Math.min(500, limit));
+        return Result.ok(adminLogMapper.selectList(new QueryWrapper<AdminLog>()
+                .orderByDesc("created_at").last("limit " + size)));
+    }
 
     @Operation(summary = "今日运营数据（生成量、成本、成功率、付费转化）")
     @GetMapping("/stats/today")

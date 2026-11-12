@@ -33,6 +33,18 @@ const routes = [
         meta: { title: '帖子管理' }
       },
       {
+        path: 'reviews',
+        name: 'Reviews',
+        component: () => import('@/views/reviews/index.vue'),
+        meta: { title: '审核中心' }
+      },
+      {
+        path: 'logs',
+        name: 'Logs',
+        component: () => import('@/views/logs/index.vue'),
+        meta: { title: '操作日志' }
+      },
+      {
         path: 'orders',
         name: 'Orders',
         component: () => import('@/views/orders/index.vue'),

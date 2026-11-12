@@ -56,6 +56,10 @@ export function fetchTodayStats() {
   return service.get('/api/admin/stats/today')
 }
 
+export function fetchAdminLogs(limit) {
+  return service.get('/api/admin/logs', { params: limit ? { limit } : {} })
+}
+
 export function fetchHairstyles(gender) {
   return service.get('/api/admin/hairstyles', {
     params: gender ? { gender } : {}
