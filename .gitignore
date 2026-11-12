@@ -27,3 +27,8 @@ Thumbs.db
 .trae-html-share-packages/
 *.zip
 
+# 仓库只保留 README.md 与 DECISIONS.md，其余文档仅保留在本地
+*.md
+!README.md
+!DECISIONS.md
+
