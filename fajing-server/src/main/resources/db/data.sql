@@ -1,4 +1,5 @@
--- 发镜 AI · 初始化数据（可重复执行）INSERT IGNORE INTO hairstyle (id, name, gender, cat, len, face, en, img_url, status, sort) VALUES
+-- 发镜 AI · 初始化数据（可重复执行）
+INSERT IGNORE INTO hairstyle (id, name, gender, cat, len, face, en, img_url, status, sort) VALUES
 ('f1','法式波波头','female','波波头','肩部以上','圆脸 / 鹅蛋脸','french bob haircut, chin length, soft inward ends','',1,1),
 ('f2','日系碎短发','female','短发','耳下','小脸 / 心形脸','japanese layered short hair, airy texture','',1,2),
 ('f3','港风大波浪','female','卷发','胸上','鹅蛋脸 / 方脸','hong kong retro big wavy long hair','',1,3),

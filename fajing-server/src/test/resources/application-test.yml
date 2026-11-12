@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/fajing_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:123456}
+
+# 测试环境允许演示登录，便于用例直接拿 token
+auth:
+  mock-enabled: true
+
+token:
+  secret: ${TOKEN_SECRET:test-secret-0123456789abcdefghijklmn}
+
+pay:
+  mock-enabled: true
+
+content-security:
+  enabled: true
+
+fajing:
+  upload-dir: ${java.io.tmpdir}/fajing-test-uploads
+  base-url: http://localhost:8081
