@@ -65,7 +65,7 @@ public class AiImageService {
             throw new BizException("AI 出图未启用");
         }
         if (cfg.getImageApiKey() == null || cfg.getImageApiKey().isBlank()) {
-            throw new BizException("未配置图像模型 API Key");
+            throw new BizException("未配置图像模型 API Key，请在管理端「AI 设置」或环境变量 SILICONFLOW_KEY 中配置");
         }
 
         String dataUri = toDataUri(photoUrl);

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { clearToken, getToken } from '@/utils/auth'
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:8081',
@@ -7,7 +8,10 @@ const service = axios.create({
 })
 
 service.interceptors.request.use((config) => {
-  config.headers['X-Admin-Token'] = 'admin-token'
+  const token = getToken()
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`
+  }
   return config
 })
 
@@ -24,6 +28,13 @@ service.interceptors.response.use(
     return body
   },
   (error) => {
+    if (error.response && error.response.status === 401) {
+      clearToken()
+      ElMessage.error('登录已过期，请重新登录')
+      const redirect = encodeURIComponent(window.location.hash.replace(/^#/, '') || '/')
+      window.location.hash = `#/login?redirect=${redirect}`
+      return Promise.reject(error)
+    }
     let message = '网络异常，请稍后重试'
     if (error.code === 'ECONNABORTED') {
       message = '请求超时，请稍后重试'
@@ -36,6 +47,10 @@ service.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+export function loginAdmin(data) {
+  return service.post('/api/admin/login', data)
+}
 
 export function fetchHairstyles(gender) {
   return service.get('/api/admin/hairstyles', {

@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
+import { loginAdmin } from '@/api'
 import { setToken } from '@/utils/auth'
 
 const router = useRouter()
@@ -32,14 +33,13 @@ async function handleLogin() {
   }
   loading.value = true
   try {
-    if (form.username.trim() !== 'admin' || form.password !== 'admin123') {
-      ElMessage.error('账号或密码错误')
-      return
-    }
-    setToken('admin-token')
+    const data = await loginAdmin({ username: form.username.trim(), password: form.password })
+    setToken(data.token)
     ElMessage.success('登录成功')
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     router.replace(redirect)
+  } catch {
+    // 错误提示由拦截器统一处理
   } finally {
     loading.value = false
   }
@@ -94,7 +94,7 @@ async function handleLogin() {
           </el-button>
         </el-form>
 
-        <div class="account-hint">默认账号：admin　默认密码：admin123</div>
+        <div class="account-hint">初始账号由服务端 ADMIN_INIT_PASSWORD 配置，未配置时不会创建管理员</div>
       </section>
     </div>
   </div>

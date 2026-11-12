@@ -92,15 +92,44 @@ public class AiConfigService {
     private void copy(AiConfig from, AiConfig to) {
         if (!isBlank(from.getImageProvider())) to.setImageProvider(from.getImageProvider());
         if (!isBlank(from.getImageBaseUrl())) to.setImageBaseUrl(from.getImageBaseUrl().trim());
-        if (!isBlank(from.getImageApiKey())) to.setImageApiKey(from.getImageApiKey().trim());
+        // 脱敏值（含 *）不回写，避免把掩码当成真实 key 存库
+        if (!isBlank(from.getImageApiKey()) && !from.getImageApiKey().contains("*")) {
+            to.setImageApiKey(from.getImageApiKey().trim());
+        }
         if (!isBlank(from.getImageModel())) to.setImageModel(from.getImageModel().trim());
         if (!isBlank(from.getTextBaseUrl())) to.setTextBaseUrl(from.getTextBaseUrl().trim());
-        if (!isBlank(from.getTextApiKey())) to.setTextApiKey(from.getTextApiKey().trim());
+        if (!isBlank(from.getTextApiKey()) && !from.getTextApiKey().contains("*")) {
+            to.setTextApiKey(from.getTextApiKey().trim());
+        }
         if (!isBlank(from.getTextModel())) to.setTextModel(from.getTextModel().trim());
         if (from.getPromptTemplate() != null) to.setPromptTemplate(from.getPromptTemplate());
         if (from.getSystemPrompt() != null) to.setSystemPrompt(from.getSystemPrompt());
         if (from.getUseTextEnhance() != null) to.setUseTextEnhance(from.getUseTextEnhance());
         if (from.getEnabled() != null) to.setEnabled(from.getEnabled());
+    }
+
+    /** 返回给管理端时脱敏：只露前 4 后 4，避免接口明文回传密钥 */
+    public AiConfig masked(AiConfig cfg) {
+        AiConfig view = new AiConfig();
+        if (cfg == null) {
+            return view;
+        }
+        copy(cfg, view);
+        view.setId(cfg.getId());
+        view.setImageApiKey(mask(cfg.getImageApiKey()));
+        view.setTextApiKey(mask(cfg.getTextApiKey()));
+        view.setUpdatedAt(cfg.getUpdatedAt());
+        return view;
+    }
+
+    private String mask(String key) {
+        if (isBlank(key)) {
+            return "";
+        }
+        if (key.length() <= 8) {
+            return "****";
+        }
+        return key.substring(0, 4) + "****" + key.substring(key.length() - 4);
     }
 
     private static boolean isBlank(String s) {

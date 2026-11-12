@@ -23,11 +23,11 @@ public class AiConfigController {
 
     @GetMapping
     public Result<AiConfig> get() {
-        return Result.ok(configService.get());
+        return Result.ok(configService.masked(configService.get()));
     }
 
     @PutMapping
     public Result<AiConfig> save(@RequestBody AiConfig req) {
-        return Result.ok(configService.save(req));
+        return Result.ok(configService.masked(configService.save(req)));
     }
 }

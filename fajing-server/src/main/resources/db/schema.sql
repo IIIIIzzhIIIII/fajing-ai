@@ -125,6 +125,17 @@ CREATE TABLE IF NOT EXISTS app_user (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 管理员账号：账号密码登录，密码 BCrypt 存储
+CREATE TABLE IF NOT EXISTS admin_user (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  username VARCHAR(32) NOT NULL,
+  password_hash VARCHAR(100) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- AI 生成配置（单行，id 固定为 1）：图像模型 / 文案模型 / 提示词，后台可改
 CREATE TABLE IF NOT EXISTS ai_config (
   id BIGINT PRIMARY KEY,

@@ -1,18 +1,20 @@
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
   servlet:
     encoding:
       charset: UTF-8
       force: true
 
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: fajing-server
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/fajing?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
-    username: root
-    password: 123456
+    url: ${DB_URL:jdbc:mysql://localhost:3306/fajing?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
   sql:
     init:
       mode: always
@@ -34,16 +36,36 @@ mybatis-plus:
       id-type: auto
 
 fajing:
-  upload-dir: E:/项目/AI发型替换/uploads
-  base-url: http://localhost:8081
-  admin-token: admin-token
+  upload-dir: ${UPLOAD_DIR:E:/项目/AI发型替换/uploads}
+  base-url: ${BASE_URL:http://localhost:8081}
+  # 旧的固定管理端 token，仅兼容用；默认关闭，改用 /api/admin/login 换取 JWT
+  admin-token: ${ADMIN_TOKEN:}
   ai:
     # 图像模型（OpenAI 兼容接口）：默认硅基流动 Qwen-Image-Edit，可换成其他兼容服务
-    image-base-url: https://api.siliconflow.cn/v1
-    image-api-key: sk-oeondzhxjsqgyropdplmckkmazorrunvplusmmnlplxolanv
-    image-model: Qwen/Qwen-Image-Edit-2509
+    image-base-url: ${AI_IMAGE_BASE_URL:https://api.siliconflow.cn/v1}
+    image-api-key: ${SILICONFLOW_KEY:}
+    image-model: ${AI_IMAGE_MODEL:Qwen/Qwen-Image-Edit-2509}
     # 文案模型：默认 DeepSeek，用于把模板改写成更专业的编辑指令（可后台关闭）
-    text-base-url: https://api.deepseek.com/v1
-    text-api-key: sk-6089d4e346bf4939a0c99ad8cf5f9946
-    text-model: deepseek-flash
-    use-text-enhance: 0
+    text-base-url: ${AI_TEXT_BASE_URL:https://api.deepseek.com/v1}
+    text-api-key: ${DEEPSEEK_KEY:}
+    text-model: ${AI_TEXT_MODEL:deepseek-flash}
+    use-text-enhance: ${AI_USE_TEXT_ENHANCE:0}
+
+# JWT：密钥必须至少 32 位，未配置环境变量时启动失败
+token:
+  secret: ${TOKEN_SECRET:}
+  expire-days: ${TOKEN_EXPIRE_DAYS:7}
+
+admin:
+  # 初始化管理员密码（仅 admin_user 为空时使用）
+  init-password: ${ADMIN_INIT_PASSWORD:}
+  legacy-token-enabled: ${ADMIN_LEGACY_TOKEN_ENABLED:false}
+
+# 微信登录（P0-1 使用；未配置时走 mock 登录）
+wechat:
+  appid: ${WECHAT_APPID:}
+  secret: ${WECHAT_SECRET:}
+
+# 图片存储：local=本地磁盘，s3=S3 兼容对象存储（P0-5）
+storage:
+  type: ${STORAGE_TYPE:local}

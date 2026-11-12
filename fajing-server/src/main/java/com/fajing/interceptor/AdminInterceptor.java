@@ -2,6 +2,8 @@ package com.fajing.interceptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fajing.common.Result;
+import com.fajing.util.JwtUtil;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -12,17 +14,21 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 管理端简易鉴权：/api/admin/** 必须携带 header X-Admin-Token
- * TODO: 阶段后期接入真实管理员登录与权限
+ * 管理端鉴权：优先校验 Authorization: Bearer（role=ADMIN）
+ * 旧的 X-Admin-Token 仅作兼容，默认关闭，由 admin.legacy-token-enabled 控制
  */
 @Component
 @RequiredArgsConstructor
 public class AdminInterceptor implements HandlerInterceptor {
 
-    @Value("${fajing.admin-token}")
-    private String adminToken;
-
     private final ObjectMapper objectMapper;
+    private final JwtUtil jwtUtil;
+
+    @Value("${fajing.admin-token:}")
+    private String legacyToken;
+
+    @Value("${admin.legacy-token-enabled:false}")
+    private boolean legacyEnabled;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
@@ -30,14 +36,21 @@ public class AdminInterceptor implements HandlerInterceptor {
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
-        String token = request.getHeader("X-Admin-Token");
-        if (adminToken.equals(token)) {
+        String auth = request.getHeader("Authorization");
+        if (auth != null && auth.startsWith("Bearer ")) {
+            Claims claims = jwtUtil.parse(auth.substring(7).trim());
+            if (claims != null && "ADMIN".equals(String.valueOf(claims.get("role")))) {
+                return true;
+            }
+        }
+        if (legacyEnabled && legacyToken != null && !legacyToken.isBlank()
+                && legacyToken.equals(request.getHeader("X-Admin-Token"))) {
             return true;
         }
-        response.setStatus(HttpServletResponse.SC_OK);
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write(objectMapper.writeValueAsString(Result.fail("无管理端访问权限")));
+        response.getWriter().write(objectMapper.writeValueAsString(Result.fail("未登录或登录已过期")));
         return false;
     }
 }
