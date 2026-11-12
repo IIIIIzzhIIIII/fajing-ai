@@ -7,7 +7,8 @@
     "dev:h5": "uni",
     "build:h5": "uni build",
     "dev:mp-weixin": "uni -p mp-weixin",
-    "build:mp-weixin": "uni build -p mp-weixin"
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "lint": "eslint . --ext .js,.vue"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5030620261106001",
@@ -20,6 +21,10 @@
   "devDependencies": {
     "@dcloudio/uni-cli-shared": "3.0.0-alpha-5030620261106001",
     "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5030620261106001",
+    "@vue/eslint-config-prettier": "^9.0.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.25.0",
+    "prettier": "^3.2.5",
     "sass": "^1.77.0",
     "vite": "^5.2.8"
   }

@@ -132,10 +132,6 @@ function back() {
   else uni.reLaunch({ url: '/pages/home/home' })
 }
 
-function login() {
-  ui.toast('原型演示：微信一键登录')
-}
-
 function logout() {
   clearToken()
   app.resetAll()
