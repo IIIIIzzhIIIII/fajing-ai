@@ -86,6 +86,11 @@ export const useAppStore = defineStore('app', {
       this.unlocks = Array.from(set)
       this.persist()
     },
+    /** 以服务端返回的解锁列表为准（taskId:styleId） */
+    setUnlocks(keys) {
+      this.unlocks = Array.from(new Set((keys || []).filter(Boolean)))
+      this.persist()
+    },
     addHistory(item) {
       this.history = [item, ...this.history].slice(0, 30)
       this.persist()

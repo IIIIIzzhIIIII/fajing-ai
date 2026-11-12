@@ -179,6 +179,8 @@ export const API = {
   reportPost: (id, reason) =>
     request({ url: `/api/posts/${id}/report`, method: 'POST', data: { reason } }),
   mockOrder: (payload) => request({ url: '/api/order/mock', method: 'POST', data: payload }),
+  createOrder: (payload) => request({ url: '/api/order/create', method: 'POST', data: payload }),
+  orderStatus: (id) => request({ url: `/api/order/${id}` }),
   unlocks: () => request({ url: '/api/unlocks' }),
   shareReward: () => request({ url: '/api/share/reward', method: 'POST' })
 }

@@ -80,6 +80,7 @@ public class GenerationService {
             result.put("faceShape", task.getGender().equals("male") ? "方脸" : "鹅蛋脸");
             result.put("score", ThreadLocalRandom.current().nextInt(88, 98));
             List<Map<String, Object>> items = new ArrayList<>();
+            int index = 0;
             for (Hairstyle s : styles) {
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("styleId", s.getId());
@@ -89,8 +90,10 @@ public class GenerationService {
                 item.put("cat", s.getCat());
                 String aiUrl = images == null ? null : images.get(s.getId());
                 item.put("img", aiUrl != null && !aiUrl.isBlank() ? aiUrl : placeholder(s.getId(), taskId));
-                item.put("unlocked", false);
+                // 第 1 款免费解锁，其余以服务端 user_unlock 为准
+                item.put("unlocked", index == 0 || isUnlocked(task.getUserId(), taskId, s.getId()));
                 items.add(item);
+                index++;
             }
             result.put("styles", items);
 
@@ -125,10 +128,22 @@ public class GenerationService {
         return taskMapper.selectById(taskId);
     }
 
+    /** 解锁判定唯一入口：按「用户 + 任务 + 款式」查 user_unlock */
+    public boolean isUnlocked(Long userId, Long taskId, String styleId) {
+        Long count = unlockMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserUnlock>()
+                        .eq("user_id", userId)
+                        .eq("task_id", taskId == null ? 0L : taskId)
+                        .eq("style_id", styleId));
+        return count != null && count > 0;
+    }
+
     public void unlock(Long userId, String styleId, Long taskId) {
         Long exists = unlockMapper.selectCount(
                 new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserUnlock>()
-                        .eq("user_id", userId).eq("style_id", styleId));
+                        .eq("user_id", userId)
+                        .eq("task_id", taskId == null ? 0L : taskId)
+                        .eq("style_id", styleId));
         if (exists != null && exists > 0) {
             return;
         }

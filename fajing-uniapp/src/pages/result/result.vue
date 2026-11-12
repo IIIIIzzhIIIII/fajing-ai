@@ -202,7 +202,13 @@ const current = computed(
   () => styles.value[activeIndex.value] || { styleId: '', name: '', len: '', face: '', cat: '', img: '' }
 )
 const beforeImg = computed(() => (app.result && app.result.before) || app.photoPath || DEMO_BEFORE)
-const unlocked = computed(() => isUnlocked(current.value))
+const unlocked = computed(() => {
+  const item = current.value
+  if (!item || !item.styleId) return false
+  // 优先用服务端在 result 里给出的 unlocked，本地缓存只兜底
+  if (item.unlocked === true) return true
+  return isUnlocked(item)
+})
 const lockedList = computed(() => styles.value.filter((item) => !isUnlocked(item)))
 const remaining = computed(() => lockedList.value.length)
 
@@ -372,7 +378,7 @@ async function syncUnlocks() {
     const keys = list
       .map((item) => (item && item.styleId ? `${item.taskId || 0}:${item.styleId}` : ''))
       .filter(Boolean)
-    if (keys.length) app.addUnlocks(keys)
+    app.setUnlocks(keys)
   } catch (e) {
     // 接口已统一 toast，失败时沿用本地解锁状态
   }

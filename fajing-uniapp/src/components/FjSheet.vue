@@ -34,7 +34,7 @@
           <view class="sheet-sub">去掉右下角水印，导出 2K 高清图，可直接打印给理发师看。</view>
         </view>
       </view>
-      <view class="plan" :class="{ on: payPlan === 'one' }" @click="ui.payPlan = 'one'">
+      <view v-if="!iosNoPay" class="plan" :class="{ on: payPlan === 'one' }" @click="ui.payPlan = 'one'">
         <view class="plan-radio" />
         <view style="flex:1">
           <view class="plan-t">单张解锁</view>
@@ -42,7 +42,7 @@
         </view>
         <view class="plan-price">¥6<text class="plan-unit">/张</text></view>
       </view>
-      <view v-if="allPlanAvailable" class="plan" :class="{ on: payPlan === 'all' }" @click="ui.payPlan = 'all'">
+      <view v-if="allPlanAvailable && !iosNoPay" class="plan" :class="{ on: payPlan === 'all' }" @click="ui.payPlan = 'all'">
         <view class="plan-radio" />
         <view style="flex:1">
           <view class="plan-t">本次全部 {{ lockedCount }} 款 <text class="plan-tag">限时 5 折</text></view>
@@ -50,9 +50,12 @@
         </view>
         <view class="plan-price"><text class="plan-old">¥{{ lockedCount * 6 }}</text>¥{{ lockedCount * 3 }}<text class="plan-unit">/全部</text></view>
       </view>
-      <button class="btn btn-primary btn-block" style="margin-top:6px" @click="payNow">
+      <button v-if="!iosNoPay" class="btn btn-primary btn-block" style="margin-top:6px" @click="payNow">
         微信支付 ¥{{ payAmount }}
       </button>
+      <view v-if="iosNoPay" class="tiny" style="text-align:center;padding:14px 0">
+        iOS 端暂不支持在线支付，可通过下方分享获得免费次数
+      </view>
       <view class="pay-share" @click="claimShare">
         <fj-icon name="share" :size="16" />分享给好友，再得 1 次生成
       </view>
@@ -263,6 +266,23 @@ const compose = reactive({ ai: '', after: '', self: '', styleName: '', text: '' 
 /** ask=还没剪（只传一张现在的发型照），real=交作业（AI 效果图 + 剪后实拍） */
 const isAsk = computed(() => ui.composeMode === 'ask')
 
+/** 微信支付未接入时，iOS 端按平台规则隐藏支付入口，只保留分享解锁 */
+const WXPAY_ENABLED = false
+const iosNoPay = (() => {
+  // #ifdef H5
+  try {
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent)
+  } catch (e) {
+    return false
+  }
+  // #endif
+  try {
+    return uni.getSystemInfoSync().platform === 'ios'
+  } catch (e2) {
+    return false
+  }
+})() && !WXPAY_ENABLED
+
 const currentStyle = computed(() => {
   const list = (app.result && app.result.styles) || []
   const id = app.selectedStyleIds[0]
@@ -324,13 +344,21 @@ async function payNow() {
   try {
     const plan = payPlan.value
     const styleIds = plan === 'one' ? [payStyle.value.styleId] : lockedUnlockedIds()
-    const order = await API.mockOrder({ plan, taskId: app.taskId, styleIds })
-    const unlockedIds = order.styleIds || styleIds
-    app.addUnlocks(unlockedIds.map((id) => `${taskKey.value}:${id}`))
+    await API.createOrder({ plan, taskId: app.taskId, styleIds })
+    await refreshUnlocks()
     ui.sheet = 'paid'
   } catch (e) {
     /* 已 toast */
   }
+}
+
+/** 解锁状态以服务端为准：拉取后整体覆盖本地缓存 */
+async function refreshUnlocks() {
+  const rows = await API.unlocks()
+  const keys = (Array.isArray(rows) ? rows : [])
+    .map((r) => (r && r.styleId ? `${r.taskId || 0}:${r.styleId}` : ''))
+    .filter(Boolean)
+  app.setUnlocks(keys)
 }
 
 function lockedUnlockedIds() {

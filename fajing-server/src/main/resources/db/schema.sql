@@ -87,8 +87,12 @@ CREATE TABLE IF NOT EXISTS user_unlock (
   task_id BIGINT NOT NULL DEFAULT 0,
   style_id VARCHAR(16) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_user_style (user_id, style_id)
+  UNIQUE KEY uk_user_task_style (user_id, task_id, style_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 解锁从「用户+款式」升级为「用户+任务+款式」：同一款在新一批仍要重新解锁
+ALTER TABLE user_unlock DROP INDEX uk_user_style;
+ALTER TABLE user_unlock ADD UNIQUE KEY uk_user_task_style (user_id, task_id, style_id);
 
 CREATE TABLE IF NOT EXISTS user_quota (
   user_id BIGINT PRIMARY KEY,
