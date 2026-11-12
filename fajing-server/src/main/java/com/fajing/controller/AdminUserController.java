@@ -40,6 +40,7 @@ public class AdminUserController {
     private final UserRecordMapper recordMapper;
     private final UserUnlockMapper unlockMapper;
     private final OrderMapper orderMapper;
+    private final com.fajing.service.AdminLogService adminLogService;
 
     @GetMapping("/users")
     public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String keyword,
@@ -89,6 +90,7 @@ public class AdminUserController {
         }
         user.setStatus(status != null && status == 1 ? 1 : 0);
         userMapper.updateById(user);
+        adminLogService.log("USER_STATUS", id + ":" + user.getStatus());
         return Result.ok(user);
     }
 

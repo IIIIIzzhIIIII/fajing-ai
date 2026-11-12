@@ -7,10 +7,13 @@ import com.fajing.entity.Comment;
 import com.fajing.entity.Hairstyle;
 import com.fajing.entity.Order;
 import com.fajing.entity.Post;
+import com.fajing.entity.Report;
 import com.fajing.mapper.CommentMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.mapper.PostMapper;
+import com.fajing.mapper.ReportMapper;
+import com.fajing.service.AdminLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +46,8 @@ public class AdminController {
     private final PostMapper postMapper;
     private final OrderMapper orderMapper;
     private final CommentMapper commentMapper;
+    private final ReportMapper reportMapper;
+    private final AdminLogService adminLogService;
 
     @GetMapping("/hairstyles")
     public Result<List<Hairstyle>> hairstyles(@RequestParam(required = false) String gender) {
@@ -70,6 +75,7 @@ public class AdminController {
         }
         hairstyle.setCreatedAt(LocalDateTime.now());
         hairstyleMapper.insert(hairstyle);
+        adminLogService.log("CREATE_HAIRSTYLE", hairstyle.getId());
         return Result.ok(hairstyle);
     }
 
@@ -82,6 +88,7 @@ public class AdminController {
         hairstyle.setId(id);
         hairstyle.setCreatedAt(exists.getCreatedAt());
         hairstyleMapper.updateById(hairstyle);
+        adminLogService.log("UPDATE_HAIRSTYLE", id);
         return Result.ok(hairstyleMapper.selectById(id));
     }
 
@@ -93,6 +100,7 @@ public class AdminController {
         }
         exists.setStatus(status != null && status == 1 ? 1 : 0);
         hairstyleMapper.updateById(exists);
+        adminLogService.log("HAIRSTYLE_STATUS", id + ":" + exists.getStatus());
         return Result.ok(exists);
     }
 
@@ -137,6 +145,45 @@ public class AdminController {
     @DeleteMapping("/posts/{id}")
     public Result<Void> deletePost(@PathVariable Long id) {
         postMapper.deleteById(id);
+        adminLogService.log("DELETE_POST", "post:" + id);
+        return Result.ok();
+    }
+
+    /** 举报列表（含被举报帖子的标题与内容） */
+    @GetMapping("/reports")
+    public Result<List<Map<String, Object>>> reports() {
+        List<Report> list = reportMapper.selectList(new QueryWrapper<Report>().orderByDesc("created_at"));
+        return Result.ok(list.stream().map(r -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", r.getId());
+            map.put("postId", r.getPostId());
+            map.put("reason", r.getReason());
+            map.put("status", r.getStatus());
+            map.put("createdAt", r.getCreatedAt());
+            Post post = postMapper.selectById(r.getPostId());
+            map.put("postTitle", post == null ? "帖子已删除" : post.getStyleName());
+            map.put("postContent", post == null ? "" : post.getContent());
+            return map;
+        }).collect(Collectors.toList()));
+    }
+
+    /** 处理举报：handled=已处理，ignored=忽略 */
+    @PatchMapping("/reports/{id}/status")
+    public Result<Void> handleReport(@PathVariable Long id, @RequestParam String status) {
+        Report report = reportMapper.selectById(id);
+        if (report == null) {
+            throw new BizException("举报不存在");
+        }
+        report.setStatus("handled".equals(status) ? "handled" : "ignored");
+        reportMapper.updateById(report);
+        adminLogService.log("REPORT_" + report.getStatus().toUpperCase(), "report:" + id);
+        return Result.ok();
+    }
+
+    @DeleteMapping("/comments/{id}")
+    public Result<Void> deleteComment(@PathVariable Long id) {
+        commentMapper.deleteById(id);
+        adminLogService.log("DELETE_COMMENT", "comment:" + id);
         return Result.ok();
     }
 

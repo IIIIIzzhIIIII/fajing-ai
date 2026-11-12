@@ -80,6 +80,20 @@ export function deletePost(id) {
   return service.delete(`/api/admin/posts/${id}`)
 }
 
+export function fetchReports() {
+  return service.get('/api/admin/reports')
+}
+
+export function handleReport(id, status) {
+  return service.patch(`/api/admin/reports/${id}/status`, null, {
+    params: { status }
+  })
+}
+
+export function deleteComment(id) {
+  return service.delete(`/api/admin/comments/${id}`)
+}
+
 export function fetchOrders() {
   return service.get('/api/admin/orders')
 }

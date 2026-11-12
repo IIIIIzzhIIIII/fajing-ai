@@ -11,6 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -189,8 +192,43 @@ public class AiImageService {
         if (bytes == null || bytes.length == 0) {
             throw new BizException("下载生成图失败");
         }
-        return storageService.put(bytes, "png",
+        byte[] marked = watermark(bytes);
+        return storageService.put(marked, "png",
                 "ai_" + taskId + "_" + styleId + "_" + System.currentTimeMillis());
+    }
+
+    /** 服务端烧「AI 生成」标识：字号取图宽 3%，右下角半透明，避免传播场景无标识 */
+    private byte[] watermark(byte[] raw) {
+        try {
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(raw));
+            if (img == null) {
+                return raw;
+            }
+            BufferedImage out = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = out.createGraphics();
+            g.drawImage(img, 0, 0, null);
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            int size = Math.max(14, (int) Math.round(img.getWidth() * 0.03));
+            Font font = new Font("SansSerif", Font.BOLD, size);
+            String text = font.canDisplay('生') ? "AI 生成" : "AI GENERATED";
+            g.setFont(font);
+            FontMetrics fm = g.getFontMetrics();
+            int pad = Math.max(10, size / 2);
+            int x = img.getWidth() - fm.stringWidth(text) - pad;
+            int y = img.getHeight() - pad;
+            g.setColor(new Color(0, 0, 0, 90));
+            g.drawString(text, x + 1, y + 1);
+            g.setColor(new Color(255, 255, 255, 170));
+            g.drawString(text, x, y);
+            g.dispose();
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ImageIO.write(out, "png", bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            log.warn("AI 标识合成失败，返回原图: {}", e.getMessage());
+            return raw;
+        }
     }
 
     private byte[] httpGet(String url) throws Exception {

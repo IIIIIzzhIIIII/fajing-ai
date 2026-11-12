@@ -1,13 +1,22 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
-import { deletePost, fetchPosts } from '@/api'
+import { Refresh, Warning } from '@element-plus/icons-vue'
+import {
+  deleteComment,
+  deletePost,
+  fetchPosts,
+  fetchReports,
+  handleReport
+} from '@/api'
 import { formatDateTime } from '@/utils/format'
 
 const loading = ref(false)
 const loadFailed = ref(false)
 const list = ref([])
+const reports = ref([])
+const reportVisible = ref(false)
+const pendingReports = computed(() => reports.value.filter((r) => r.status === 'pending').length)
 
 const badgeMap = {
   real: { label: '真实作业', className: 'is-real' },
@@ -63,12 +72,59 @@ async function handleDelete(row) {
   }
 }
 
+async function loadReports() {
+  try {
+    const data = await fetchReports()
+    reports.value = Array.isArray(data) ? data : []
+  } catch {
+    reports.value = []
+  }
+}
+
+function openReports() {
+  reportVisible.value = true
+  loadReports()
+}
+
+async function handleReportItem(row, status) {
+  try {
+    await handleReport(row.id, status)
+    ElMessage.success(status === 'handled' ? '已处理' : '已忽略')
+    await loadReports()
+  } catch {
+    // 错误提示统一由拦截器处理
+  }
+}
+
+async function removeComment(row, comment) {
+  try {
+    await ElMessageBox.confirm('确定删除这条评论吗？', '删除评论', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteComment(comment.id)
+    ElMessage.success('评论已删除')
+    await loadList()
+  } catch {
+    // 错误提示统一由拦截器处理
+  }
+}
+
 let timer = null
 
 onMounted(() => {
   loadList()
-  // 用户在小程序端评论后，管理端每 20 秒自动同步一次
-  timer = setInterval(() => loadList(true), 20000)
+  loadReports()
+  // 用户在小程序端评论 / 举报后，管理端每 20 秒自动同步一次
+  timer = setInterval(() => {
+    loadList(true)
+    loadReports()
+  }, 20000)
 })
 
 onUnmounted(() => {
@@ -79,7 +135,13 @@ onUnmounted(() => {
 <template>
   <div class="post-page">
     <div class="page-toolbar">
-      <span class="list-total">共 {{ list.length }} 篇帖子</span>
+      <div class="toolbar-left">
+        <span class="list-total">共 {{ list.length }} 篇帖子</span>
+        <el-button :icon="Warning" @click="openReports">
+          举报处理
+          <el-badge v-if="pendingReports" :value="pendingReports" class="report-badge" />
+        </el-button>
+      </div>
       <el-button :icon="Refresh" circle title="刷新" @click="loadList" />
     </div>
 
@@ -93,6 +155,7 @@ onUnmounted(() => {
               <span class="comment-name">{{ c.userName || '匿名' }}</span>
               <span class="comment-text">{{ c.content }}</span>
               <span class="comment-time">{{ formatDateTime(c.createdAt) }}</span>
+              <el-button link type="danger" size="small" @click="removeComment(row, c)">删评论</el-button>
             </div>
           </div>
         </template>
@@ -154,6 +217,44 @@ onUnmounted(() => {
         />
       </template>
     </el-table>
+
+    <el-dialog v-model="reportVisible" title="举报处理" width="680px">
+      <el-table :data="reports" size="small" max-height="420">
+        <el-table-column label="时间" width="150">
+          <template #default="{ row }">
+            <span class="time-text">{{ formatDateTime(row.createdAt) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="postTitle" label="帖子" width="120" />
+        <el-table-column prop="postContent" label="内容摘要" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="reason" label="举报原因" width="110" />
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'pending' ? 'warning' : 'info'" effect="light" round>
+              {{ row.status === 'pending' ? '待处理' : row.status === 'handled' ? '已处理' : '已忽略' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="{ row }">
+            <template v-if="row.status === 'pending'">
+              <el-button link type="primary" size="small" @click="handleReportItem(row, 'handled')">
+                处理
+              </el-button>
+              <el-button link size="small" @click="handleReportItem(row, 'ignored')">忽略</el-button>
+            </template>
+            <span v-else class="time-text">—</span>
+          </template>
+        </el-table-column>
+
+        <template #empty>
+          <el-empty description="暂无举报" :image-size="70" />
+        </template>
+      </el-table>
+      <template #footer>
+        <el-button @click="reportVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -163,6 +264,17 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 18px;
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.report-badge {
+  margin-left: 6px;
+  vertical-align: super;
 }
 
 .list-total {

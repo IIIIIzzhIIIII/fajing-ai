@@ -40,6 +40,11 @@ public class AdminInterceptor implements HandlerInterceptor {
         if (auth != null && auth.startsWith("Bearer ")) {
             Claims claims = jwtUtil.parse(auth.substring(7).trim());
             if (claims != null && "ADMIN".equals(String.valueOf(claims.get("role")))) {
+                try {
+                    request.setAttribute("adminId", Long.valueOf(claims.getSubject()));
+                } catch (NumberFormatException ignored) {
+                    request.setAttribute("adminId", 0L);
+                }
                 return true;
             }
         }

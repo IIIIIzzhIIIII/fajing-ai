@@ -6,9 +6,12 @@ import com.fajing.common.Result;
 import com.fajing.dto.PostRequest;
 import com.fajing.entity.Comment;
 import com.fajing.entity.Post;
+import com.fajing.entity.Report;
 import com.fajing.mapper.CommentMapper;
 import com.fajing.mapper.PostMapper;
+import com.fajing.mapper.ReportMapper;
 import com.fajing.service.GenerationService;
+import com.fajing.service.WeChatContentSecurity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,6 +36,8 @@ public class PostController {
 
     private final PostMapper postMapper;
     private final CommentMapper commentMapper;
+    private final ReportMapper reportMapper;
+    private final WeChatContentSecurity contentSecurity;
 
     @GetMapping("/posts")
     public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String filter) {
@@ -56,6 +61,7 @@ public class PostController {
         if (req.getContent() == null || req.getContent().isBlank()) {
             throw new BizException("说说剪完的感受吧");
         }
+        contentSecurity.check(req.getContent(), "");
         Post post = new Post();
         boolean ask = "ask".equals(req.getBadge());
         post.setUserId(GenerationService.USER_ID);
@@ -111,6 +117,7 @@ public class PostController {
         if (content == null || content.isBlank()) {
             throw new BizException("评论内容不能为空");
         }
+        contentSecurity.check(content, "");
         Comment comment = new Comment();
         comment.setPostId(id);
         comment.setUserName("我");
@@ -118,6 +125,24 @@ public class PostController {
         comment.setCreatedAt(LocalDateTime.now());
         commentMapper.insert(comment);
         return Result.ok(commentMap(comment));
+    }
+
+    /** 举报帖子：进入管理端待处理列表 */
+    @PostMapping("/posts/{id}/report")
+    public Result<Void> report(@PathVariable Long id, @RequestBody(required = false) Map<String, String> body) {
+        Post post = postMapper.selectById(id);
+        if (post == null) {
+            throw new BizException("帖子不存在");
+        }
+        String reason = body == null ? null : body.get("reason");
+        Report report = new Report();
+        report.setPostId(id);
+        report.setUserId(GenerationService.USER_ID);
+        report.setReason(reason == null || reason.isBlank() ? "用户举报" : reason.trim());
+        report.setStatus("pending");
+        report.setCreatedAt(LocalDateTime.now());
+        reportMapper.insert(report);
+        return Result.ok();
     }
 
     private Map<String, Object> commentMap(Comment c) {

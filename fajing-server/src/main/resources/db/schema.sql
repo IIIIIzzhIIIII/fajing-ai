@@ -136,6 +136,28 @@ CREATE TABLE IF NOT EXISTS admin_user (
   UNIQUE KEY uk_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 举报：讨论区帖子举报与处理状态
+CREATE TABLE IF NOT EXISTS report (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  post_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL DEFAULT 1,
+  reason VARCHAR(200) NOT NULL DEFAULT '',
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_post (post_id),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 管理端操作日志
+CREATE TABLE IF NOT EXISTS admin_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  admin_id BIGINT NOT NULL DEFAULT 0,
+  action VARCHAR(64) NOT NULL DEFAULT '',
+  target VARCHAR(64) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- AI 生成配置（单行，id 固定为 1）：图像模型 / 文案模型 / 提示词，后台可改
 CREATE TABLE IF NOT EXISTS ai_config (
   id BIGINT PRIMARY KEY,

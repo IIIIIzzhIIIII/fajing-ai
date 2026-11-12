@@ -65,6 +65,7 @@
               <text class="post-badge" :class="{ ask: p.badge !== 'real' }">
                 {{ p.badge === 'real' ? '剪后实拍' : '还没剪' }}
               </text>
+              <text v-if="p.aiImage" class="ai-mark">AI 生成</text>
             </view>
             <view class="post-meta">{{ metaLine(p) }}</view>
           </view>
@@ -109,6 +110,10 @@
           </view>
           <view class="post-act try" @click="trySame(p)">
             <fj-icon name="scissors" :size="16" color="#9E3654" />试同款
+          </view>
+          <view class="post-act" @click="reportPost(p)">
+            <fj-icon name="shield" :size="16" color="#8B9295" />
+            <text>举报</text>
           </view>
         </view>
       </view>
@@ -251,6 +256,26 @@ function openComments(p) {
   ui.openSheet('comments')
 }
 
+function reportPost(p) {
+  if (!/^\d+$/.test(String(p.id))) {
+    ui.toast('示例内容不支持举报')
+    return
+  }
+  const reasons = ['内容违规', '广告引流', '侵犯隐私', '其他']
+  uni.showActionSheet({
+    itemList: reasons,
+    success: async (res) => {
+      const reason = reasons[res.tapIndex] || '用户举报'
+      try {
+        await API.reportPost(p.id, reason)
+        ui.toast('已提交举报，我们会尽快处理')
+      } catch (e) {
+        /* request 已统一提示 */
+      }
+    }
+  })
+}
+
 function trySame(p) {
   const gender = p.gender === 'male' ? 'male' : 'female'
   const list = STYLES[gender] || []
@@ -308,5 +333,15 @@ onUnload(() => {
   width: 100%;
   height: 100%;
   display: block;
+}
+.ai-mark {
+  flex: none;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #7a7276;
+  background: #f1edef;
+  border-radius: 4px;
 }
 </style>

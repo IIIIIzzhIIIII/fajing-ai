@@ -86,6 +86,20 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "试发记录"
       }
+    },
+    {
+      "path": "pages/agreement/privacy",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "隐私政策"
+      }
+    },
+    {
+      "path": "pages/agreement/terms",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "用户协议"
+      }
     }
   ],
   "globalStyle": {

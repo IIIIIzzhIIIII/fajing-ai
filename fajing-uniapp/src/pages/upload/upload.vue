@@ -58,12 +58,24 @@
           </view>
         </view>
 
-        <view class="consent" @click="consent = !consent">
-          <view class="cbx" :class="{ on: consent }">
+        <view class="consent" @click="privacyAgreed = !privacyAgreed">
+          <view class="cbx" :class="{ on: privacyAgreed }">
             <fj-icon name="check" :size="13" color="#FFFFFF" />
           </view>
           <view class="consent-t">
-            我已阅读并同意 <text class="hl">《隐私政策》</text>，照片<text class="hl">仅用于本次生成</text>，24 小时后自动删除，不会用于训练或其他用途。
+            我已阅读并同意
+            <text class="hl" @click.stop="openDoc('privacy')">《隐私政策》</text>
+            与
+            <text class="hl" @click.stop="openDoc('terms')">《用户协议》</text>，照片仅用于本次生成，24 小时后自动删除。
+          </view>
+        </view>
+
+        <view class="consent" @click="faceAgreed = !faceAgreed">
+          <view class="cbx" :class="{ on: faceAgreed }">
+            <fj-icon name="check" :size="13" color="#FFFFFF" />
+          </view>
+          <view class="consent-t">
+            <text class="hl">人脸信息单独同意：</text>我同意收集并处理我上传的人脸照片（敏感个人信息），仅用于本次 AI 换发预览，不建人脸库、不用于训练，生成结束 24 小时内删除原图。
           </view>
         </view>
 
@@ -98,11 +110,18 @@ import { DEMO_BEFORE } from '@/mock/constants'
 const app = useAppStore()
 const ui = useUiStore()
 
-const consent = ref(false)
+const privacyAgreed = ref(false)
+const faceAgreed = ref(false)
 const busy = ref(false)
 
 const photoSrc = computed(() => app.photoPath || '')
-const canNext = computed(() => !!photoSrc.value && consent.value && !busy.value)
+const canNext = computed(
+  () => !!photoSrc.value && privacyAgreed.value && faceAgreed.value && !busy.value
+)
+
+function openDoc(name) {
+  uni.navigateTo({ url: `/pages/agreement/${name}` })
+}
 
 function back() {
   uni.navigateBack()
@@ -127,7 +146,7 @@ function useDemo() {
 
 async function next() {
   if (busy.value) return
-  if (!photoSrc.value || !consent.value) return
+  if (!photoSrc.value || !privacyAgreed.value || !faceAgreed.value) return
   if (app.quota.freeLeft <= 0) {
     ui.openSheet('quota')
     return

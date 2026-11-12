@@ -82,6 +82,8 @@ export const API = {
   comments: (id) => request({ url: `/api/posts/${id}/comments` }),
   addComment: (id, content) =>
     request({ url: `/api/posts/${id}/comments`, method: 'POST', data: { content } }),
+  reportPost: (id, reason) =>
+    request({ url: `/api/posts/${id}/report`, method: 'POST', data: { reason } }),
   mockOrder: (payload) => request({ url: '/api/order/mock', method: 'POST', data: payload }),
   unlocks: () => request({ url: '/api/unlocks' }),
   shareReward: () => request({ url: '/api/share/reward', method: 'POST' })
