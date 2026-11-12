@@ -3,18 +3,18 @@ package com.fajing.task;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fajing.entity.GenerationTask;
 import com.fajing.mapper.GenerationTaskMapper;
+import com.fajing.service.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
  * 每天凌晨 3 点清理过期原图（24h 自动删除）
+ * 走 StorageService，本地磁盘与对象存储都能删。
  */
 @Slf4j
 @Component
@@ -22,9 +22,7 @@ import java.util.List;
 public class CleanupTask {
 
     private final GenerationTaskMapper taskMapper;
-
-    @Value("${fajing.upload-dir}")
-    private String uploadDir;
+    private final StorageService storageService;
 
     @Scheduled(cron = "0 0 3 * * ?")
     public void cleanExpiredPhotos() {
@@ -34,25 +32,15 @@ public class CleanupTask {
                 .ne("photo_url", ""));
         int cleaned = 0;
         for (GenerationTask task : tasks) {
-            deleteLocalFile(task.getPhotoUrl());
+            try {
+                storageService.delete(task.getPhotoUrl());
+            } catch (Exception e) {
+                log.warn("删除过期原图失败 taskId={}: {}", task.getId(), e.getMessage());
+            }
             task.setPhotoUrl("");
             taskMapper.updateById(task);
             cleaned++;
         }
         log.info("过期原图清理完成，共 {} 条", cleaned);
-    }
-
-    private void deleteLocalFile(String url) {
-        if (url == null || !url.contains("/uploads/")) {
-            return;
-        }
-        String name = url.substring(url.lastIndexOf("/uploads/") + "/uploads/".length());
-        if (name.isBlank() || name.contains("..")) {
-            return;
-        }
-        File file = new File(uploadDir, name);
-        if (file.exists() && !file.delete()) {
-            log.warn("删除原图失败：{}", file.getAbsolutePath());
-        }
     }
 }

@@ -2,20 +2,18 @@ package com.fajing.controller;
 
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
+import com.fajing.service.storage.StorageService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api")
@@ -25,11 +23,7 @@ public class UploadController {
     private static final Set<String> ALLOWED = Set.of("jpg", "jpeg", "png", "webp");
     private static final long MAX_SIZE = 10 * 1024 * 1024L;
 
-    @Value("${fajing.upload-dir}")
-    private String uploadDir;
-
-    @Value("${fajing.base-url}")
-    private String baseUrl;
+    private final StorageService storageService;
 
     @PostMapping("/upload")
     public Result<Map<String, Object>> upload(@RequestParam("file") MultipartFile file) throws Exception {
@@ -50,16 +44,10 @@ public class UploadController {
             throw new BizException("文件类型不正确");
         }
 
-        File dir = new File(uploadDir);
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new BizException("上传目录创建失败");
-        }
-        String name = UUID.randomUUID().toString().replace("-", "") + "." + ext;
-        file.transferTo(new File(dir, name));
-
+        String url = storageService.put(file.getBytes(), ext, null);
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("url", baseUrl + "/uploads/" + name);
-        data.put("path", name);
+        data.put("url", url);
+        data.put("path", url.substring(url.lastIndexOf('/') + 1));
         data.put("size", file.getSize());
         return Result.ok(data);
     }

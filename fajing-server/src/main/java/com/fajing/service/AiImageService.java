@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fajing.common.BizException;
 import com.fajing.entity.AiConfig;
+import com.fajing.service.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,12 +41,10 @@ public class AiImageService {
     private static final int MAX_EDGE = 1280;
 
     private final AiConfigService configService;
+    private final StorageService storageService;
 
     @Value("${fajing.upload-dir}")
     private String uploadDir;
-
-    @Value("${fajing.base-url}")
-    private String baseUrl;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder()
@@ -190,13 +189,8 @@ public class AiImageService {
         if (bytes == null || bytes.length == 0) {
             throw new BizException("下载生成图失败");
         }
-        File dir = new File(uploadDir);
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw new BizException("上传目录创建失败");
-        }
-        String name = "ai_" + taskId + "_" + styleId + "_" + System.currentTimeMillis() + ".png";
-        Files.write(new File(dir, name).toPath(), bytes);
-        return trimSlash(baseUrl) + "/uploads/" + name;
+        return storageService.put(bytes, "png",
+                "ai_" + taskId + "_" + styleId + "_" + System.currentTimeMillis());
     }
 
     private byte[] httpGet(String url) throws Exception {
