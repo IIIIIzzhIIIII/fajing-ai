@@ -1,0 +1,42 @@
+import { getToken } from '@/utils/auth'
+
+const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || ''
+const queue = []
+let timer = null
+
+/**
+ * 关键行为埋点：批量上报，失败静默，绝不阻断业务。
+ * 事件：upload_success / generate_start / generate_success / result_view /
+ *       save_image / pay_click / pay_success / post_create
+ */
+export function track(event, payload = {}) {
+  if (!BASE_URL || !event) return
+  queue.push({ event, payload })
+  if (queue.length >= 20) {
+    flush()
+    return
+  }
+  if (!timer) {
+    timer = setTimeout(() => {
+      timer = null
+      flush()
+    }, 1000)
+  }
+}
+
+function flush() {
+  if (!queue.length) return
+  const events = queue.splice(0, 20)
+  const token = getToken()
+  uni.request({
+    url: BASE_URL + '/api/event',
+    method: 'POST',
+    data: { events },
+    header: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    timeout: 8000,
+    fail: () => {}
+  })
+}

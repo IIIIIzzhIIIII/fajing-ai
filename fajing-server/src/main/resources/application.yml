@@ -35,10 +35,13 @@ mybatis-plus:
     db-config:
       id-type: auto
 
+# 日志目录：logback-spring.xml 读取，生产默认 /opt/fajing/logs
+app:
+  log-dir: ${LOG_DIR:/opt/fajing/logs}
+
 fajing:
   upload-dir: ${UPLOAD_DIR:E:/项目/AI发型替换/uploads}
-  base-url: ${BASE_URL:http://localhost:8081}
-  # 旧的固定管理端 token，仅兼容用；默认关闭，改用 /api/admin/login 换取 JWT
+  base-url: ${BASE_URL:http://localhost:8081}  # 旧的固定管理端 token，仅兼容用；默认关闭，改用 /api/admin/login 换取 JWT
   admin-token: ${ADMIN_TOKEN:}
   ai:
     # 图像模型（OpenAI 兼容接口）：默认硅基流动 Qwen-Image-Edit，可换成其他兼容服务

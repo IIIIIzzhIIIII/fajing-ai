@@ -126,6 +126,17 @@ CREATE TABLE IF NOT EXISTS ai_call_log (
   KEY idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 前端行为埋点：upload_success / generate_start / generate_success / result_view / save_image / pay_click / pay_success / post_create
+CREATE TABLE IF NOT EXISTS event_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL DEFAULT 0,
+  event VARCHAR(48) NOT NULL,
+  payload_json TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_event (event),
+  KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS orders (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   user_id BIGINT NOT NULL DEFAULT 1,

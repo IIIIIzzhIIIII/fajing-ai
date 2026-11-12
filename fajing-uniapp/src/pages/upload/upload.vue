@@ -105,6 +105,7 @@ import { computed, ref } from 'vue'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { upload } from '@/api/request'
+import { track } from '@/utils/track'
 import { DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
@@ -161,6 +162,7 @@ async function next() {
       const data = await upload(localPath)
       const url = (data && (data.url || data.path)) || ''
       app.setPhoto(localPath, url || localPath)
+      track('upload_success', { remote: !!url })
     } catch (e) {
       // 上传失败时降级使用本地路径，request 已统一提示
       app.setPhoto(localPath, localPath)

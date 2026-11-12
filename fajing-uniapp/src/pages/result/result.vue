@@ -191,6 +191,7 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { saveRemoteImage } from '@/utils/save'
+import { track } from '@/utils/track'
 import { DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
@@ -400,6 +401,7 @@ async function saveImage() {
   try {
     await saveRemoteImage(item.img, !unlocked.value)
     ui.toast(unlocked.value ? '已保存高清无水印图' : '已保存带水印效果图')
+    track('save_image', { taskId: taskId.value, styleId: item.styleId, unlocked: unlocked.value })
   } catch (e) {
     ui.toast('保存失败，请检查相册权限')
   }
@@ -480,6 +482,7 @@ onLoad(async (options) => {
     const first = styles.value[0]
     if (first && first.styleId) unlockStyles([first.styleId])
   }
+  track('result_view', { taskId: taskId.value, styleCount: styles.value.length })
 })
 
 onReady(() => {

@@ -256,6 +256,7 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API, upload } from '@/api/request'
 import { saveRemoteImage } from '@/utils/save'
+import { track } from '@/utils/track'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -344,8 +345,10 @@ async function payNow() {
   try {
     const plan = payPlan.value
     const styleIds = plan === 'one' ? [payStyle.value.styleId] : lockedUnlockedIds()
+    track('pay_click', { plan, count: styleIds.length })
     await API.createOrder({ plan, taskId: app.taskId, styleIds })
     await refreshUnlocks()
+    track('pay_success', { plan, count: styleIds.length })
     ui.sheet = 'paid'
   } catch (e) {
     /* 已 toast */
@@ -460,6 +463,7 @@ async function publish() {
       tags: []
     })
     ui.toast('发布成功')
+    track('post_create', { badge: isAsk.value ? 'ask' : 'real' })
     resetCompose()
     ui.close()
     uni.$emit('fajing:post-created')

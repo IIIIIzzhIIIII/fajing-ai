@@ -74,6 +74,7 @@ import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
+import { track } from '@/utils/track'
 import { STYLES, COLORS, PORTRAIT, DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
@@ -233,6 +234,7 @@ async function submit() {
     if (!id) throw new Error('missing taskId')
     taskId = id
     app.taskId = id
+    track('generate_start', { styleCount: (app.selectedStyleIds || []).length })
     startPolling()
   } catch (e) {
     fallbackLocal()
@@ -258,6 +260,7 @@ function finishSuccess(result) {
   const payload = Object.assign({}, result || {})
   if (!payload.taskId) payload.taskId = taskId
   app.setResult(payload)
+  track('generate_success', { taskId: payload.taskId, styleCount: (payload.styles || []).length })
   setTimeout(() => {
     uni.redirectTo({ url: '/pages/result/result' })
   }, 320)
