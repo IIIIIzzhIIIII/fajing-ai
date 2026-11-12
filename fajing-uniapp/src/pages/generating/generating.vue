@@ -84,6 +84,8 @@ const titles = ['正在识别人脸特征…', '匹配最适合你的发型…',
 
 const progress = ref(0)
 const apiProgress = ref(null)
+/** 服务端已出图数量，有值时进度条按真实张数展示 */
+const apiDone = ref(0)
 const picked = ref([])
 
 let taskId = ''
@@ -109,7 +111,10 @@ const thumbs = computed(() => {
   return list
 })
 
-const shown = computed(() => Math.min(total.value, Math.floor((progress.value / 100) * (total.value + 1))))
+const shown = computed(() => {
+  if (apiProgress.value !== null) return Math.min(total.value, apiDone.value)
+  return Math.min(total.value, Math.floor((progress.value / 100) * (total.value + 1)))
+})
 
 const stage = computed(() => (progress.value < 25 ? 0 : progress.value < 60 ? 1 : 2))
 const title = computed(() => titles[stage.value])
@@ -200,6 +205,9 @@ async function pollTask() {
     if (typeof data.progress === 'number') {
       apiProgress.value = data.progress
       progress.value = Math.max(progress.value, Math.min(99, Math.round(data.progress)))
+    }
+    if (typeof data.done === 'number') {
+      apiDone.value = data.done
     }
     if (data.status === 'success') {
       finishSuccess(data.result)

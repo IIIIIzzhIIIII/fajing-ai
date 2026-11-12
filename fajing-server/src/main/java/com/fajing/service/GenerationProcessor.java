@@ -16,11 +16,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  * 1. 读出任务与所选发型
  * 2. 为每一款生成编辑指令（模板 / 文案模型增强）
  * 3. 调用图像模型并行换发（最多 2 并发，避免触发限流）
- * 4. 任一失败回退占位图，保证任务能完成
+ * 4. 失败的款式标记 failed，不再回退假图，可在结果页单款重试
  */
 @Slf4j
 @Service
@@ -43,6 +43,7 @@ public class GenerationProcessor {
     private final AiImageService imageService;
     private final HairstyleMapper hairstyleMapper;
     private final HairColorMapper hairColorMapper;
+    private final QuotaService quotaService;
 
     @Async
     public void process(Long taskId) {
@@ -51,22 +52,19 @@ public class GenerationProcessor {
             log.warn("生成任务不存在 taskId={}", taskId);
             return;
         }
+        // 进度只在关键节点写值：任务领取 5% → AI 调用开始 10% → 每完成一张推进 → finish 置 100%
+        generationService.updateProgress(taskId, 5);
 
         List<Hairstyle> styles = resolveStyles(task);
         if (styles.isEmpty()) {
-            generationService.finish(taskId, Map.of());
+            generationService.finish(taskId, Map.of(), Set.of());
             return;
         }
-
-        // 进度条：真实调用期间缓慢推进到 90%，完成后由 finish 置 100%
-        AtomicInteger progress = new AtomicInteger(5);
-        ScheduledExecutorService ticker = Executors.newSingleThreadScheduledExecutor();
-        ticker.scheduleAtFixedRate(() -> {
-            int v = Math.min(90, progress.addAndGet(3));
-            generationService.updateProgress(taskId, v);
-        }, 1500, 1500, TimeUnit.MILLISECONDS);
+        generationService.updateProgress(taskId, 10);
 
         Map<String, String> images = new ConcurrentHashMap<>();
+        Set<String> failed = ConcurrentHashMap.newKeySet();
+        AtomicInteger done = new AtomicInteger();
         ExecutorService pool = Executors.newFixedThreadPool(Math.max(1, Math.min(2, styles.size())));
         try {
             String colorName = colorName(task.getColorId());
@@ -75,18 +73,13 @@ public class GenerationProcessor {
             for (Hairstyle s : styles) {
                 futures.add(pool.submit(() -> {
                     try {
-                        String prompt = promptService.build(s, colorName);
-                        String ref = referenceUrl(s, colorEn);
-                        if (ref != null) {
-                            prompt = "图1是人物原图，图2是目标发型参考。请把图1人物的头发换成图2中的发型，"
-                                    + "图1人物的脸部、眉毛、五官、表情（笑容、嘴部开合、是否露齿、眼神）必须保持完全不变。\n\n" + prompt;
-                        }
-                        log.info("开始 AI 换发 taskId={} style={} ref={} prompt={}", taskId, s.getName(), ref != null, prompt);
-                        String url = imageService.editHair(task.getPhotoUrl(), ref, prompt, taskId, s.getId());
-                        images.put(s.getId(), url);
-                        log.info("AI 换发完成 taskId={} style={} url={}", taskId, s.getName(), url);
+                        images.put(s.getId(), generateOne(task, s, colorName, colorEn));
                     } catch (Exception e) {
-                        log.warn("AI 换发失败，使用占位图 taskId={} style={}: {}", taskId, s.getName(), e.getMessage());
+                        failed.add(s.getId());
+                        log.warn("AI 换发失败 taskId={} style={}: {}", taskId, s.getName(), e.getMessage());
+                    } finally {
+                        int finished = done.incrementAndGet();
+                        generationService.updateProgress(taskId, 10 + (int) Math.round(80.0 * finished / styles.size()));
                     }
                 }));
             }
@@ -99,10 +92,54 @@ public class GenerationProcessor {
             }
         } finally {
             pool.shutdownNow();
-            ticker.shutdownNow();
         }
 
-        generationService.finish(taskId, images);
+        // 超时或没拿到图的也算失败
+        for (Hairstyle s : styles) {
+            if (!images.containsKey(s.getId())) {
+                failed.add(s.getId());
+            }
+        }
+
+        generationService.finish(taskId, images, failed);
+
+        // 整批全部失败：自动退还 1 次额度并记流水
+        if (!styles.isEmpty() && failed.size() == styles.size()) {
+            quotaService.refund(task.getUserId(), taskId, "生成全部失败");
+        }
+    }
+
+    /** 单款重试：只重跑失败的那一款，成功后回写结果 */
+    @Async
+    public void retry(Long taskId, String styleId) {
+        GenerationTask task = generationService.getTask(taskId);
+        if (task == null) {
+            return;
+        }
+        Hairstyle s = hairstyleMapper.selectById(styleId);
+        if (s == null) {
+            return;
+        }
+        try {
+            String url = generateOne(task, s, colorName(task.getColorId()), colorEn(task.getColorId()));
+            generationService.patchStyle(taskId, styleId, url);
+        } catch (Exception e) {
+            log.warn("重试失败 taskId={} styleId={}: {}", taskId, styleId, e.getMessage());
+            generationService.patchStyle(taskId, styleId, null);
+        }
+    }
+
+    private String generateOne(GenerationTask task, Hairstyle s, String colorName, String colorEn) throws Exception {
+        String prompt = promptService.build(s, colorName);
+        String ref = referenceUrl(s, colorEn);
+        if (ref != null) {
+            prompt = "图1是人物原图，图2是目标发型参考。请把图1人物的头发换成图2中的发型，"
+                    + "图1人物的脸部、眉毛、五官、表情（笑容、嘴部开合、是否露齿、眼神）必须保持完全不变。\n\n" + prompt;
+        }
+        log.info("开始 AI 换发 taskId={} style={} ref={} prompt={}", task.getId(), s.getName(), ref != null, prompt);
+        String url = imageService.editHair(task.getPhotoUrl(), ref, prompt, task.getId(), s.getId());
+        log.info("AI 换发完成 taskId={} style={} url={}", task.getId(), s.getName(), url);
+        return url;
     }
 
     private List<Hairstyle> resolveStyles(GenerationTask task) {

@@ -1,7 +1,9 @@
 package com.fajing.service;
 
 import com.fajing.common.BizException;
+import com.fajing.entity.QuotaRefund;
 import com.fajing.entity.UserQuota;
+import com.fajing.mapper.QuotaRefundMapper;
 import com.fajing.mapper.UserQuotaMapper;
 import com.fajing.util.UserContext;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import java.util.Map;
 public class QuotaService {
 
     private final UserQuotaMapper quotaMapper;
+    private final QuotaRefundMapper refundMapper;
 
     public UserQuota get() {
         Long userId = UserContext.require();
@@ -69,6 +72,40 @@ public class QuotaService {
         quota.setUpdatedAt(LocalDateTime.now());
         quotaMapper.updateById(quota);
         return quota;
+    }
+
+    /** 整批生成全部失败时自动退还 1 次额度，并写 quota_refund 流水 */
+    public void refund(Long userId, Long taskId, String reason) {
+        if (userId == null) {
+            return;
+        }
+        UserQuota quota = quotaMapper.selectById(userId);
+        LocalDate today = LocalDate.now();
+        if (quota == null) {
+            quota = new UserQuota();
+            quota.setUserId(userId);
+            quota.setFreeLeft(2);
+            quota.setQuotaDate(today);
+            quota.setShareClaimed(false);
+            quota.setAdUsed(false);
+            quota.setUpdatedAt(LocalDateTime.now());
+            quotaMapper.insert(quota);
+        } else {
+            if (!today.equals(quota.getQuotaDate())) {
+                quota.setFreeLeft(1);
+                quota.setQuotaDate(today);
+                quota.setAdUsed(false);
+            }
+            quota.setFreeLeft((quota.getFreeLeft() == null ? 0 : quota.getFreeLeft()) + 1);
+            quota.setUpdatedAt(LocalDateTime.now());
+            quotaMapper.updateById(quota);
+        }
+        QuotaRefund refund = new QuotaRefund();
+        refund.setUserId(userId);
+        refund.setTaskId(taskId == null ? 0L : taskId);
+        refund.setReason(reason == null ? "" : reason);
+        refund.setCreatedAt(LocalDateTime.now());
+        refundMapper.insert(refund);
     }
 
     public Map<String, Object> toMap(UserQuota quota) {

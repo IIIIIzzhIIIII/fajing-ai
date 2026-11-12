@@ -56,4 +56,26 @@ public class GenerateController {
         }
         return Result.ok(generationService.toMap(task));
     }
+
+    @Operation(summary = "重试失败的一款发型")
+    @PostMapping("/generate/{taskId}/retry")
+    public Result<Map<String, Object>> retry(@PathVariable Long taskId,
+                                             @RequestBody(required = false) Map<String, String> body) {
+        GenerationTask task = taskMapper.selectById(taskId);
+        if (task == null || !Long.valueOf(UserContext.require()).equals(task.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+        String styleId = body == null ? null : body.get("styleId");
+        if (styleId == null || styleId.isBlank()) {
+            throw new BizException("缺少要重试的款式");
+        }
+        if (!java.util.Arrays.asList(task.getStyleIds().split(",")).contains(styleId)) {
+            throw new BizException("该款式不属于此任务");
+        }
+        processor.retry(taskId, styleId);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("retried", true);
+        data.put("styleId", styleId);
+        return Result.ok(data);
+    }
 }

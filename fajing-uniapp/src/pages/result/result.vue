@@ -26,7 +26,13 @@
         </view>
 
         <view v-if="view === 'compare'">
+          <view v-if="isFailed(current)" class="res-fail" @click="retryCurrent">
+            <fj-icon name="refresh" :size="24" color="#8B9295" />
+            <text class="res-fail-t">{{ retrying ? '正在重新生成…' : '生成失败，点击重试' }}</text>
+            <text class="res-fail-d">{{ current.failReason || '生成超时/服务异常' }}</text>
+          </view>
           <fj-compare-slider
+            v-else
             ref="sliderRef"
             v-model:pct="baPct"
             :before="beforeImg"
@@ -108,7 +114,8 @@
               :class="{ on: i === activeIndex, locked: !isUnlocked(item) }"
               @click="openFromGrid(i)"
             >
-              <image class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+              <image v-if="!isFailed(item)" class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+              <view v-else class="fail-thumb"><text>生成失败</text></view>
               <text class="res-cell-idx">{{ i + 1 }}</text>
               <view v-if="!isUnlocked(item)" class="res-cell-lock">
                 <view class="lk">
@@ -143,7 +150,8 @@
           :class="{ on: i === activeIndex, locked: !isUnlocked(item) }"
           @click="selectStyle(i)"
         >
-          <image class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+          <image v-if="!isFailed(item)" class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+          <view v-else class="fail-thumb"><text>失败</text></view>
           <text class="r-thumb-idx">{{ i + 1 }}</text>
           <view v-if="!isUnlocked(item)" class="r-thumb-lock">
             <fj-icon name="lock" :size="14" color="#FFFFFF" />
@@ -191,6 +199,8 @@ const ui = useUiStore()
 const view = ref('compare')
 const activeIndex = ref(0)
 const baPct = ref(50)
+/** 失败款重试中，避免重复提交 */
+const retrying = ref(false)
 /** 是否从试发记录进入（决定返回目标） */
 const fromHistory = ref(false)
 
@@ -209,7 +219,8 @@ const unlocked = computed(() => {
   if (item.unlocked === true) return true
   return isUnlocked(item)
 })
-const lockedList = computed(() => styles.value.filter((item) => !isUnlocked(item)))
+const lockedList = computed(() => styles.value.filter((item) => !isFailed(item) && !isUnlocked(item)))
+const failedList = computed(() => styles.value.filter(isFailed))
 const remaining = computed(() => lockedList.value.length)
 
 const score = computed(() => {
@@ -247,9 +258,11 @@ const ringStyle = computed(() => {
 // 原型 SVG 适配环：r=23，周长 2πr ≈ 144.5
 const fitDash = computed(() => 144.5 - 144.5 * (Math.max(0, Math.min(100, fit.value.score)) / 100))
 
-const primaryTitle = computed(() =>
-  remaining.value > 0 ? `解锁剩余 ${remaining.value} 款` : '已解锁全部 · 保存高清图'
-)
+const primaryTitle = computed(() => {
+  if (remaining.value > 0) return `解锁剩余 ${remaining.value} 款`
+  if (failedList.value.length > 0) return '部分生成失败 · 点击重试'
+  return '已解锁全部 · 保存高清图'
+})
 /** 只剩 1 款时按单张 ¥6 计价，多款按 ¥3/款 打包 */
 const unlockPrice = computed(() => (remaining.value > 1 ? remaining.value * 3 : 6))
 const primarySub = computed(() =>
@@ -269,6 +282,51 @@ function measure() {
 
 function isUnlocked(item) {
   return !!item && !!item.styleId && unlockedKeys.value.includes(`${taskId.value}:${item.styleId}`)
+}
+
+/** 服务端标记失败的款式：无图即视为失败 */
+function isFailed(item) {
+  return !!item && (item.failed === true || !item.img)
+}
+
+/** 重试当前这款（对比位或失败缩略图点击） */
+function retryCurrent() {
+  retryOne(current.value)
+}
+
+async function retryOne(item) {
+  if (!item || !item.styleId || retrying.value) return
+  retrying.value = true
+  try {
+    await API.retryStyle(taskId.value, item.styleId)
+    ui.toast('已重新提交生成')
+    await pollRetry(item.styleId)
+  } catch (e) {
+    // request 已统一提示
+  } finally {
+    retrying.value = false
+  }
+}
+
+/** 轮询直到这款出图（最多约 60 秒） */
+async function pollRetry(styleId) {
+  for (let i = 0; i < 40; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      const res = await API.task(taskId.value)
+      const data = (res && res.result) || res
+      const list = (data && data.styles) || []
+      const target = list.find((s) => s.styleId === styleId)
+      if (target && target.img && !target.failed) {
+        app.setResult({ ...data, taskId: taskId.value })
+        ui.toast('重试成功')
+        return
+      }
+    } catch (e) {
+      // 继续轮询
+    }
+  }
+  ui.toast('仍在生成中，稍后可回到试发记录查看')
 }
 
 /** 解锁当前任务下的款式（第 1 款免费 / 付费解锁） */
@@ -292,6 +350,10 @@ function setView(next) {
 
 function selectStyle(i) {
   if (i < 0 || i >= styles.value.length) return
+  if (isFailed(styles.value[i])) {
+    retryOne(styles.value[i])
+    return
+  }
   // 未解锁内容只给付费提示，不切换、不展示
   if (!isUnlocked(styles.value[i])) {
     openPay(styles.value[i].styleId)
@@ -303,6 +365,10 @@ function selectStyle(i) {
 
 function openFromGrid(i) {
   if (i < 0 || i >= styles.value.length) return
+  if (isFailed(styles.value[i])) {
+    retryOne(styles.value[i])
+    return
+  }
   if (!isUnlocked(styles.value[i])) {
     openPay(styles.value[i].styleId)
     return
@@ -342,6 +408,10 @@ async function saveImage() {
 function onPrimary() {
   if (remaining.value > 0) {
     openPay()
+    return
+  }
+  if (failedList.value.length > 0) {
+    retryOne(failedList.value[0])
     return
   }
   saveImage()
@@ -490,5 +560,36 @@ onShow(() => {
   line-height: 1.3;
   opacity: 0.92;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+/* 生成失败：灰块占位，点击重试 */
+.fail-thumb {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ececee;
+  color: #8b9295;
+  font-size: 11px;
+  font-weight: 600;
+}
+.res-fail {
+  height: 380px;
+  border-radius: 18px;
+  background: #ececee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.res-fail-t {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6f7679;
+}
+.res-fail-d {
+  font-size: 11px;
+  color: #a3a9ac;
 }
 </style>

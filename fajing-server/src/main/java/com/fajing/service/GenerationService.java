@@ -67,8 +67,8 @@ public class GenerationService {
         taskMapper.updateById(task);
     }
 
-    /** 生成完成：写入 result_json、历史记录，并默认解锁第 1 款 */
-    public void finish(Long taskId, Map<String, String> images) {
+    /** 生成完成：写入 result_json、历史记录，并默认解锁第 1 款；失败款不再回退假图 */
+    public void finish(Long taskId, Map<String, String> images, java.util.Set<String> failed) {
         GenerationTask task = taskMapper.selectById(taskId);
         if (task == null) {
             return;
@@ -89,9 +89,15 @@ public class GenerationService {
                 item.put("face", s.getFace());
                 item.put("cat", s.getCat());
                 String aiUrl = images == null ? null : images.get(s.getId());
-                item.put("img", aiUrl != null && !aiUrl.isBlank() ? aiUrl : placeholder(s.getId(), taskId));
+                boolean isFailed = aiUrl == null || aiUrl.isBlank()
+                        || (failed != null && failed.contains(s.getId()));
+                item.put("img", isFailed ? null : aiUrl);
+                item.put("failed", isFailed);
+                if (isFailed) {
+                    item.put("failReason", "生成超时/服务异常");
+                }
                 // 第 1 款免费解锁，其余以服务端 user_unlock 为准
-                item.put("unlocked", index == 0 || isUnlocked(task.getUserId(), taskId, s.getId()));
+                item.put("unlocked", !isFailed && (index == 0 || isUnlocked(task.getUserId(), taskId, s.getId())));
                 items.add(item);
                 index++;
             }
@@ -108,8 +114,11 @@ public class GenerationService {
                 record.setTaskId(taskId);
                 record.setTitle(styles.size() > 1 ? styles.get(0).getName() + " 等 " + styles.size() + " 款" : styles.get(0).getName());
                 record.setBeforeUrl(task.getPhotoUrl());
-                String cover = images == null ? null : images.get(styles.get(0).getId());
-                record.setCoverUrl(cover != null && !cover.isBlank() ? cover : placeholder(styles.get(0).getId(), taskId));
+                String cover = images == null ? "" : styles.stream()
+                        .map(s -> images.get(s.getId()))
+                        .filter(url -> url != null && !url.isBlank())
+                        .findFirst().orElse("");
+                record.setCoverUrl(cover);
                 record.setStyleIds(task.getStyleIds());
                 record.setCreatedAt(LocalDateTime.now());
                 recordMapper.insert(record);
@@ -121,6 +130,65 @@ public class GenerationService {
             log.error("生成结果写入失败 taskId={}", taskId, e);
             task.setStatus("failed");
             taskMapper.updateById(task);
+        }
+    }
+
+    /**
+     * 单款重试后回写结果：img 为空表示这次仍失败
+     */
+    public void patchStyle(Long taskId, String styleId, String img) {
+        GenerationTask task = taskMapper.selectById(taskId);
+        if (task == null || task.getResultJson() == null || task.getResultJson().isBlank()) {
+            return;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = objectMapper.readValue(task.getResultJson(), Map.class);
+            Object stylesObj = result.get("styles");
+            if (!(stylesObj instanceof List<?> list)) {
+                return;
+            }
+            boolean changed = false;
+            int index = 0;
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> raw) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> item = (Map<String, Object>) raw;
+                    if (styleId.equals(String.valueOf(item.get("styleId")))) {
+                        boolean ok = img != null && !img.isBlank();
+                        item.put("img", ok ? img : null);
+                        item.put("failed", !ok);
+                        if (ok) {
+                            item.remove("failReason");
+                        } else {
+                            item.put("failReason", "生成超时/服务异常");
+                        }
+                        item.put("unlocked", ok && (index == 0 || isUnlocked(task.getUserId(), taskId, styleId)));
+                        changed = true;
+                        break;
+                    }
+                }
+                index++;
+            }
+            if (!changed) {
+                return;
+            }
+            task.setResultJson(objectMapper.writeValueAsString(result));
+            task.setProgress(100);
+            task.setStatus("success");
+            taskMapper.updateById(task);
+
+            // 记录封面为空时用这次成功的图补上
+            if (img != null && !img.isBlank()) {
+                UserRecord record = recordMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserRecord>()
+                        .eq("task_id", taskId).last("limit 1"));
+                if (record != null && (record.getCoverUrl() == null || record.getCoverUrl().isBlank())) {
+                    record.setCoverUrl(img);
+                    recordMapper.updateById(record);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("重试结果回写失败 taskId={} styleId={}: {}", taskId, styleId, e.getMessage());
         }
     }
 
@@ -161,7 +229,37 @@ public class GenerationService {
         map.put("status", task.getStatus());
         map.put("progress", task.getProgress());
         map.put("result", parseResult(task.getResultJson()));
+        map.put("done", doneCount(task.getResultJson()));
+        map.put("failed", failedCount(task.getResultJson()));
         return map;
+    }
+
+    /** 已成功出图的数量，前端进度条显示「已出图 n/N」 */
+    private int doneCount(String json) {
+        return countStyles(json, false);
+    }
+
+    private int failedCount(String json) {
+        return countStyles(json, true);
+    }
+
+    private int countStyles(String json, boolean failed) {
+        Object parsed = parseResult(json);
+        if (!(parsed instanceof Map<?, ?> map) || !(map.get("styles") instanceof List<?> styles)) {
+            return 0;
+        }
+        int count = 0;
+        for (Object o : styles) {
+            if (o instanceof Map<?, ?> item) {
+                boolean isFailed = Boolean.TRUE.equals(item.get("failed"));
+                Object img = item.get("img");
+                boolean hasImg = img != null && !String.valueOf(img).isBlank();
+                if (failed ? isFailed : (hasImg && !isFailed)) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     private Object parseResult(String json) {
@@ -192,10 +290,5 @@ public class GenerationService {
             }
         }
         return list.size() > 4 ? new ArrayList<>(list.subList(0, 4)) : list;
-    }
-
-    /** AI 效果占位图（阶段后期替换为真实 AI 出图） */
-    private String placeholder(String styleId, Long taskId) {
-        return "https://picsum.photos/seed/fajing_" + styleId + "_" + taskId + "/600/800";
     }
 }

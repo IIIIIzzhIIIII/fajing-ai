@@ -191,6 +191,8 @@ export const API = {
   colors: () => request({ url: '/api/colors' }),
   generate: (payload) => request({ url: '/api/generate', method: 'POST', data: payload }),
   task: (taskId) => request({ url: `/api/generate/${taskId}` }),
+  retryStyle: (taskId, styleId) =>
+    request({ url: `/api/generate/${taskId}/retry`, method: 'POST', data: { styleId } }),
   records: () => request({ url: '/api/records' }),
   quota: () => request({ url: '/api/quota' }),
   consume: (type) => request({ url: '/api/quota/consume', method: 'POST', data: { type } }),
