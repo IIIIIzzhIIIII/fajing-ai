@@ -11,3 +11,7 @@ app:
 
 storage:
   type: ${STORAGE_TYPE:local}
+
+# 开发环境允许 mock 支付，便于本地联调解锁流程
+pay:
+  mock-enabled: ${PAY_MOCK_ENABLED:true}

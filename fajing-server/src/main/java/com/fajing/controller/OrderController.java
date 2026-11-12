@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,6 +45,13 @@ public class OrderController {
     private final GenerationTaskMapper taskMapper;
     private final GenerationService generationService;
 
+    /** mock 支付仅在非生产环境开启；生产必须接真实微信支付 */
+    @Value("${pay.mock-enabled:true}")
+    private boolean mockPayEnabled;
+
+    @Value("${pay.wxpay-enabled:false}")
+    private boolean wxpayEnabled;
+
     /** 创建订单；wxpay 未配置时直接 mock 支付成功并写解锁 */
     @Operation(summary = "创建解锁订单（未接微信支付时走 mock 并直接解锁）")
     @PostMapping("/create")
@@ -72,7 +80,7 @@ public class OrderController {
         order.setStyleIds(String.join(",", styleIds));
         order.setCreatedAt(LocalDateTime.now());
 
-        boolean mock = !wxpayEnabled();
+        boolean mock = !wxpayEnabled && mockPayEnabled;
         order.setStatus(mock ? "paid" : "created");
         orderMapper.insert(order);
 
@@ -89,10 +97,13 @@ public class OrderController {
         return Result.ok(data);
     }
 
-    /** 兼容老前端：等同 create 的 mock 分支 */
-    @Operation(summary = "兼容接口：等同创建订单")
+    /** 兼容老前端：等同 create 的 mock 分支；生产环境关闭 */
+    @Operation(summary = "兼容接口：等同创建订单（生产不可用）")
     @PostMapping("/mock")
     public Result<Map<String, Object>> mockPay(@RequestBody Map<String, Object> body) {
+        if (!mockPayEnabled) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "接口不存在");
+        }
         return create(body);
     }
 
@@ -148,11 +159,6 @@ public class OrderController {
         for (String id : styleIds) {
             generationService.unlock(userId, id, taskId);
         }
-    }
-
-    private boolean wxpayEnabled() {
-        // 未接入商户号前恒为 mock；接入后由配置切换
-        return false;
     }
 
     @SuppressWarnings("unchecked")

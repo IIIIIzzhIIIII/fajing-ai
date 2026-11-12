@@ -56,6 +56,11 @@ token:
   secret: ${TOKEN_SECRET:}
   expire-days: ${TOKEN_EXPIRE_DAYS:7}
 
+# 支付：未接入微信支付商户前，mock 支付只在非生产环境可用（直接置 paid 并写解锁）
+pay:
+  mock-enabled: ${PAY_MOCK_ENABLED:true}
+  wxpay-enabled: ${WXPAY_ENABLED:false}
+
 admin:
   # 初始化管理员密码（仅 admin_user 为空时使用）
   init-password: ${ADMIN_INIT_PASSWORD:}
