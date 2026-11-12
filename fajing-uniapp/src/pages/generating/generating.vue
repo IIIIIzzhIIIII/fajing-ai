@@ -2,7 +2,31 @@
   <view class="page active" id="page-generating">
     <view class="gen-wrap">
       <view class="ring">
+        <!-- #ifdef H5 -->
+        <svg width="150" height="150" viewBox="0 0 150 150">
+          <defs>
+            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#E8A0B4" />
+              <stop offset="55%" stop-color="#C95676" />
+              <stop offset="100%" stop-color="#D98A63" />
+            </linearGradient>
+          </defs>
+          <circle class="ring-bg" cx="75" cy="75" r="64" fill="none" stroke-width="8" />
+          <circle
+            class="ring-fg"
+            cx="75"
+            cy="75"
+            r="64"
+            fill="none"
+            stroke-width="8"
+            stroke-dasharray="402"
+            :stroke-dashoffset="dashOffset"
+          />
+        </svg>
+        <!-- #endif -->
+        <!-- #ifndef H5 -->
         <view class="ring-arc" :style="ringStyle" />
+        <!-- #endif -->
         <view class="ring-core">
           <view class="ring-num">{{ progress }}<text style="font-size:13px">%</text></view>
           <view class="ring-unit">GENERATING</view>
@@ -97,6 +121,9 @@ const ringStyle = computed(() => {
     background: `conic-gradient(from -90deg, #E8A0B4 0deg, #C95676 ${deg * 0.55}deg, #D98A63 ${deg}deg, rgba(255,255,255,.10) ${deg}deg 360deg)`
   }
 })
+
+// 原型 SVG 圆环：周长 2πr ≈ 402
+const dashOffset = computed(() => 402 - 402 * (Math.max(0, Math.min(100, progress.value)) / 100))
 
 function imgOf(s) {
   if (!s) return ''

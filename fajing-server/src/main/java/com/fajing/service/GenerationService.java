@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -69,7 +70,7 @@ public class GenerationService {
     }
 
     /** 生成完成：写入 result_json、历史记录，并默认解锁第 1 款 */
-    public void finish(Long taskId) {
+    public void finish(Long taskId, Map<String, String> images) {
         GenerationTask task = taskMapper.selectById(taskId);
         if (task == null) {
             return;
@@ -88,7 +89,8 @@ public class GenerationService {
                 item.put("len", s.getLen());
                 item.put("face", s.getFace());
                 item.put("cat", s.getCat());
-                item.put("img", placeholder(s.getId(), taskId));
+                String aiUrl = images == null ? null : images.get(s.getId());
+                item.put("img", aiUrl != null && !aiUrl.isBlank() ? aiUrl : placeholder(s.getId(), taskId));
                 item.put("unlocked", false);
                 items.add(item);
             }
@@ -105,7 +107,8 @@ public class GenerationService {
                 record.setTaskId(taskId);
                 record.setTitle(styles.size() > 1 ? styles.get(0).getName() + " 等 " + styles.size() + " 款" : styles.get(0).getName());
                 record.setBeforeUrl(task.getPhotoUrl());
-                record.setCoverUrl(placeholder(styles.get(0).getId(), taskId));
+                String cover = images == null ? null : images.get(styles.get(0).getId());
+                record.setCoverUrl(cover != null && !cover.isBlank() ? cover : placeholder(styles.get(0).getId(), taskId));
                 record.setStyleIds(task.getStyleIds());
                 record.setCreatedAt(LocalDateTime.now());
                 recordMapper.insert(record);
@@ -118,6 +121,10 @@ public class GenerationService {
             task.setStatus("failed");
             taskMapper.updateById(task);
         }
+    }
+
+    public GenerationTask getTask(Long taskId) {
+        return taskMapper.selectById(taskId);
     }
 
     public void unlock(String styleId, Long taskId) {
@@ -158,24 +165,20 @@ public class GenerationService {
     private List<Hairstyle> resolveStyles(GenerationTask task) {
         List<String> ids = new ArrayList<>(Arrays.asList(task.getStyleIds().split(",")));
         ids.removeIf(String::isBlank);
-        List<Hairstyle> list = new ArrayList<>();
-        if (!ids.isEmpty()) {
-            list.addAll(hairstyleMapper.selectBatchIds(ids));
+        if (ids.isEmpty()) {
+            return new ArrayList<>();
         }
-        if (list.size() < 4) {
-            List<Hairstyle> pool = hairstyleMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Hairstyle>()
-                            .eq("gender", task.getGender()).eq("status", 1).orderByAsc("sort"));
-            for (Hairstyle s : pool) {
-                if (list.size() >= 4) {
-                    break;
-                }
-                if (list.stream().noneMatch(x -> x.getId().equals(s.getId()))) {
-                    list.add(s);
-                }
+        // 严格按用户选择的款式出图：选 2 款就只出 2 张，不做自动补齐
+        Map<String, Hairstyle> found = hairstyleMapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(Hairstyle::getId, s -> s, (a, b) -> a));
+        List<Hairstyle> list = new ArrayList<>();
+        for (String id : ids) {
+            Hairstyle s = found.get(id);
+            if (s != null) {
+                list.add(s);
             }
         }
-        return list;
+        return list.size() > 4 ? new ArrayList<>(list.subList(0, 4)) : list;
     }
 
     /** AI 效果占位图（阶段后期替换为真实 AI 出图） */

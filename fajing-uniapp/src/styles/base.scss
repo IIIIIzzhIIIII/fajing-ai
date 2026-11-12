@@ -44,6 +44,38 @@ uni-page-wrapper,
 uni-page-body {
   height: 100%;
 }
+
+/* uni-app H5 的 scroll-view 内部多了一层内容容器，
+ * 原型的 display:flex 只作用于外层，导致横向列表被子项竖排。
+ * 这里把外层还原为块级（滚动交给 scroll-view），
+ * 再把 flex 与间距补到内容层，恢复原型的横滑效果。 */
+.hot-strip,
+.chip-row,
+.color-row,
+.result-strip {
+  display: block;
+  overflow: visible;
+}
+.hot-strip .uni-scroll-view-content,
+.chip-row .uni-scroll-view-content,
+.color-row .uni-scroll-view-content,
+.result-strip .uni-scroll-view-content {
+  display: flex;
+  align-items: flex-start;
+  width: max-content;
+}
+.hot-strip .uni-scroll-view-content {
+  gap: 10px;
+}
+.chip-row .uni-scroll-view-content {
+  gap: 8px;
+}
+.color-row .uni-scroll-view-content {
+  gap: 9px;
+}
+.result-strip .uni-scroll-view-content {
+  gap: 9px;
+}
 /* #endif */
 
 /* #ifdef MP-WEIXIN */

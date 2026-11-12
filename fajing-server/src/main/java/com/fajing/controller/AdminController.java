@@ -3,9 +3,11 @@ package com.fajing.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
+import com.fajing.entity.Comment;
 import com.fajing.entity.Hairstyle;
 import com.fajing.entity.Order;
 import com.fajing.entity.Post;
+import com.fajing.mapper.CommentMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.mapper.PostMapper;
@@ -22,8 +24,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 管理端接口（由 AdminInterceptor 校验 X-Admin-Token）
@@ -37,6 +42,7 @@ public class AdminController {
     private final HairstyleMapper hairstyleMapper;
     private final PostMapper postMapper;
     private final OrderMapper orderMapper;
+    private final CommentMapper commentMapper;
 
     @GetMapping("/hairstyles")
     public Result<List<Hairstyle>> hairstyles(@RequestParam(required = false) String gender) {
@@ -91,8 +97,41 @@ public class AdminController {
     }
 
     @GetMapping("/posts")
-    public Result<List<Post>> posts() {
-        return Result.ok(postMapper.selectList(new QueryWrapper<Post>().orderByDesc("created_at")));
+    public Result<List<Map<String, Object>>> posts() {
+        List<Post> posts = postMapper.selectList(new QueryWrapper<Post>().orderByDesc("created_at"));
+        return Result.ok(posts.stream().map(this::postMap).collect(Collectors.toList()));
+    }
+
+    /** 帖子带上评论明细，管理端能直接看到用户最新评论 */
+    private Map<String, Object> postMap(Post p) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", p.getId());
+        map.put("userId", p.getUserId());
+        map.put("name", p.getName());
+        map.put("avatarColor", p.getAvatarColor());
+        map.put("meta", p.getMeta());
+        map.put("badge", p.getBadge());
+        map.put("gender", p.getGender());
+        map.put("styleName", p.getStyleName());
+        map.put("content", p.getContent());
+        map.put("aiImage", p.getAiImage());
+        map.put("afterImage", p.getAfterImage());
+        map.put("score", p.getScore());
+        map.put("likes", p.getLikes());
+        map.put("createdAt", p.getCreatedAt());
+
+        List<Comment> comments = commentMapper.selectList(new QueryWrapper<Comment>()
+                .eq("post_id", p.getId()).orderByAsc("created_at"));
+        map.put("commentCount", comments.size());
+        map.put("comments", comments.stream().map(c -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", c.getId());
+            item.put("userName", c.getUserName());
+            item.put("content", c.getContent());
+            item.put("createdAt", c.getCreatedAt());
+            return item;
+        }).collect(Collectors.toList()));
+        return map;
     }
 
     @DeleteMapping("/posts/{id}")

@@ -91,7 +91,8 @@ function goUpload() {
   uni.navigateTo({ url: '/pages/upload/upload' })
 }
 function goStyles() {
-  uni.navigateTo({ url: '/pages/styles/styles' })
+  // 首页「全部发型 / 热门款」只做图鉴浏览，不能直接发起生成
+  uni.navigateTo({ url: '/pages/styles/styles?view=1' })
 }
 function goProfile() {
   uni.reLaunch({ url: '/pages/profile/profile' })

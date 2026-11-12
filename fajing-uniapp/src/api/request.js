@@ -1,4 +1,4 @@
-const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || 'http://localhost:8080'
+const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || 'http://localhost:8081'
 
 /** 统一 toast（避免各处重复 import 组件） */
 function fail(msg) {

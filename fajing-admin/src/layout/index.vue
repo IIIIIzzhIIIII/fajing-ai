@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, Scissor, SwitchButton, Tickets } from '@element-plus/icons-vue'
+import { ChatDotRound, MagicStick, Scissor, SwitchButton, Tickets, User } from '@element-plus/icons-vue'
 import { clearToken } from '@/utils/auth'
 
 const route = useRoute()
@@ -11,7 +11,9 @@ const router = useRouter()
 const menus = [
   { path: '/hairstyles', title: '发型库', icon: Scissor },
   { path: '/posts', title: '帖子管理', icon: ChatDotRound },
-  { path: '/orders', title: '订单列表', icon: Tickets }
+  { path: '/orders', title: '订单列表', icon: Tickets },
+  { path: '/users', title: '用户管理', icon: User },
+  { path: '/ai', title: 'AI 设置', icon: MagicStick }
 ]
 
 const activeMenu = computed(() => route.path)

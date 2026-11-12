@@ -110,3 +110,34 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 用户表：目前登录接入前只有体验用户，接入微信登录后按 openid 建档
+CREATE TABLE IF NOT EXISTS app_user (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  nickname VARCHAR(32) NOT NULL DEFAULT '微信用户',
+  avatar VARCHAR(512) NOT NULL DEFAULT '',
+  gender VARCHAR(8) NOT NULL DEFAULT 'unknown',
+  openid VARCHAR(64) NOT NULL DEFAULT '',
+  phone VARCHAR(20) NOT NULL DEFAULT '',
+  status TINYINT NOT NULL DEFAULT 1,
+  register_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_active_at DATETIME NULL,
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- AI 生成配置（单行，id 固定为 1）：图像模型 / 文案模型 / 提示词，后台可改
+CREATE TABLE IF NOT EXISTS ai_config (
+  id BIGINT PRIMARY KEY,
+  image_provider VARCHAR(32) NOT NULL DEFAULT 'siliconflow',
+  image_base_url VARCHAR(255) NOT NULL DEFAULT 'https://api.siliconflow.cn/v1',
+  image_api_key VARCHAR(255) NOT NULL DEFAULT '',
+  image_model VARCHAR(128) NOT NULL DEFAULT 'Qwen/Qwen-Image-Edit-2509',
+  text_base_url VARCHAR(255) NOT NULL DEFAULT 'https://api.deepseek.com/v1',
+  text_api_key VARCHAR(255) NOT NULL DEFAULT '',
+  text_model VARCHAR(128) NOT NULL DEFAULT 'deepseek-flash',
+  prompt_template TEXT NULL,
+  system_prompt TEXT NULL,
+  use_text_enhance TINYINT NOT NULL DEFAULT 0,
+  enabled TINYINT NOT NULL DEFAULT 1,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

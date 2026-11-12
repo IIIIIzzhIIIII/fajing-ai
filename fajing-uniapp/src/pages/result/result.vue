@@ -32,8 +32,8 @@
             :before="beforeImg"
             :after="current.img"
             :unlocked="unlocked"
-            @lock="ui.openSheet('pay')"
-            @dragstart="stopReplay"
+            @lock="openPay()"
+            @dragstart="onSliderDrag"
           />
 
           <view class="ba-replay" @click="replayCompare">
@@ -43,12 +43,34 @@
 
           <view class="fit-card">
             <view class="fit-score">
+              <!-- #ifdef H5 -->
+              <svg width="54" height="54" viewBox="0 0 54 54">
+                <defs>
+                  <linearGradient id="fitGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#E8A0B4" />
+                    <stop offset="100%" stop-color="#C95676" />
+                  </linearGradient>
+                </defs>
+                <circle class="fit-score-bg" cx="27" cy="27" r="23" fill="none" stroke-width="5" />
+                <circle
+                  class="fit-score-fg"
+                  cx="27"
+                  cy="27"
+                  r="23"
+                  fill="none"
+                  stroke-width="5"
+                  stroke-dasharray="144.5"
+                  :stroke-dashoffset="fitDash"
+                />
+              </svg>
+              <!-- #endif -->
+              <!-- #ifndef H5 -->
               <view class="fit-ring" :style="ringStyle">
-                <view class="fit-ring-in">
-                  <view class="fit-score-num">
-                    {{ fit.score }}<text style="font-size:9px;font-weight:700">%</text>
-                  </view>
-                </view>
+                <view class="fit-ring-in" />
+              </view>
+              <!-- #endif -->
+              <view class="fit-score-num">
+                {{ fit.score }}<text style="font-size:9px;font-weight:700">%</text>
               </view>
             </view>
             <view class="fit-main">
@@ -64,15 +86,15 @@
           </view>
         </view>
 
-        <view v-if="remaining > 0" class="unlock-bar" @click="ui.openSheet('pay')">
+        <view v-if="remaining > 0" class="unlock-bar" @click="openPay()">
           <view class="ub-thumbs">
             <view v-for="item in lockedList.slice(0, 3)" :key="item.styleId" class="ub-thumb">
-              <image :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+              <image class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
             </view>
           </view>
           <view class="ub-main">
             <view class="ub-t">还有 {{ remaining }} 款效果已生成</view>
-            <view class="ub-d">限时 ¥12 全部解锁 · 高清无水印</view>
+            <view class="ub-d">{{ unlockSub }}</view>
           </view>
           <text class="ub-btn">解锁</text>
         </view>
@@ -92,7 +114,8 @@
                 <view class="lk">
                   <fj-icon name="lock" :size="16" color="#C95676" />
                 </view>
-                <text style="font-size:10.5px;font-weight:700">解锁查看</text>
+                <text class="rc-lt">付费解锁</text>
+                <text class="rc-ls">¥6/张 · 高清无水印</text>
               </view>
               <view class="res-cell-name">{{ item.name }}</view>
             </view>
@@ -123,7 +146,8 @@
           <image class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
           <text class="r-thumb-idx">{{ i + 1 }}</text>
           <view v-if="!isUnlocked(item)" class="r-thumb-lock">
-            <fj-icon name="lock" :size="15" color="#FFFFFF" />
+            <fj-icon name="lock" :size="14" color="#FFFFFF" />
+            <text class="rtl-t">付费</text>
           </view>
         </view>
       </view>
@@ -167,13 +191,18 @@ const ui = useUiStore()
 const view = ref('compare')
 const activeIndex = ref(0)
 const baPct = ref(50)
+/** 是否从试发记录进入（决定返回目标） */
+const fromHistory = ref(false)
 
 const styles = computed(() => (app.result && app.result.styles) || [])
+/** 当前这批生成的任务 ID：解锁按「任务 + 款式」计算，第 2 张起需要重新付费 */
+const taskId = computed(() => String((app.result && app.result.taskId) || app.taskId || ''))
+const unlockedKeys = computed(() => app.unlocks)
 const current = computed(
   () => styles.value[activeIndex.value] || { styleId: '', name: '', len: '', face: '', cat: '', img: '' }
 )
 const beforeImg = computed(() => (app.result && app.result.before) || app.photoPath || DEMO_BEFORE)
-const unlocked = computed(() => !!current.value.styleId && app.unlocks.includes(current.value.styleId))
+const unlocked = computed(() => isUnlocked(current.value))
 const lockedList = computed(() => styles.value.filter((item) => !isUnlocked(item)))
 const remaining = computed(() => lockedList.value.length)
 
@@ -209,10 +238,22 @@ const ringStyle = computed(() => {
   return `background: conic-gradient(from -90deg, #C95676 0% ${p}%, #F1DDE2 ${p}% 100%)`
 })
 
+// 原型 SVG 适配环：r=23，周长 2πr ≈ 144.5
+const fitDash = computed(() => 144.5 - 144.5 * (Math.max(0, Math.min(100, fit.value.score)) / 100))
+
 const primaryTitle = computed(() =>
   remaining.value > 0 ? `解锁剩余 ${remaining.value} 款` : '已解锁全部 · 保存高清图'
 )
-const primarySub = computed(() => (remaining.value > 0 ? '高清无水印 · ¥12' : '高清无水印 · 可直接保存'))
+/** 只剩 1 款时按单张 ¥6 计价，多款按 ¥3/款 打包 */
+const unlockPrice = computed(() => (remaining.value > 1 ? remaining.value * 3 : 6))
+const primarySub = computed(() =>
+  remaining.value > 0 ? `高清无水印 · ¥${unlockPrice.value}` : '高清无水印 · 可直接保存'
+)
+const unlockSub = computed(() =>
+  remaining.value > 1
+    ? `限时 ¥${unlockPrice.value} 全部解锁 · 高清无水印`
+    : `¥${unlockPrice.value} 解锁高清无水印版`
+)
 
 const sliderRef = ref(null)
 
@@ -221,7 +262,19 @@ function measure() {
 }
 
 function isUnlocked(item) {
-  return !!item && app.unlocks.includes(item.styleId)
+  return !!item && !!item.styleId && unlockedKeys.value.includes(`${taskId.value}:${item.styleId}`)
+}
+
+/** 解锁当前任务下的款式（第 1 款免费 / 付费解锁） */
+function unlockStyles(styleIds) {
+  app.addUnlocks(styleIds.map((id) => `${taskId.value}:${id}`))
+}
+
+/** 打开付费墙：带上具体款式时默认按「单张解锁」计价 */
+function openPay(styleId) {
+  ui.payStyleId = styleId || ''
+  if (styleId) ui.payPlan = 'one'
+  ui.openSheet('pay')
 }
 
 function setView(next) {
@@ -233,11 +286,21 @@ function setView(next) {
 
 function selectStyle(i) {
   if (i < 0 || i >= styles.value.length) return
+  // 未解锁内容只给付费提示，不切换、不展示
+  if (!isUnlocked(styles.value[i])) {
+    openPay(styles.value[i].styleId)
+    return
+  }
   activeIndex.value = i
   stopReplay()
 }
 
 function openFromGrid(i) {
+  if (i < 0 || i >= styles.value.length) return
+  if (!isUnlocked(styles.value[i])) {
+    openPay(styles.value[i].styleId)
+    return
+  }
   selectStyle(i)
   setView('compare')
 }
@@ -245,6 +308,11 @@ function openFromGrid(i) {
 function stopReplay() {
   baPct.value = 50
   if (sliderRef.value) sliderRef.value.reset()
+}
+
+/** 开始拖动：只停掉自动播放动画，不能重置位置，否则会一直被拉回中间 */
+function onSliderDrag() {
+  if (sliderRef.value) sliderRef.value.stop()
 }
 
 function replayCompare() {
@@ -267,7 +335,7 @@ async function saveImage() {
 
 function onPrimary() {
   if (remaining.value > 0) {
-    ui.openSheet('pay')
+    openPay()
     return
   }
   saveImage()
@@ -286,23 +354,33 @@ function openCard() {
 }
 
 function goBack() {
-  uni.navigateBack({
-    fail: () => uni.reLaunch({ url: '/pages/home/home' })
-  })
+  if (fromHistory.value) {
+    uni.navigateBack({
+      fail: () => uni.reLaunch({ url: '/pages/home/home' })
+    })
+    return
+  }
+  // 生成流程终点：不回到选发型/发色页，直接回首页
+  uni.reLaunch({ url: '/pages/home/home' })
 }
 
 async function syncUnlocks() {
   try {
     const res = await API.unlocks()
     const list = Array.isArray(res) ? res : (res && (res.styleIds || res.ids)) || []
-    const ids = list.map((item) => (typeof item === 'string' ? item : item && item.styleId)).filter(Boolean)
-    if (ids.length) app.addUnlocks(ids)
+    // 服务端按「任务 + 款式」返回，转成 taskId:styleId 的键
+    const keys = list
+      .map((item) => (item && item.styleId ? `${item.taskId || 0}:${item.styleId}` : ''))
+      .filter(Boolean)
+    if (keys.length) app.addUnlocks(keys)
   } catch (e) {
     // 接口已统一 toast，失败时沿用本地解锁状态
   }
 }
 
-onLoad(async () => {
+onLoad(async (options) => {
+  // 从「试发记录」进来的，返回时回到记录页；生成流程进来的，返回直接回首页
+  fromHistory.value = !!(options && options.from === 'history')
   const hasStyles = !!(app.result && app.result.styles && app.result.styles.length)
   if (!hasStyles && app.taskId) {
     try {
@@ -318,6 +396,13 @@ onLoad(async () => {
   if (!app.result || !app.result.styles || !app.result.styles.length) {
     ui.toast('效果已过期，请重新上传生成')
     uni.reLaunch({ url: '/pages/home/home' })
+    return
+  }
+
+  // 初始仅免费开放 1 款，其余按付费解锁处理
+  if (!styles.value.some(isUnlocked)) {
+    const first = styles.value[0]
+    if (first && first.styleId) unlockStyles([first.styleId])
   }
 })
 
@@ -345,7 +430,8 @@ onShow(() => {
   min-width: 0;
 }
 .fit-ring {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 54px;
   height: 54px;
   border-radius: 50%;
@@ -364,12 +450,39 @@ onShow(() => {
   align-items: center;
   justify-content: center;
 }
+/* 未解锁内容：整张卡片最大强度模糊，内容完全不可辨识 */
 .r-thumb.locked .thumb-img {
-  filter: blur(6px) saturate(0.9);
-  transform: scale(1.12);
+  filter: blur(50px);
+  transform: scale(2.4);
 }
 .res-cell.locked .thumb-img {
-  filter: blur(11px) saturate(0.9);
-  transform: scale(1.06);
+  filter: blur(70px);
+  transform: scale(2.4);
+}
+.ub-thumb .thumb-img {
+  filter: blur(30px);
+  transform: scale(2.4);
+}
+.r-thumb-lock {
+  flex-direction: column;
+  gap: 2px;
+}
+.rtl-t {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.rc-lt {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.rc-ls {
+  font-size: 9px;
+  line-height: 1.3;
+  opacity: 0.92;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 </style>

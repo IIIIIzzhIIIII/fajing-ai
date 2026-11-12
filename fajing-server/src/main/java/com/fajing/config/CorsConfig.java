@@ -13,9 +13,8 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:5173", "http://127.0.0.1:5173",
-                        "http://localhost:5180", "http://127.0.0.1:5180",
-                        "http://localhost:8081", "http://127.0.0.1:8081")
+                // 本地开发：H5 预览、管理后台可能运行在任意端口，统一放行 localhost
+                .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)

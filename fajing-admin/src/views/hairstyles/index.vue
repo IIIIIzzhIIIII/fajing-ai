@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
-import { createHairstyle, fetchHairstyles, updateHairstyle, updateHairstyleStatus } from '@/api'
+import { Plus, Refresh, Upload } from '@element-plus/icons-vue'
+import service, { createHairstyle, fetchHairstyles, updateHairstyle, updateHairstyleStatus } from '@/api'
 
 const genderOptions = [
   { label: '女款', value: 'female' },
@@ -36,6 +36,37 @@ const rules = {
 }
 
 const dialogTitle = computed(() => (editingId.value ? '编辑发型' : '新增发型'))
+const uploading = ref(false)
+
+/** 上传示例照片：走 /api/upload，返回可直接访问的 URL */
+async function uploadImage(options) {
+  const file = options?.file
+  if (!file) return
+  if (!/^image\//.test(file.type)) {
+    ElMessage.error('只能上传图片文件')
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片不能超过 10MB')
+    return
+  }
+  uploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const data = await service.post('/api/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    if (data && data.url) {
+      form.imgUrl = data.url
+      ElMessage.success('示例照片已上传')
+    }
+  } catch {
+    // 错误提示由拦截器处理
+  } finally {
+    uploading.value = false
+  }
+}
 
 async function loadList() {
   loading.value = true
@@ -153,6 +184,19 @@ onMounted(loadList)
 
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
       <el-table-column prop="id" label="ID" width="90" />
+      <el-table-column label="示例图" width="84">
+        <template #default="{ row }">
+          <el-image
+            v-if="row.imgUrl"
+            :src="row.imgUrl"
+            fit="cover"
+            class="thumb"
+            :preview-src-list="[row.imgUrl]"
+            preview-teleported
+          />
+          <span v-else class="thumb-auto">自动生成</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="name" label="名称" min-width="130">
         <template #default="{ row }">
           <span class="name-text">{{ row.name }}</span>
@@ -247,6 +291,27 @@ onMounted(loadList)
               show-word-limit
             />
           </el-form-item>
+
+          <el-form-item label="示例照片" class="span-2">
+            <div class="img-field">
+              <div v-if="form.imgUrl" class="img-preview">
+                <el-image :src="form.imgUrl" fit="cover" :preview-src-list="[form.imgUrl]" preview-teleported />
+                <el-button link type="danger" size="small" @click="form.imgUrl = ''">移除</el-button>
+              </div>
+              <el-upload
+                :show-file-list="false"
+                :http-request="uploadImage"
+                accept="image/*"
+              >
+                <el-button :icon="Upload" :loading="uploading">上传照片</el-button>
+              </el-upload>
+              <el-input v-model="form.imgUrl" placeholder="或直接填写图片 URL" />
+            </div>
+            <div class="form-tip">
+              推荐上传正脸、光线均匀的示例照。设置后：发型库展示与 AI 换发的参考图都会优先使用这张照片；留空则按英文提示词自动生成。
+            </div>
+          </el-form-item>
+
           <el-form-item label="状态" prop="status" class="span-2">
             <el-radio-group v-model="form.status">
               <el-radio :value="1">上架</el-radio>
@@ -304,5 +369,46 @@ onMounted(loadList)
   .span-2 {
     grid-column: span 2;
   }
+}
+
+.thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  display: block;
+}
+
+.thumb-auto {
+  font-size: 12px;
+  color: #a8a2a4;
+}
+
+.img-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.img-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+
+  :deep(.el-image) {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    border: 1px solid #eee3e5;
+  }
+}
+
+.form-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #a8a2a4;
 }
 </style>

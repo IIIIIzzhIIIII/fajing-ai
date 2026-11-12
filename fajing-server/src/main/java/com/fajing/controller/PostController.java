@@ -57,16 +57,18 @@ public class PostController {
             throw new BizException("说说剪完的感受吧");
         }
         Post post = new Post();
+        boolean ask = "ask".equals(req.getBadge());
         post.setUserId(GenerationService.USER_ID);
         post.setName("我");
         post.setAvatarColor("#C95676");
-        post.setMeta("刚刚 · 我的作业");
-        post.setBadge("real");
+        post.setMeta(ask ? "刚刚 · 还没剪" : "刚刚 · 我的作业");
+        post.setBadge(ask ? "ask" : "real");
         post.setGender("male".equals(req.getGender()) ? "male" : "female");
         post.setStyleName(req.getStyleName() == null ? "" : req.getStyleName());
         post.setContent(req.getContent());
         post.setAiImage(req.getAiImage() == null ? "" : req.getAiImage());
-        post.setAfterImage(req.getAfterImage() == null ? "" : req.getAfterImage());
+        // 还没剪只发一张现在的发型照，不存剪后实拍
+        post.setAfterImage(ask || req.getAfterImage() == null ? "" : req.getAfterImage());
         post.setTags(req.getTags() == null ? "" : String.join(",", req.getTags()));
         post.setLikes(0);
         post.setLiked(false);

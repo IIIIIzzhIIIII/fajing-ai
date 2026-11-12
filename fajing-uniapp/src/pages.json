@@ -39,6 +39,13 @@
       }
     },
     {
+      "path": "pages/style-detail/style-detail",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "发型详情"
+      }
+    },
+    {
       "path": "pages/generating/generating",
       "style": {
         "navigationStyle": "custom",
@@ -71,6 +78,13 @@
       "style": {
         "navigationStyle": "custom",
         "navigationBarTitleText": "发型讨论"
+      }
+    },
+    {
+      "path": "pages/history/history",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "试发记录"
       }
     }
   ],

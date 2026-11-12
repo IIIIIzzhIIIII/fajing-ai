@@ -2,7 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:8080',
+  baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:8081',
   timeout: 15000
 })
 
@@ -67,6 +67,24 @@ export function deletePost(id) {
 
 export function fetchOrders() {
   return service.get('/api/admin/orders')
+}
+
+export function fetchUsers(params) {
+  return service.get('/api/admin/users', { params })
+}
+
+export function updateUserStatus(id, status) {
+  return service.patch(`/api/admin/users/${id}/status`, null, {
+    params: { status }
+  })
+}
+
+export function fetchAiConfig() {
+  return service.get('/api/admin/ai-config')
+}
+
+export function saveAiConfig(data) {
+  return service.put('/api/admin/ai-config', data)
 }
 
 export default service

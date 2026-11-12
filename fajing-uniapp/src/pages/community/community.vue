@@ -8,7 +8,7 @@
         </view>
         <view class="comm-sub">AI 预览 vs 剪后实拍 · 少踩一次雷</view>
       </view>
-      <view class="comm-post-btn" @click="openCompose">
+      <view class="comm-post-btn" @click="openCompose('real')">
         <fj-icon name="message" :size="16" color="#FFFFFF" />发讨论
       </view>
     </view>
@@ -25,8 +25,8 @@
             <text class="ch-av" style="background:#7FA6C9">柚</text>
           </view>
           <view class="ch-note">真实作业 · 已授权</view>
-          <view class="ch-cta ghost" @click="openCompose">还没剪？</view>
-          <view class="ch-cta" @click="openCompose">交作业 →</view>
+          <view class="ch-cta ghost" @click="openCompose('ask')">还没剪？</view>
+          <view class="ch-cta" @click="openCompose('real')">交作业 →</view>
         </view>
       </view>
 
@@ -87,7 +87,9 @@
         <view v-else class="post-pair single">
           <view class="pair-cell">
             <image v-if="p.afterImage || p.aiImage" :src="p.afterImage || p.aiImage" mode="aspectFill" class="pair-img" />
-            <text class="pair-tag" :class="{ after: !!p.afterImage }">{{ p.afterImage ? '剪后实拍' : 'AI 效果图' }}</text>
+            <text class="pair-tag" :class="{ after: !!p.afterImage }">
+              {{ p.afterImage ? '剪后实拍' : p.badge === 'ask' ? '现在的发型' : 'AI 效果图' }}
+            </text>
             <text v-if="p.afterImage && p.score" class="pair-score" :class="{ warn: p.score < 85 }">还原 {{ p.score }}%</text>
           </view>
         </view>
@@ -219,7 +221,8 @@ function pickTopic(t) {
   ui.toast(`${t} 话题 · 原型演示`)
 }
 
-function openCompose() {
+function openCompose(mode) {
+  ui.composeMode = mode === 'ask' ? 'ask' : 'real'
   ui.openSheet('compose')
 }
 
@@ -238,7 +241,14 @@ async function toggleLike(p) {
 }
 
 function openComments(p) {
-  uni.$emit('fajing:open-comments', p)
+  // 传一份普通对象，避免响应式引用在弹层里取不到评论数据
+  ui.commentPost = {
+    id: p.id,
+    name: p.name,
+    styleName: p.styleName,
+    comments: (p.comments || []).slice()
+  }
+  ui.openSheet('comments')
 }
 
 function trySame(p) {

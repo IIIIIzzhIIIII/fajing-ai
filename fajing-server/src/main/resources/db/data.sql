@@ -1,5 +1,4 @@
--- 发镜 AI · 初始化数据（可重复执行）
-INSERT IGNORE INTO hairstyle (id, name, gender, cat, len, face, en, img_url, status, sort) VALUES
+-- 发镜 AI · 初始化数据（可重复执行）INSERT IGNORE INTO hairstyle (id, name, gender, cat, len, face, en, img_url, status, sort) VALUES
 ('f1','法式波波头','female','波波头','肩部以上','圆脸 / 鹅蛋脸','french bob haircut, chin length, soft inward ends','',1,1),
 ('f2','日系碎短发','female','短发','耳下','小脸 / 心形脸','japanese layered short hair, airy texture','',1,2),
 ('f3','港风大波浪','female','卷发','胸上','鹅蛋脸 / 方脸','hong kong retro big wavy long hair','',1,3),
@@ -50,3 +49,30 @@ INSERT IGNORE INTO comment (id, post_id, user_name, content, created_at) VALUES
 
 INSERT IGNORE INTO user_quota (user_id, free_left, quota_date, share_claimed, ad_used, updated_at)
 VALUES (1, 1, CURDATE(), 0, 0, NOW());
+
+INSERT IGNORE INTO app_user (id, nickname, gender, status, register_at, last_active_at)
+VALUES (1, '发镜体验用户', 'female', 1, NOW(), NOW());
+
+-- 发型描述更新：统一为现代流行款式描述（幂等，可重复执行）
+UPDATE hairstyle SET en='modern soft big wavy long hair, layered volume, glossy finish' WHERE id='f3';
+UPDATE hairstyle SET en='korean texture perm men hair, soft natural waves, light airy volume, modern trendy style' WHERE id='m3';
+UPDATE hairstyle SET en='modern slick back men hair with low fade, clean tapered sides, natural shine' WHERE id='m4';
+UPDATE hairstyle SET en='modern mullet men hair, soft layers, shaved sides, trendy korean style' WHERE id='m6';
+UPDATE hairstyle SET en='modern korean side part men hair, soft natural flow, light airy volume, exposed forehead, tapered sides' WHERE id='m7';
+
+-- 讨论区示例图：换成真实发型示例（AI 效果 / 剪后实拍），不再用随机风景图（幂等）
+UPDATE post SET ai_image='http://localhost:8081/uploads/ai_25_f1_1794467034354.png',
+                after_image='http://localhost:8081/uploads/80ee4800dde443a19543b2df0ef9f806.jpg'
+WHERE id=1;
+UPDATE post SET ai_image='http://localhost:8081/uploads/ai_26_f2_1794470130081.png',
+                after_image='http://localhost:8081/uploads/095a2690109e438fa5dd19025e6908f1.jpg'
+WHERE id=2;
+UPDATE post SET ai_image='http://localhost:8081/uploads/02caa3b8f9d84e94beb45b42b0f86482.jpg',
+                after_image=''
+WHERE id=3;
+UPDATE post SET ai_image='http://localhost:8081/uploads/ai_17_m2_1794457873568.png',
+                after_image='http://localhost:8081/uploads/91f27d40de73448faa0bf6288a58a884.jpg'
+WHERE id=4;
+UPDATE post SET ai_image='http://localhost:8081/uploads/ai_26_f7_1794470130191.png',
+                after_image='http://localhost:8081/uploads/5b4481a719b34998800762d66fccaa8d.jpg'
+WHERE id=5;

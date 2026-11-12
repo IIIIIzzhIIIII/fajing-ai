@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { deletePost, fetchPosts } from '@/api'
@@ -14,8 +14,10 @@ const badgeMap = {
   ask: { label: '求建议', className: 'is-ask' }
 }
 
-async function loadList() {
-  loading.value = true
+async function loadList(silent = false) {
+  if (!silent) {
+    loading.value = true
+  }
   loadFailed.value = false
   try {
     const data = await fetchPosts()
@@ -61,7 +63,17 @@ async function handleDelete(row) {
   }
 }
 
-onMounted(loadList)
+let timer = null
+
+onMounted(() => {
+  loadList()
+  // 用户在小程序端评论后，管理端每 20 秒自动同步一次
+  timer = setInterval(() => loadList(true), 20000)
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
 </script>
 
 <template>
@@ -72,6 +84,19 @@ onMounted(loadList)
     </div>
 
     <el-table v-loading="loading" :data="list" stripe style="width: 100%">
+      <el-table-column type="expand" width="40">
+        <template #default="{ row }">
+          <div class="comment-box">
+            <div class="comment-title">评论（{{ row.commentCount || 0 }}）</div>
+            <div v-if="!row.comments || !row.comments.length" class="comment-empty">暂无评论</div>
+            <div v-for="c in row.comments" :key="c.id" class="comment-item">
+              <span class="comment-name">{{ c.userName || '匿名' }}</span>
+              <span class="comment-text">{{ c.content }}</span>
+              <span class="comment-time">{{ formatDateTime(c.createdAt) }}</span>
+            </div>
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column label="作者" min-width="150">
         <template #default="{ row }">
@@ -104,6 +129,13 @@ onMounted(loadList)
         </template>
       </el-table-column>
       <el-table-column prop="likes" label="点赞数" width="90" align="center" />
+      <el-table-column label="评论数" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag :type="row.commentCount ? 'danger' : 'info'" effect="light" round>
+            {{ row.commentCount || 0 }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="发布时间" width="160">
         <template #default="{ row }">
           <span class="time-text">{{ formatDateTime(row.createdAt) }}</span>
@@ -185,5 +217,54 @@ onMounted(loadList)
 .time-text {
   font-size: 13px;
   color: #7d7278;
+}
+
+.comment-box {
+  padding: 10px 20px 12px 56px;
+  background: #fdfafb;
+}
+
+.comment-title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b7f86;
+}
+
+.comment-empty {
+  font-size: 12px;
+  color: #a0949a;
+}
+
+.comment-item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px dashed #f2e8eb;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.comment-name {
+  flex: none;
+  min-width: 64px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c95676;
+}
+
+.comment-text {
+  flex: 1;
+  font-size: 13px;
+  color: #3b3337;
+}
+
+.comment-time {
+  flex: none;
+  font-size: 12px;
+  color: #a0949a;
 }
 </style>

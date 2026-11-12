@@ -8,7 +8,10 @@ export const IMG = (p, size) =>
 
 export const PORTRAIT = (en, gender) =>
   IMG(
-    `${gender === 'male' ? 'young asian man' : 'young asian woman'}, ${en}, front facing portrait, shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail`
+    `${gender === 'male' ? 'young asian man' : 'young asian woman'}, ${en}, ` +
+    'front facing portrait, looking straight at camera, head level and centered, symmetrical frontal face, ' +
+    'no side profile, no tilted head, shoulders up, natural window light, clean neutral background, ' +
+    'photorealistic, 85mm lens, high detail'
   )
 
 export const DEMO_BEFORE = IMG(
@@ -19,7 +22,7 @@ export const STYLES = {
   female: [
     { id: 'f1', name: '法式波波头', cat: '波波头', len: '肩部以上', face: '圆脸 / 鹅蛋脸', en: 'french bob haircut, chin length, soft inward ends' },
     { id: 'f2', name: '日系碎短发', cat: '短发', len: '耳下', face: '小脸 / 心形脸', en: 'japanese layered short hair, airy texture' },
-    { id: 'f3', name: '港风大波浪', cat: '卷发', len: '胸上', face: '鹅蛋脸 / 方脸', en: 'hong kong retro big wavy long hair' },
+    { id: 'f3', name: '港风大波浪', cat: '卷发', len: '胸上', face: '鹅蛋脸 / 方脸', en: 'modern soft big wavy long hair, layered volume, glossy finish' },
     { id: 'f4', name: '空气感齐刘海', cat: '齐刘海', len: '肩部', face: '长脸 / 鹅蛋脸', en: 'see-through blunt bangs with medium straight hair' },
     { id: 'f5', name: '挂耳短发', cat: '短发', len: '耳上', face: '小脸 / 圆脸', en: 'sleek ear-tuck short bob' },
     { id: 'f6', name: '中长直发', cat: '中长发', len: '锁骨', face: '所有脸型', en: 'glossy medium length straight hair, collarbone length' },
@@ -33,11 +36,11 @@ export const STYLES = {
   male: [
     { id: 'm1', name: '栗子头', cat: '短发', len: '耳上', face: '圆脸 / 学生感', en: 'korean chestnut cut short hair with rounded fringe' },
     { id: 'm2', name: '微分碎盖', cat: '短发', len: '眉上', face: '鹅蛋脸 / 长脸', en: 'textured fringe korean men hair with see-through bangs' },
-    { id: 'm3', name: '韩式纹理烫', cat: '纹理烫', len: '耳下', face: '所有脸型', en: 'korean texture perm men hair with wavy volume' },
-    { id: 'm4', name: '侧推背头', cat: '背头', len: '短', face: '方脸 / 成熟', en: 'side part slick back men hair with faded sides' },
+    { id: 'm3', name: '韩式纹理烫', cat: '纹理烫', len: '耳下', face: '所有脸型', en: 'korean texture perm men hair, soft natural waves, light airy volume, modern trendy style' },
+    { id: 'm4', name: '侧推背头', cat: '背头', len: '短', face: '方脸 / 成熟', en: 'modern slick back men hair with low fade, clean tapered sides, natural shine' },
     { id: 'm5', name: '法式短寸', cat: '寸头', len: '极短', face: '硬朗 / 方脸', en: 'french crop buzz cut men hair' },
-    { id: 'm6', name: '狼尾鲻鱼头', cat: '狼尾', len: '颈后', face: '心形脸 / 潮男', en: 'mullet wolf cut men hair with shaved sides' },
-    { id: 'm7', name: '三七分毛流', cat: '短发', len: '耳上', face: '长脸 / 鹅蛋脸', en: 'side part men hair with natural hair flow' },
+    { id: 'm6', name: '狼尾鲻鱼头', cat: '狼尾', len: '颈后', face: '心形脸 / 潮男', en: 'modern mullet men hair, soft layers, shaved sides, trendy korean style' },
+    { id: 'm7', name: '三七分毛流', cat: '短发', len: '耳上', face: '长脸 / 鹅蛋脸', en: 'modern korean side part men hair, soft natural flow, light airy volume, exposed forehead, tapered sides' },
     { id: 'm8', name: '圆寸', cat: '寸头', len: '极短', face: '所有脸型', en: 'round buzz cut men hair, very short' }
   ]
 }
@@ -87,7 +90,9 @@ export const BARBER_FALLBACK = {
 
 export const COMM_AI = (en, gender) =>
   IMG(
-    `${gender === 'male' ? 'young asian man' : 'young asian woman'}, ${en}, front facing portrait, shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail`,
+    `${gender === 'male' ? 'young asian man' : 'young asian woman'}, ${en}, ` +
+    'front facing portrait, looking straight at camera, head level and centered, symmetrical frontal face, ' +
+    'no side profile, shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail',
     'square'
   )
 

@@ -73,7 +73,9 @@ public class HairstyleController {
         }
         String person = "male".equals(s.getGender()) ? "young asian man" : "young asian woman";
         String prompt = person + ", " + s.getEn()
-                + ", front facing portrait, shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail";
+                + ", front facing portrait, looking straight at camera, head level and centered, "
+                + "symmetrical frontal face, no side profile, no tilted head, "
+                + "shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail";
         return "https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt="
                 + URLEncoder.encode(prompt, StandardCharsets.UTF_8) + "&image_size=portrait_4_3";
     }

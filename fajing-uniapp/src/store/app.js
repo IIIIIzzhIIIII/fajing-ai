@@ -32,7 +32,10 @@ export const useAppStore = defineStore('app', {
         if (raw) {
           const data = typeof raw === 'string' ? JSON.parse(raw) : raw
           if (data.quota) this.quota = { ...this.quota, ...data.quota }
-          if (Array.isArray(data.unlocks)) this.unlocks = data.unlocks
+          // 解锁按「任务:款式」存储；没有任务前缀的历史数据直接丢弃，避免旧解锁让新一批出图免费
+          if (Array.isArray(data.unlocks)) {
+            this.unlocks = data.unlocks.filter((key) => typeof key === 'string' && key.indexOf(':') > -1)
+          }
           if (Array.isArray(data.history)) this.history = data.history
         }
       } catch (e) {

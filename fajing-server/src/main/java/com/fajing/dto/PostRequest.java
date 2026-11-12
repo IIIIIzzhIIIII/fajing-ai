@@ -11,5 +11,7 @@ public class PostRequest {
     private String aiImage = "";
     private String afterImage = "";
     private String gender = "female";
+    /** real=剪后作业，ask=还没剪求建议 */
+    private String badge = "real";
     private List<String> tags;
 }

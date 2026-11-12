@@ -5,7 +5,7 @@
 <script setup>
 defineProps({
   show: { type: Boolean, default: true },
-  text: { type: String, default: 'AI 生成 · 发镜 AI' },
+  text: { type: String, default: '发镜 AI · AI 生成' },
   position: { type: String, default: 'br' }
 })
 </script>

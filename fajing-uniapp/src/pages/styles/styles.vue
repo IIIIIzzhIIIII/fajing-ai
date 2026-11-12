@@ -2,15 +2,15 @@
   <view class="page active">
     <view class="topbar">
       <view class="icon-btn" @click="back()"><fj-icon name="arrow-left" :size="16" /></view>
-      <view class="topbar-title">选一款想试的</view>
+      <view class="topbar-title">{{ browse ? '全部发型' : '选一款想试的' }}</view>
     </view>
 
     <view class="pad" style="padding-top:2px">
-      <view class="seg">
+      <view v-if="!browse" class="seg">
         <view class="seg-item" :class="{ on: mode === 'hair' }" @click="setMode('hair')">只换发型</view>
         <view class="seg-item" :class="{ on: mode === 'color' }" @click="setMode('color')">发型 + 发色</view>
       </view>
-      <view class="tiny" style="margin:8px 2px 14px">{{ modeHint }}</view>
+      <view v-if="!browse" class="tiny" style="margin:8px 2px 14px">{{ modeHint }}</view>
 
       <view class="gender-tabs">
         <view class="gender-tab" :class="{ on: gender === 'female' }" data-g="female" @click="setGender('female')">
@@ -23,7 +23,7 @@
         </view>
       </view>
 
-      <view v-if="faceShape" class="rec-card">
+      <view v-if="faceShape && !browse" class="rec-card">
         <view class="rec-ico"><fj-icon name="sparkles" :size="16" color="#C95676" /></view>
         <view class="rec-main">
           <view class="rec-t">AI 识别你的脸型：<text class="rec-face">{{ faceShape }}</text></view>
@@ -45,7 +45,7 @@
       </view>
     </scroll-view>
 
-    <view v-if="mode === 'color'">
+    <view v-if="mode === 'color' && !browse">
       <view style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px 2px">
         <text style="font-size:11.5px;font-weight:700;color:var(--ink-2)">发色（可选 1 种）</text>
         <text style="font-size:10px;color:var(--muted)">{{ colorName }}</text>
@@ -72,24 +72,24 @@
           v-for="(s, i) in list"
           :key="s.id"
           class="style-card"
-          :class="{ on: isSelected(s.id) }"
-          @click="toggleStyle(s.id)"
+          :class="{ on: !browse && isSelected(s.id) }"
+          @click="openStyle(s)"
         >
           <view class="style-thumb">
             <image v-if="styleImg(s)" class="style-img" :src="styleImg(s)" mode="aspectFill" />
-            <view v-if="faceShape && matchesFace(s)" class="style-rec">适你</view>
-            <view v-if="i === 0" class="style-free">免费</view>
-            <view v-if="isSelected(s.id)" class="style-badge">{{ orderOf(s.id) }}</view>
+            <view v-if="!browse && faceShape && matchesFace(s)" class="style-rec">适你</view>
+            <view v-if="!browse && i === 0" class="style-free">免费</view>
+            <view v-if="!browse && isSelected(s.id)" class="style-badge">{{ orderOf(s.id) }}</view>
           </view>
           <view class="style-name">{{ s.name }}</view>
           <view class="style-tagline">{{ tagline(s) }}</view>
         </view>
         <view v-if="!list.length" class="empty" style="grid-column:1/-1">这个分类还没有发型，换一个看看？</view>
       </view>
-      <view class="tiny" style="text-align:center;padding:6px 20px 20px">最多勾选 4 款 · 第 1 款免费出图，其余可解锁高清</view>
+      <view class="tiny" style="text-align:center;padding:6px 20px 20px">{{ footHint }}</view>
     </scroll-view>
 
-    <view class="bottom-bar">
+    <view v-if="!browse" class="bottom-bar">
       <view class="btn btn-primary btn-block" :class="{ 'is-disabled': !canGenerate }" @click="startGenerate()">
         <text>{{ btnLabel }}</text>
         <fj-icon name="arrow-right" :size="16" color="#FFFFFF" />
@@ -113,6 +113,8 @@ const ui = useUiStore()
 
 const gender = ref(app.gender === 'male' ? 'male' : 'female')
 const mode = ref(app.mode === 'color' ? 'color' : 'hair')
+/** 浏览模式：从首页「全部发型」进入，只能看图鉴，不能选款生成 */
+const browse = ref(false)
 const faceShape = computed(() => (app.result && app.result.faceShape) || '')
 const cat = ref(faceShape.value ? '推荐' : '全部')
 const selected = ref(Array.isArray(app.selectedStyleIds) ? app.selectedStyleIds.slice(0, 4) : [])
@@ -174,6 +176,11 @@ const canGenerate = computed(() => selected.value.length > 0)
 const btnLabel = computed(() =>
   selected.value.length ? `生成 ${selected.value.length} 款效果` : '请先选择发型'
 )
+const footHint = computed(() =>
+  browse.value
+    ? '点开可查看大图 · 想试这款发型，请先上传自己的照片'
+    : '最多勾选 4 款 · 第 1 款免费出图，其余可解锁高清'
+)
 
 function styleImg(s) {
   if (!s) return ''
@@ -229,6 +236,23 @@ function toggleStyle(id) {
   }
 }
 
+/** 浏览模式只看大图，选款模式才做勾选 */
+function openStyle(s) {
+  if (!browse.value) {
+    toggleStyle(s.id)
+    return
+  }
+  const query = [
+    'id=' + encodeURIComponent(s.id || ''),
+    'name=' + encodeURIComponent(s.name || ''),
+    'len=' + encodeURIComponent(s.len || ''),
+    'face=' + encodeURIComponent(s.face || ''),
+    'cat=' + encodeURIComponent(s.cat || ''),
+    'img=' + encodeURIComponent(styleImg(s) || '')
+  ].join('&')
+  uni.navigateTo({ url: '/pages/style-detail/style-detail?' + query })
+}
+
 function tryRecommended() {
   cat.value = '推荐'
   selected.value = recList.value.map((s) => s.id).slice(0, 4)
@@ -242,7 +266,7 @@ function normalizeStyle(s) {
     len: s.len || s.length || s.lenDesc || '',
     face: s.face || s.faceShape || '',
     en: s.en || s.enPrompt || '',
-    img: s.img || s.image || ''
+    img: s.img || s.image || s.imgUrl || s.imageUrl || ''
   }
 }
 
@@ -302,7 +326,8 @@ function startGenerate() {
   uni.navigateTo({ url: '/pages/generating/generating' })
 }
 
-onLoad(() => {
+onLoad((options) => {
+  browse.value = !!(options && (options.view === '1' || options.mode === 'view'))
   loadStyles()
   loadColors()
 })

@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8081
   servlet:
     encoding:
       charset: UTF-8
@@ -35,5 +35,15 @@ mybatis-plus:
 
 fajing:
   upload-dir: E:/项目/AI发型替换/uploads
-  base-url: http://localhost:8080
+  base-url: http://localhost:8081
   admin-token: admin-token
+  ai:
+    # 图像模型（OpenAI 兼容接口）：默认硅基流动 Qwen-Image-Edit，可换成其他兼容服务
+    image-base-url: https://api.siliconflow.cn/v1
+    image-api-key: sk-oeondzhxjsqgyropdplmckkmazorrunvplusmmnlplxolanv
+    image-model: Qwen/Qwen-Image-Edit-2509
+    # 文案模型：默认 DeepSeek，用于把模板改写成更专业的编辑指令（可后台关闭）
+    text-base-url: https://api.deepseek.com/v1
+    text-api-key: sk-6089d4e346bf4939a0c99ad8cf5f9946
+    text-model: deepseek-flash
+    use-text-enhance: 0
