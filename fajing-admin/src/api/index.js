@@ -52,6 +52,10 @@ export function loginAdmin(data) {
   return service.post('/api/admin/login', data)
 }
 
+export function fetchTodayStats() {
+  return service.get('/api/admin/stats/today')
+}
+
 export function fetchHairstyles(gender) {
   return service.get('/api/admin/hairstyles', {
     params: gender ? { gender } : {}

@@ -61,6 +61,14 @@ pay:
   mock-enabled: ${PAY_MOCK_ENABLED:true}
   wxpay-enabled: ${WXPAY_ENABLED:false}
 
+# 单用户每日生成次数上限
+quota:
+  daily-max: ${QUOTA_DAILY_MAX:5}
+
+# AI 调用成本估算（分/次），用于管理端统计
+ai:
+  cost-cents-per-call: ${AI_COST_CENTS:20}
+
 admin:
   # 初始化管理员密码（仅 admin_user 为空时使用）
   init-password: ${ADMIN_INIT_PASSWORD:}

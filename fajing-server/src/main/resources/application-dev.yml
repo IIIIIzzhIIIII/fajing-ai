@@ -15,3 +15,7 @@ storage:
 # 开发环境允许 mock 支付，便于本地联调解锁流程
 pay:
   mock-enabled: ${PAY_MOCK_ENABLED:true}
+
+# 开发/测试环境放宽每日生成上限
+quota:
+  daily-max: ${QUOTA_DAILY_MAX:20}

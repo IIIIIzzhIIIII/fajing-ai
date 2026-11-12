@@ -1,5 +1,6 @@
 package com.fajing.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.dto.GenerateRequest;
@@ -7,11 +8,13 @@ import com.fajing.entity.GenerationTask;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.service.GenerationProcessor;
 import com.fajing.service.GenerationService;
+import com.fajing.service.RateLimitService;
 import com.fajing.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -33,10 +37,23 @@ public class GenerateController {
     private final GenerationService generationService;
     private final GenerationProcessor processor;
     private final GenerationTaskMapper taskMapper;
+    private final RateLimitService rateLimitService;
+
+    /** 单用户每日生成次数上限 */
+    @Value("${quota.daily-max:5}")
+    private int dailyMax;
 
     @Operation(summary = "创建换发任务")
     @PostMapping("/generate")
     public Result<Map<String, Object>> generate(@Valid @RequestBody GenerateRequest req) {
+        Long userId = UserContext.require();
+        rateLimitService.checkGenerate(userId);
+        Long todayCount = taskMapper.selectCount(new QueryWrapper<GenerationTask>()
+                .eq("user_id", userId)
+                .ge("created_at", LocalDate.now().atStartOfDay()));
+        if (todayCount != null && todayCount >= dailyMax) {
+            throw new BizException("今日生成次数已达上限（" + dailyMax + " 次），明天再来试试吧");
+        }
         GenerationTask task = generationService.create(
                 req.getPhotoUrl(), req.getGender(), req.getMode(), req.getStyleIds(), req.getColorId());
         processor.process(task.getId());

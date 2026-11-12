@@ -2,13 +2,14 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, MagicStick, Scissor, SwitchButton, Tickets, User } from '@element-plus/icons-vue'
+import { ChatDotRound, DataLine, MagicStick, Scissor, SwitchButton, Tickets, User } from '@element-plus/icons-vue'
 import { clearToken } from '@/utils/auth'
 
 const route = useRoute()
 const router = useRouter()
 
 const menus = [
+  { path: '/dashboard', title: '数据看板', icon: DataLine },
   { path: '/hairstyles', title: '发型库', icon: Scissor },
   { path: '/posts', title: '帖子管理', icon: ChatDotRound },
   { path: '/orders', title: '订单列表', icon: Tickets },

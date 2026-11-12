@@ -12,8 +12,14 @@ const routes = [
   {
     path: '/',
     component: Layout,
-    redirect: '/hairstyles',
+    redirect: '/dashboard',
     children: [
+      {
+        path: 'dashboard',
+        name: 'Dashboard',
+        component: () => import('@/views/dashboard/index.vue'),
+        meta: { title: '数据看板' }
+      },
       {
         path: 'hairstyles',
         name: 'Hairstyles',
@@ -48,7 +54,7 @@ const routes = [
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/hairstyles'
+    redirect: '/dashboard'
   }
 ]
 

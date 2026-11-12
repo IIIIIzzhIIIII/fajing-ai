@@ -1,17 +1,22 @@
 package com.fajing.service;
 
+import com.fajing.entity.AiCallLog;
+import com.fajing.entity.AiConfig;
 import com.fajing.entity.GenerationTask;
 import com.fajing.entity.HairColor;
 import com.fajing.entity.Hairstyle;
+import com.fajing.mapper.AiCallLogMapper;
 import com.fajing.mapper.HairColorMapper;
 import com.fajing.mapper.HairstyleMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -44,6 +49,11 @@ public class GenerationProcessor {
     private final HairstyleMapper hairstyleMapper;
     private final HairColorMapper hairColorMapper;
     private final QuotaService quotaService;
+    private final AiCallLogMapper aiCallLogMapper;
+
+    /** 单次图像调用的估算成本（分），用于管理端成本统计 */
+    @Value("${ai.cost-cents-per-call:20}")
+    private int costCentsPerCall;
 
     @Async
     public void process(Long taskId) {
@@ -74,8 +84,10 @@ public class GenerationProcessor {
                 futures.add(pool.submit(() -> {
                     try {
                         images.put(s.getId(), generateOne(task, s, colorName, colorEn));
+                        logCall(task, true);
                     } catch (Exception e) {
                         failed.add(s.getId());
+                        logCall(task, false);
                         log.warn("AI 换发失败 taskId={} style={}: {}", taskId, s.getName(), e.getMessage());
                     } finally {
                         int finished = done.incrementAndGet();
@@ -123,9 +135,29 @@ public class GenerationProcessor {
         try {
             String url = generateOne(task, s, colorName(task.getColorId()), colorEn(task.getColorId()));
             generationService.patchStyle(taskId, styleId, url);
+            logCall(task, true);
         } catch (Exception e) {
             log.warn("重试失败 taskId={} styleId={}: {}", taskId, styleId, e.getMessage());
             generationService.patchStyle(taskId, styleId, null);
+            logCall(task, false);
+        }
+    }
+
+    /** 记录一次 AI 调用的成本流水，失败不影响主流程 */
+    private void logCall(GenerationTask task, boolean ok) {
+        try {
+            AiConfig config = aiConfigService.get();
+            AiCallLog logRow = new AiCallLog();
+            logRow.setTaskId(task.getId());
+            logRow.setUserId(task.getUserId());
+            logRow.setProvider(config == null || config.getImageProvider() == null ? "" : config.getImageProvider());
+            logRow.setModel(config == null || config.getImageModel() == null ? "" : config.getImageModel());
+            logRow.setCostCents(ok ? costCentsPerCall : 0);
+            logRow.setOk(ok);
+            logRow.setCreatedAt(LocalDateTime.now());
+            aiCallLogMapper.insert(logRow);
+        } catch (Exception e) {
+            log.debug("AI 调用流水写入失败: {}", e.getMessage());
         }
     }
 

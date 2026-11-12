@@ -3,12 +3,16 @@ package com.fajing.controller;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
+import com.fajing.entity.AiCallLog;
 import com.fajing.entity.Comment;
+import com.fajing.entity.GenerationTask;
 import com.fajing.entity.Hairstyle;
 import com.fajing.entity.Order;
 import com.fajing.entity.Post;
 import com.fajing.entity.Report;
+import com.fajing.mapper.AiCallLogMapper;
 import com.fajing.mapper.CommentMapper;
+import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.mapper.PostMapper;
@@ -28,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,6 +56,67 @@ public class AdminController {
     private final CommentMapper commentMapper;
     private final ReportMapper reportMapper;
     private final AdminLogService adminLogService;
+    private final GenerationTaskMapper taskMapper;
+    private final AiCallLogMapper aiCallLogMapper;
+
+    @Operation(summary = "今日运营数据（生成量、成本、成功率、付费转化）")
+    @GetMapping("/stats/today")
+    public Result<Map<String, Object>> todayStats() {
+        LocalDateTime start = LocalDate.now().atStartOfDay();
+        Long generateCount = taskMapper.selectCount(new QueryWrapper<GenerationTask>()
+                .ge("created_at", start));
+        Long successCount = taskMapper.selectCount(new QueryWrapper<GenerationTask>()
+                .eq("status", "success").ge("created_at", start));
+        Long failedCount = taskMapper.selectCount(new QueryWrapper<GenerationTask>()
+                .eq("status", "failed").ge("created_at", start));
+        Long aiCalls = aiCallLogMapper.selectCount(new QueryWrapper<AiCallLog>()
+                .ge("created_at", start));
+        long costCents = sumOf(aiCallLogMapper.selectMaps(new QueryWrapper<AiCallLog>()
+                .select("IFNULL(SUM(cost_cents),0) AS total").ge("created_at", start)));
+        Long paidOrders = orderMapper.selectCount(new QueryWrapper<Order>()
+                .eq("status", "paid").ge("created_at", start));
+        long payingUsers = sumOf(orderMapper.selectMaps(new QueryWrapper<Order>()
+                .select("COUNT(DISTINCT user_id) AS total")
+                .eq("status", "paid").ge("created_at", start)));
+        long generateUsers = sumOf(taskMapper.selectMaps(new QueryWrapper<GenerationTask>()
+                .select("COUNT(DISTINCT user_id) AS total").ge("created_at", start)));
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("generateCount", generateCount == null ? 0 : generateCount);
+        data.put("successCount", successCount == null ? 0 : successCount);
+        data.put("failedCount", failedCount == null ? 0 : failedCount);
+        data.put("successRate", rate(successCount, generateCount));
+        data.put("aiCalls", aiCalls == null ? 0 : aiCalls);
+        data.put("costCents", costCents);
+        data.put("costYuan", String.format("%.2f", costCents / 100.0));
+        data.put("paidOrders", paidOrders == null ? 0 : paidOrders);
+        data.put("payingUsers", payingUsers);
+        data.put("generateUsers", generateUsers);
+        data.put("conversionRate", generateUsers == 0 ? 0 : Math.round(payingUsers * 1000.0 / generateUsers) / 10.0);
+        return Result.ok(data);
+    }
+
+    private long sumOf(List<Map<String, Object>> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return 0L;
+        }
+        Object total = rows.get(0).get("total");
+        if (total == null) {
+            return 0L;
+        }
+        try {
+            return new java.math.BigDecimal(String.valueOf(total)).longValue();
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
+    }
+
+    private double rate(Long part, Long all) {
+        if (part == null || all == null || all == 0) {
+            return 0;
+        }
+        return Math.round(part * 1000.0 / all) / 10.0;
+    }
 
     @Operation(summary = "发型列表（管理端）")
     @GetMapping("/hairstyles")
