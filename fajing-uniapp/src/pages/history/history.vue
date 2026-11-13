@@ -16,6 +16,9 @@
           <view class="hist-top">
             <view class="hist-title">{{ rec.title }}</view>
             <view class="hist-count">{{ rec.count }} 款</view>
+            <view class="hist-del" @click.stop="removeRecord(rec)">
+              <fj-icon name="trash" :size="13" color="#A39AA0" />
+            </view>
           </view>
           <view class="hist-date">{{ rec.dateText }}</view>
           <view class="hist-thumbs">
@@ -83,6 +86,7 @@ function normalizeRecord(r, i) {
     .filter((it) => it.styleId || it.img)
   return {
     key: r.id || r.taskId || `rec-${i}`,
+    recordId: r.id || '',
     taskId: r.taskId ? String(r.taskId) : '',
     title: r.title || r.styleName || (styles[0] && styles[0].name) || '我的试发记录',
     count: styles.length || Number(r.count) || 0,
@@ -126,6 +130,31 @@ function openRecord(rec) {
   uni.navigateTo({ url: '/pages/result/result?from=history' })
 }
 
+/** 删除单条试发记录（先确认，失败由 request 统一提示） */
+async function removeRecord(rec) {
+  if (!rec.recordId) {
+    ui.toast('这条记录暂不支持删除')
+    return
+  }
+  const confirmed = await new Promise((resolve) => {
+    uni.showModal({
+      title: '删除记录',
+      content: '删除后不可恢复，确定删除这条试发记录？',
+      confirmText: '删除',
+      confirmColor: '#C95676',
+      success: (res) => resolve(res.confirm)
+    })
+  })
+  if (!confirmed) return
+  try {
+    await API.deleteRecord(rec.recordId)
+    records.value = records.value.filter((item) => item.key !== rec.key)
+    ui.toast('已删除')
+  } catch (e) {
+    // request 已统一 toast
+  }
+}
+
 function goUpload() {
   uni.navigateTo({ url: '/pages/upload/upload' })
 }
@@ -160,8 +189,18 @@ function goUpload() {
   font-weight: 700;
   color: var(--pink-700);
   background: var(--pink-50);
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 99px;
+}
+.hist-del {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f7f3f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .hist-date {
   font-size: 10.5px;

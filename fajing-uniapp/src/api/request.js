@@ -194,6 +194,7 @@ export const API = {
   retryStyle: (taskId, styleId) =>
     request({ url: `/api/generate/${taskId}/retry`, method: 'POST', data: { styleId } }),
   records: () => request({ url: '/api/records' }),
+  deleteRecord: (id) => request({ url: `/api/records/${id}`, method: 'DELETE' }),
   quota: () => request({ url: '/api/quota' }),
   consume: (type) => request({ url: '/api/quota/consume', method: 'POST', data: { type } }),
   posts: (filter) => request({ url: `/api/posts?filter=${encodeURIComponent(filter || '')}` }),
