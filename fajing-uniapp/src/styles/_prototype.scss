@@ -36,6 +36,11 @@ button{font-family:inherit}
 @keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .scroll::-webkit-scrollbar{display:none}
+/* H5：隐藏 scroll-view 原生滚动条（滚动条在内层 .uni-scroll-view 上），手机上直接滑动即可 */
+.uni-scroll-view,
+.uni-scroll-view-content{scrollbar-width:none;-ms-overflow-style:none}
+.uni-scroll-view::-webkit-scrollbar,
+.uni-scroll-view-content::-webkit-scrollbar{display:none;width:0;height:0}
 /* ============ Icons ============ */
 .ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .ic-sm{width:16px;height:16px}.ic-xs{width:13px;height:13px}.ic-lg{width:24px;height:24px}

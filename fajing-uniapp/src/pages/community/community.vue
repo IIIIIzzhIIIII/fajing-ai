@@ -30,7 +30,7 @@
         </view>
       </view>
 
-      <scroll-view scroll-x class="comm-filters">
+      <scroll-view scroll-x :show-scrollbar="false" class="comm-filters">
         <view class="chip-row">
           <view
             v-for="f in filters"
@@ -44,7 +44,7 @@
         </view>
       </scroll-view>
 
-      <scroll-view scroll-x class="comm-topics">
+      <scroll-view scroll-x :show-scrollbar="false" class="comm-topics">
         <view class="topic-row">
           <text class="ct-label">话题</text>
           <view v-for="t in topics" :key="t" class="ct" @click="pickTopic(t)">{{ t }}</view>

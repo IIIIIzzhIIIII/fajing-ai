@@ -33,7 +33,7 @@
       </view>
     </view>
 
-    <scroll-view scroll-x class="chip-row" style="padding-top:14px">
+    <scroll-view scroll-x :show-scrollbar="false" class="chip-row" style="padding-top:14px">
       <view
         v-for="c in cats"
         :key="c"
@@ -50,7 +50,7 @@
         <text style="font-size:11.5px;font-weight:700;color:var(--ink-2)">发色（可选 1 种）</text>
         <text style="font-size:10px;color:var(--muted)">{{ colorName }}</text>
       </view>
-      <scroll-view scroll-x class="color-row">
+      <scroll-view scroll-x :show-scrollbar="false" class="color-row">
         <view
           v-for="c in colorList"
           :key="c.id"

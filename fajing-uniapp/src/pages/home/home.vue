@@ -43,7 +43,7 @@
         <view class="sec-title">本周热门</view>
         <view class="sec-more" @click="goStyles">全部发型<fj-icon name="chevron-right" :size="13" /></view>
       </view>
-      <scroll-view scroll-x class="hot-strip">
+      <scroll-view scroll-x :show-scrollbar="false" class="hot-strip">
         <view v-for="item in hotList" :key="item.id" class="hot-card" @click="goStyles">
           <view class="hot-thumb">
             <image :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
