@@ -196,6 +196,8 @@ export const API = {
   records: () => request({ url: '/api/records' }),
   deleteRecord: (id) => request({ url: `/api/records/${id}`, method: 'DELETE' }),
   quota: () => request({ url: '/api/quota' }),
+  checkPhoto: (photoUrl) =>
+    request({ url: '/api/photo/check', method: 'POST', data: { photoUrl } }),
   consume: (type) => request({ url: '/api/quota/consume', method: 'POST', data: { type } }),
   posts: (filter) => request({ url: `/api/posts?filter=${encodeURIComponent(filter || '')}` }),
   createPost: (payload) => request({ url: '/api/posts', method: 'POST', data: payload }),

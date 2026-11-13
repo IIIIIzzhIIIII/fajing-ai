@@ -71,6 +71,9 @@ quota:
 # AI 调用成本估算（分/次），用于管理端统计
 ai:
   cost-cents-per-call: ${AI_COST_CENTS:20}
+  # 上传照片审查用的视觉模型（与图像模型同一服务商）
+  vision-model: ${AI_VISION_MODEL:Qwen/Qwen3-VL-8B-Instruct}
+  photo-check-enabled: ${AI_PHOTO_CHECK:true}
 
 admin:
   # 初始化管理员密码（仅 admin_user 为空时使用）

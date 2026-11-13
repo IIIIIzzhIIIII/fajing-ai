@@ -149,7 +149,7 @@ public class AiImageService {
     }
 
     /* ---------- 原图 → data URI ---------- */
-    private String toDataUri(String photoUrl) throws Exception {
+    public String toDataUri(String photoUrl) throws Exception {
         byte[] raw = null;
         String name = fileNameOf(photoUrl);
         if (!name.isBlank()) {

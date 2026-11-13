@@ -104,7 +104,7 @@
 import { computed, ref } from 'vue'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
-import { upload } from '@/api/request'
+import { upload, API } from '@/api/request'
 import { track } from '@/utils/track'
 import { DEMO_BEFORE } from '@/mock/constants'
 
@@ -168,6 +168,22 @@ async function next() {
       app.setPhoto(localPath, localPath)
     }
   }
+
+  // 跳转前用视觉模型审查：只放行单人正脸照，服务异常时放行不阻断
+  const checkUrl = app.photoUrl || ''
+  if (/^https?:\/\//.test(checkUrl)) {
+    try {
+      const check = await API.checkPhoto(checkUrl)
+      if (check && check.ok === false) {
+        busy.value = false
+        ui.toast(check.reason || '请上传正面、清晰的本人照片')
+        return
+      }
+    } catch (e) {
+      // 审查失败不阻断正常流程
+    }
+  }
+
   busy.value = false
   uni.navigateTo({ url: '/pages/styles/styles' })
 }
