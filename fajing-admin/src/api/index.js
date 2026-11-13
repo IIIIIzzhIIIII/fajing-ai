@@ -66,6 +66,31 @@ export function uploadImage(file) {
   })
 }
 
+export function fetchPayConfig() {
+  return service.get('/api/admin/pay-config')
+}
+
+export function savePayConfig(data) {
+  return service.put('/api/admin/pay-config', data)
+}
+
+export function verifyPayChannel(channel) {
+  return service.post('/api/admin/pay-config/verify', { channel }, { timeout: 60000 })
+}
+
+export function uploadPayCert(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return service.post('/api/admin/pay-config/cert', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000
+  })
+}
+
+export function refundOrder(id, data) {
+  return service.post(`/api/admin/orders/${id}/refund`, data, { timeout: 60000 })
+}
+
 export function fetchTodayStats() {
   return service.get('/api/admin/stats/today')
 }

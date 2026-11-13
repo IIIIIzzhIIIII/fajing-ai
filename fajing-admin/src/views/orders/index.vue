@@ -1,12 +1,18 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Refresh, Tickets, Wallet } from '@element-plus/icons-vue'
-import { fetchOrders } from '@/api'
+import { fetchOrders, refundOrder } from '@/api'
 import { formatDateTime, formatMoney } from '@/utils/format'
 
 const loading = ref(false)
 const loadFailed = ref(false)
 const list = ref([])
+
+const refundVisible = ref(false)
+const refundSubmitting = ref(false)
+const refundRow = ref(null)
+const refundForm = reactive({ amount: 0, reason: '' })
 
 const totalCount = computed(() => list.value.length)
 const totalAmount = computed(() =>
@@ -48,6 +54,48 @@ function statusMeta(status) {
 function unlockCount(styleIds) {
   if (!styleIds) return 0
   return String(styleIds).split(',').filter((item) => item.trim()).length
+}
+
+function channelLabel(channel) {
+  if (channel === 'wx') return '微信支付'
+  if (channel === 'alipay') return '支付宝'
+  if (channel === 'mock') return '模拟支付'
+  return channel || '-'
+}
+
+function refundMeta(status) {
+  if (status === 'refunded') return { label: '已退款', type: 'info' }
+  if (status === 'refunding') return { label: '退款中', type: 'warning' }
+  return { label: '未退款', type: '' }
+}
+
+function openRefund(row) {
+  refundRow.value = row
+  refundForm.amount = Number(row.amount) || 0
+  refundForm.reason = ''
+  refundVisible.value = true
+}
+
+async function submitRefund() {
+  if (!refundRow.value) return
+  if (!(refundForm.amount > 0)) {
+    ElMessage.warning('请输入正确的退款金额')
+    return
+  }
+  refundSubmitting.value = true
+  try {
+    await refundOrder(refundRow.value.id, {
+      amount: refundForm.amount,
+      reason: refundForm.reason
+    })
+    ElMessage.success('退款已提交')
+    refundVisible.value = false
+    loadList()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    refundSubmitting.value = false
+  }
 }
 
 onMounted(loadList)
@@ -112,6 +160,39 @@ onMounted(loadList)
       <el-table-column label="解锁款数" width="100" align="center">
         <template #default="{ row }">{{ unlockCount(row.styleIds) || '-' }}</template>
       </el-table-column>
+      <el-table-column label="支付渠道" width="110">
+        <template #default="{ row }">{{ channelLabel(row.payChannel) }}</template>
+      </el-table-column>
+      <el-table-column label="渠道流水号" min-width="180">
+        <template #default="{ row }">
+          <span class="time-text">{{ row.transactionId || row.outTradeNo || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="支付时间" width="160">
+        <template #default="{ row }">
+          <span class="time-text">{{ row.paidAt ? formatDateTime(row.paidAt) : '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="退款" width="100">
+        <template #default="{ row }">
+          <el-tag :type="refundMeta(row.refundStatus).type" effect="light" round>
+            {{ refundMeta(row.refundStatus).label }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="90" fixed="right">
+        <template #default="{ row }">
+          <el-button
+            link
+            type="danger"
+            size="small"
+            :disabled="row.status !== 'paid' || row.refundStatus === 'refunded'"
+            @click="openRefund(row)"
+          >
+            退款
+          </el-button>
+        </template>
+      </el-table-column>
       <el-table-column label="时间" min-width="160">
         <template #default="{ row }">
           <span class="time-text">{{ formatDateTime(row.createdAt) }}</span>
@@ -125,6 +206,23 @@ onMounted(loadList)
         />
       </template>
     </el-table>
+
+    <el-dialog v-model="refundVisible" title="订单退款" width="420px">
+      <el-form label-width="90px">
+        <el-form-item label="订单号">#{{ refundRow ? refundRow.id : '' }}</el-form-item>
+        <el-form-item label="订单金额">¥ {{ refundRow ? formatMoney(refundRow.amount) : '0.00' }}</el-form-item>
+        <el-form-item label="退款金额">
+          <el-input-number v-model="refundForm.amount" :min="0.01" :precision="2" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="退款原因">
+          <el-input v-model="refundForm.reason" placeholder="选填" maxlength="64" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="refundVisible = false">取消</el-button>
+        <el-button type="danger" :loading="refundSubmitting" @click="submitRefund">确认退款</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

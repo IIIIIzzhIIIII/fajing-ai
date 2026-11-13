@@ -51,6 +51,12 @@ const routes = [
         meta: { title: 'AI 模特照' }
       },
       {
+        path: 'pay',
+        name: 'PayConfig',
+        component: () => import('@/views/pay/index.vue'),
+        meta: { title: '支付配置' }
+      },
+      {
         path: 'ai',
         name: 'AiConfig',
         component: () => import('@/views/ai/index.vue'),

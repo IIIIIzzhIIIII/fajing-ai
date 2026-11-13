@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Document, MagicStick, Picture, Scissor, SwitchButton, Tickets, User } from '@element-plus/icons-vue'
+import { DataLine, Document, MagicStick, Picture, Scissor, SwitchButton, Tickets, User, Wallet } from '@element-plus/icons-vue'
 import { clearToken } from '@/utils/auth'
 
 const route = useRoute()
@@ -15,6 +15,7 @@ const menus = [
   { path: '/users', title: '用户管理', icon: User },
   { path: '/logs', title: '操作日志', icon: Document },
   { path: '/ai-model', title: 'AI 模特照', icon: Picture },
+  { path: '/pay', title: '支付配置', icon: Wallet },
   { path: '/ai', title: 'AI 设置', icon: MagicStick }
 ]
 
