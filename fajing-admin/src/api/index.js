@@ -53,14 +53,16 @@ export function loginAdmin(data) {
 }
 
 export function generateModelShot(imageUrl) {
-  return service.post('/api/admin/ai/model-shot', { imageUrl })
+  // AI 出图通常 20~60 秒，单独放宽超时，避免走默认 15 秒被中断
+  return service.post('/api/admin/ai/model-shot', { imageUrl }, { timeout: 240000 })
 }
 
 export function uploadImage(file) {
   const form = new FormData()
   form.append('file', file)
   return service.post('/api/upload', form, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000
   })
 }
 
