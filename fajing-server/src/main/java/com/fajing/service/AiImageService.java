@@ -62,24 +62,30 @@ public class AiImageService {
      * @param referenceUrl 目标发型参考图（可选），Qwen-Image-Edit-2509 支持 image2 多图输入
      */
     public String editHair(String photoUrl, String referenceUrl, String prompt, Long taskId, String styleId) throws Exception {
-        return edit(photoUrl, referenceUrl, prompt, "ai_" + taskId + "_" + styleId + "_", true);
+        return edit(photoUrl, referenceUrl, prompt, "ai_" + taskId + "_" + styleId + "_", true, null, false);
     }
 
     /**
      * 管理端「标准模特照」：保留人物脸部/五官/发型/表情，只规范取景与姿态，
-     * 输出面向前方、只露脖子与肩膀以上的照片，用于发型库素材。
+     * 输出固定 3:4 的正面肩颈像（头顶留少量空隙、下沿在锁骨附近），用于发型库素材。
      */
     public String normalizeModelShot(String imageUrl) throws Exception {
         String prompt = "图1、图2是同一个人。请严格保留人物在图2中的脸部、五官、脸型、发型形状、发长、发色、刘海、卷度、表情和年龄特征，"
-                + "不要染发、不要改变发色、不要换发型、不要加刘海或去掉刘海；只调整取景与姿态："
-                + "正面朝向镜头、头部水平不倾斜、脸部居中、平视镜头，只保留脖子和肩膀以上部位，裁掉多余的身体与背景，"
-                + "纯净的浅灰摄影棚背景，柔和均匀的自然光，真实摄影质感，高清细节。"
-                + "不要美颜、不要换脸、不要改变脸型、不要改变表情。";
-        return edit(imageUrl, imageUrl, prompt, "ai_model_", false);
+                + "不要染发、不要改变发色、不要换发型、不要加刘海或去掉刘海。\n"
+                + "【只调整取景与姿态】正面朝向镜头、头部水平不倾斜、脸部居中、平视镜头，双肩对称；"
+                + "头顶距画面上边缘约 5%～8%，下巴位于画面高度约 60% 处，下沿裁剪在锁骨与肩膀上缘，"
+                + "只露出脖子和肩膀，不露出胸部或身体；脸部宽度约占画面宽度的 45%～55%。\n"
+                + "【画面规格】3:4 竖构图，纯净浅灰（约 #EAEAEA）纯色背景，无纹理、无杂物、无文字；"
+                + "柔和均匀的正面摄影棚光，真实摄影质感，高清细节，发丝根根分明。\n"
+                + "不要美颜、不要换脸、不要改变脸型、不要改变表情、不要添加任何文字或水印。";
+        String extraNegative = "full body, wide shot, showing chest, bare chest, too much shoulder, "
+                + "cropped head, tilted head, side profile, off-center face, busy background, "
+                + "text, watermark, logo, border, frame";
+        return edit(imageUrl, imageUrl, prompt, "ai_model_", false, extraNegative, true);
     }
 
     private String edit(String photoUrl, String referenceUrl, String prompt,
-                        String prefix, boolean withWatermark) throws Exception {
+                        String prefix, boolean withWatermark, String extraNegative, boolean portrait) throws Exception {
         AiConfig cfg = configService.get();
         if (cfg.getEnabled() == null || cfg.getEnabled() != 1) {
             throw new BizException("AI 出图未启用");
@@ -102,7 +108,11 @@ public class AiImageService {
             body.put("image2", refDataUri);
         }
         // 抑制改五官/美颜倾向；部分编辑模型不支持该参数，下面会降级重试
-        body.put("negative_prompt", AiConfigService.DEFAULT_NEGATIVE_PROMPT);
+        String negative = AiConfigService.DEFAULT_NEGATIVE_PROMPT;
+        if (extraNegative != null && !extraNegative.isBlank()) {
+            negative = negative + ", " + extraNegative;
+        }
+        body.put("negative_prompt", negative);
 
         String endpoint = trimSlash(cfg.getImageBaseUrl()) + "/images/generations";
         HttpResponse<String> resp = post(endpoint, cfg.getImageApiKey(), body);
@@ -125,7 +135,7 @@ public class AiImageService {
         if (urlNode.isMissingNode() || urlNode.asText().isBlank()) {
             throw new BizException("图像模型未返回图片：" + shorten(resp.body()));
         }
-        return download(urlNode.asText(), prefix, withWatermark);
+        return download(urlNode.asText(), prefix, withWatermark, portrait);
     }
 
     private HttpResponse<String> post(String endpoint, String apiKey, Map<String, Object> body) throws Exception {
@@ -205,13 +215,56 @@ public class AiImageService {
     }
 
     /* ---------- 结果图下载落盘，避免 URL 过期 ---------- */
-    private String download(String url, String prefix, boolean withWatermark) throws Exception {
+    private String download(String url, String prefix, boolean withWatermark, boolean portrait) throws Exception {
         byte[] bytes = httpGet(url);
         if (bytes == null || bytes.length == 0) {
             throw new BizException("下载生成图失败");
         }
         byte[] output = withWatermark ? watermark(bytes) : bytes;
+        if (portrait) {
+            output = toThreeFour(output);
+        }
         return storageService.put(output, "png", prefix + System.currentTimeMillis());
+    }
+
+    /**
+     * 统一模特照规格：裁剪/缩放为 3:4（768×1024）。
+     * 偏宽的图居中裁两侧；偏高的图保留顶部、裁掉下方多余部分（只留肩颈）。
+     */
+    private byte[] toThreeFour(byte[] raw) {
+        try {
+            BufferedImage src = ImageIO.read(new ByteArrayInputStream(raw));
+            if (src == null) {
+                return raw;
+            }
+            double targetRatio = 3.0 / 4.0;
+            double ratio = (double) src.getWidth() / src.getHeight();
+            BufferedImage cropped;
+            if (ratio > targetRatio) {
+                int w = Math.max(1, (int) Math.round(src.getHeight() * targetRatio));
+                int x = Math.max(0, (src.getWidth() - w) / 2);
+                cropped = src.getSubimage(x, 0, w, src.getHeight());
+            } else if (ratio < targetRatio) {
+                int h = Math.max(1, (int) Math.round(src.getWidth() / targetRatio));
+                cropped = src.getSubimage(0, 0, src.getWidth(), Math.min(h, src.getHeight()));
+            } else {
+                cropped = src;
+            }
+
+            BufferedImage out = new BufferedImage(768, 1024, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = out.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g.drawImage(cropped, 0, 0, 768, 1024, null);
+            g.dispose();
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ImageIO.write(out, "png", bos);
+            return bos.toByteArray();
+        } catch (Exception e) {
+            log.warn("模特照比例规整失败，返回原图: {}", e.getMessage());
+            return raw;
+        }
     }
 
     /** 服务端烧「AI 生成」标识：字号取图宽 3%，右下角半透明，避免传播场景无标识 */
