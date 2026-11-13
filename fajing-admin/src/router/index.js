@@ -57,6 +57,12 @@ const routes = [
         meta: { title: '用户管理' }
       },
       {
+        path: 'ai-model',
+        name: 'AiModel',
+        component: () => import('@/views/ai-model/index.vue'),
+        meta: { title: 'AI 模特照' }
+      },
+      {
         path: 'ai',
         name: 'AiConfig',
         component: () => import('@/views/ai/index.vue'),

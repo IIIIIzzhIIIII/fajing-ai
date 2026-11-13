@@ -62,6 +62,24 @@ public class AiImageService {
      * @param referenceUrl 目标发型参考图（可选），Qwen-Image-Edit-2509 支持 image2 多图输入
      */
     public String editHair(String photoUrl, String referenceUrl, String prompt, Long taskId, String styleId) throws Exception {
+        return edit(photoUrl, referenceUrl, prompt, "ai_" + taskId + "_" + styleId + "_", true);
+    }
+
+    /**
+     * 管理端「标准模特照」：保留人物脸部/五官/发型/表情，只规范取景与姿态，
+     * 输出面向前方、只露脖子与肩膀以上的照片，用于发型库素材。
+     */
+    public String normalizeModelShot(String imageUrl) throws Exception {
+        String prompt = "图1、图2是同一个人。请严格保留人物在图2中的脸部、五官、脸型、发型形状、发长、发色、刘海、卷度、表情和年龄特征，"
+                + "不要染发、不要改变发色、不要换发型、不要加刘海或去掉刘海；只调整取景与姿态："
+                + "正面朝向镜头、头部水平不倾斜、脸部居中、平视镜头，只保留脖子和肩膀以上部位，裁掉多余的身体与背景，"
+                + "纯净的浅灰摄影棚背景，柔和均匀的自然光，真实摄影质感，高清细节。"
+                + "不要美颜、不要换脸、不要改变脸型、不要改变表情。";
+        return edit(imageUrl, imageUrl, prompt, "ai_model_", false);
+    }
+
+    private String edit(String photoUrl, String referenceUrl, String prompt,
+                        String prefix, boolean withWatermark) throws Exception {
         AiConfig cfg = configService.get();
         if (cfg.getEnabled() == null || cfg.getEnabled() != 1) {
             throw new BizException("AI 出图未启用");
@@ -107,7 +125,7 @@ public class AiImageService {
         if (urlNode.isMissingNode() || urlNode.asText().isBlank()) {
             throw new BizException("图像模型未返回图片：" + shorten(resp.body()));
         }
-        return download(urlNode.asText(), taskId, styleId);
+        return download(urlNode.asText(), prefix, withWatermark);
     }
 
     private HttpResponse<String> post(String endpoint, String apiKey, Map<String, Object> body) throws Exception {
@@ -187,14 +205,13 @@ public class AiImageService {
     }
 
     /* ---------- 结果图下载落盘，避免 URL 过期 ---------- */
-    private String download(String url, Long taskId, String styleId) throws Exception {
+    private String download(String url, String prefix, boolean withWatermark) throws Exception {
         byte[] bytes = httpGet(url);
         if (bytes == null || bytes.length == 0) {
             throw new BizException("下载生成图失败");
         }
-        byte[] marked = watermark(bytes);
-        return storageService.put(marked, "png",
-                "ai_" + taskId + "_" + styleId + "_" + System.currentTimeMillis());
+        byte[] output = withWatermark ? watermark(bytes) : bytes;
+        return storageService.put(output, "png", prefix + System.currentTimeMillis());
     }
 
     /** 服务端烧「AI 生成」标识：字号取图宽 3%，右下角半透明，避免传播场景无标识 */

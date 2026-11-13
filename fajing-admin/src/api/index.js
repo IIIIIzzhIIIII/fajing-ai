@@ -52,6 +52,18 @@ export function loginAdmin(data) {
   return service.post('/api/admin/login', data)
 }
 
+export function generateModelShot(imageUrl) {
+  return service.post('/api/admin/ai/model-shot', { imageUrl })
+}
+
+export function uploadImage(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return service.post('/api/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 export function fetchTodayStats() {
   return service.get('/api/admin/stats/today')
 }
