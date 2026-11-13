@@ -51,7 +51,7 @@
         <view class="plan-price"><text class="plan-old">¥{{ lockedCount * 6 }}</text>¥{{ lockedCount * 3 }}<text class="plan-unit">/全部</text></view>
       </view>
       <button v-if="!iosNoPay" class="btn btn-primary btn-block" style="margin-top:6px" @click="payNow">
-        微信支付 ¥{{ payAmount }}
+        模拟支付 ¥{{ payAmount }}
       </button>
       <view v-if="iosNoPay" class="tiny" style="text-align:center;padding:14px 0">
         iOS 端暂不支持在线支付，可通过下方分享获得免费次数
