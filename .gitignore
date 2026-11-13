@@ -7,7 +7,9 @@ build/
 
 # 运行时数据
 uploads/
+logs/
 *.log
+*.log.gz
 
 # IDE
 .idea/
