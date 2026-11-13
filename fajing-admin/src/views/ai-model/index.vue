@@ -1,8 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Picture, Upload } from '@element-plus/icons-vue'
 import { fetchHairstyles, generateModelShot, updateHairstyle, uploadImage } from '@/api'
+
+const router = useRouter()
 
 const imageUrl = ref('')
 const resultUrl = ref('')
@@ -82,6 +85,15 @@ function copyResult() {
     .catch(() => ElMessage.warning('复制失败，请手动复制'))
 }
 
+/** 跳到发型库并自动打开「新增发型」，示例照片预填生成图 */
+function addToLibrary() {
+  if (!resultUrl.value) {
+    ElMessage.warning('请先生成标准模特照')
+    return
+  }
+  router.push({ path: '/hairstyles', query: { imgUrl: resultUrl.value } })
+}
+
 onMounted(loadHairstyles)
 </script>
 
@@ -134,10 +146,11 @@ onMounted(loadHairstyles)
     </div>
 
     <div v-if="resultUrl" class="result-actions">
-      <el-select v-model="targetId" filterable placeholder="选择要写入的发型" style="width: 260px">
+      <el-button type="primary" @click="addToLibrary">添加到发型库</el-button>
+      <el-select v-model="targetId" filterable placeholder="或选择已有发型直接替换" style="width: 260px">
         <el-option v-for="item in hairstyles" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
-      <el-button type="primary" @click="writeBack">写入该发型</el-button>
+      <el-button @click="writeBack">替换该发型示例图</el-button>
       <el-button @click="copyResult">复制图片地址</el-button>
     </div>
   </div>

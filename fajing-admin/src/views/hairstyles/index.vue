@@ -1,8 +1,12 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh, Upload } from '@element-plus/icons-vue'
 import service, { createHairstyle, fetchHairstyles, updateHairstyle, updateHairstyleStatus } from '@/api'
+
+const route = useRoute()
+const router = useRouter()
 
 const genderOptions = [
   { label: '女款', value: 'female' },
@@ -161,7 +165,26 @@ function genderLabel(value) {
   return value === 'male' ? '男款' : '女款'
 }
 
+/** 从「AI 模特照」跳转过来：示例照片已生成，直接打开新增弹窗并预填 */
+function openCreateWithImage(imageUrl) {
+  openCreate()
+  form.imgUrl = imageUrl
+  // 清掉 query，避免刷新页面又弹一次
+  router.replace({ path: '/hairstyles' })
+}
+
 onMounted(loadList)
+
+// 支持同页 hash 变化（已在发型库时从 AI 页跳过来不会重新挂载组件）
+watch(
+  () => route.query.imgUrl,
+  (val) => {
+    if (val) {
+      openCreateWithImage(String(val))
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
