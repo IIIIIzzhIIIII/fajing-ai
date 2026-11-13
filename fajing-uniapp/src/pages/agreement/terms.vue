@@ -45,8 +45,10 @@
 </template>
 
 <script setup>
+import { goBack } from '@/utils/nav'
+
 function back() {
-  uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/home/home' }) })
+  goBack()
 }
 </script>
 

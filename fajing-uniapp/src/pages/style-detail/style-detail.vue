@@ -28,6 +28,7 @@
 <script setup>
 import { reactive } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { goBack } from '@/utils/nav'
 
 const info = reactive({ id: '', name: '发型', len: '', face: '', cat: '', img: '' })
 
@@ -41,9 +42,7 @@ function dec(value) {
 }
 
 function back() {
-  uni.navigateBack({
-    fail: () => uni.reLaunch({ url: '/pages/home/home' })
-  })
+  goBack()
 }
 
 onLoad((options) => {

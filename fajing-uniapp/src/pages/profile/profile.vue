@@ -75,6 +75,7 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { clearToken } from '@/utils/auth'
+import { goBack } from '@/utils/nav'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -127,9 +128,7 @@ onShow(() => {
 })
 
 function back() {
-  const pages = getCurrentPages()
-  if (pages.length > 1) uni.navigateBack()
-  else uni.reLaunch({ url: '/pages/home/home' })
+  goBack()
 }
 
 function logout() {

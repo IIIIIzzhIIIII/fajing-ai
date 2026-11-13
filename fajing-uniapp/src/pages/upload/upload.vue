@@ -106,6 +106,7 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { upload, API } from '@/api/request'
 import { track } from '@/utils/track'
+import { goBack } from '@/utils/nav'
 import { DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
@@ -125,7 +126,7 @@ function openDoc(name) {
 }
 
 function back() {
-  uni.navigateBack()
+  goBack()
 }
 
 function pickPhoto(source) {

@@ -106,6 +106,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
+import { goBack } from '@/utils/nav'
 import { STYLES, CATS, COLORS, PORTRAIT } from '@/mock/constants'
 
 const app = useAppStore()
@@ -202,7 +203,7 @@ function orderOf(id) {
 }
 
 function back() {
-  uni.navigateBack()
+  goBack()
 }
 
 function setMode(m) {

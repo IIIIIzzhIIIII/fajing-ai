@@ -77,6 +77,7 @@ import { computed } from 'vue'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { BARBER_SPEC, BARBER_FALLBACK, DEMO_BEFORE } from '@/mock/constants'
+import { goBack as navBack } from '@/utils/nav'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -137,8 +138,6 @@ function sendToBarber() {
 }
 
 function goBack() {
-  uni.navigateBack({
-    fail: () => uni.reLaunch({ url: '/pages/home/home' })
-  })
+  navBack()
 }
 </script>

@@ -54,6 +54,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
+import { goBack } from '@/utils/nav'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -116,9 +117,7 @@ async function loadRecords() {
 onShow(loadRecords)
 
 function back() {
-  uni.navigateBack({
-    fail: () => uni.reLaunch({ url: '/pages/profile/profile' })
-  })
+  goBack('/pages/profile/profile')
 }
 
 function openRecord(rec) {

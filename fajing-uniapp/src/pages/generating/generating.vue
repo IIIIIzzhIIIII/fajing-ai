@@ -75,6 +75,7 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { track } from '@/utils/track'
+import { goBack } from '@/utils/nav'
 import { STYLES, COLORS, PORTRAIT, DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
@@ -273,7 +274,7 @@ function finishFail() {
   app.taskId = ''
   ui.toast('生成失败，请重试')
   setTimeout(() => {
-    uni.navigateBack()
+    goBack()
   }, 900)
 }
 
