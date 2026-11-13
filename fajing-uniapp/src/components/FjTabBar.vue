@@ -5,11 +5,6 @@
       <text>首页</text>
       <view class="tab-dot" />
     </view>
-    <view class="tab" :class="{ on: active === 'community' }" @click="go('/pages/community/community')">
-      <fj-icon name="message" :size="20" :color="active === 'community' ? '#B54263' : '#B4A9AE'" />
-      <text>讨论</text>
-      <view class="tab-dot" />
-    </view>
     <view class="tab" :class="{ on: active === 'profile' }" @click="go('/pages/profile/profile')">
       <fj-icon name="user" :size="20" :color="active === 'profile' ? '#B54263' : '#B4A9AE'" />
       <text>我的</text>

@@ -58,7 +58,7 @@ async function handleLogin() {
         <p class="brand-slogan">AI 换发型 · 让每一次改变都有据可依</p>
         <ul class="brand-points">
           <li>发型库上下架即时生效</li>
-          <li>社区帖子内容统一管理</li>
+          <li>发型素材与 AI 配置统一管理</li>
           <li>订单数据一目了然</li>
         </ul>
       </section>

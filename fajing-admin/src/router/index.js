@@ -27,18 +27,6 @@ const routes = [
         meta: { title: '发型库' }
       },
       {
-        path: 'posts',
-        name: 'Posts',
-        component: () => import('@/views/posts/index.vue'),
-        meta: { title: '帖子管理' }
-      },
-      {
-        path: 'reviews',
-        name: 'Reviews',
-        component: () => import('@/views/reviews/index.vue'),
-        meta: { title: '审核中心' }
-      },
-      {
         path: 'logs',
         name: 'Logs',
         component: () => import('@/views/logs/index.vue'),

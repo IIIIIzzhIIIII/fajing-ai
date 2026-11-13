@@ -18,9 +18,6 @@ pay:
 quota:
   daily-max: 100
 
-content-security:
-  enabled: true
-
 fajing:
   upload-dir: ${java.io.tmpdir}/fajing-test-uploads
   base-url: http://localhost:8081

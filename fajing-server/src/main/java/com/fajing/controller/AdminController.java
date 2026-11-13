@@ -5,20 +5,14 @@ import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.entity.AdminLog;
 import com.fajing.entity.AiCallLog;
-import com.fajing.entity.Comment;
 import com.fajing.entity.GenerationTask;
 import com.fajing.entity.Hairstyle;
 import com.fajing.entity.Order;
-import com.fajing.entity.Post;
-import com.fajing.entity.Report;
 import com.fajing.mapper.AdminLogMapper;
 import com.fajing.mapper.AiCallLogMapper;
-import com.fajing.mapper.CommentMapper;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.OrderMapper;
-import com.fajing.mapper.PostMapper;
-import com.fajing.mapper.ReportMapper;
 import com.fajing.service.AdminLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,10 +47,7 @@ import java.util.stream.Collectors;
 public class AdminController {
 
     private final HairstyleMapper hairstyleMapper;
-    private final PostMapper postMapper;
     private final OrderMapper orderMapper;
-    private final CommentMapper commentMapper;
-    private final ReportMapper reportMapper;
     private final AdminLogService adminLogService;
     private final GenerationTaskMapper taskMapper;
     private final AiCallLogMapper aiCallLogMapper;
@@ -186,94 +177,6 @@ public class AdminController {
         hairstyleMapper.updateById(exists);
         adminLogService.log("HAIRSTYLE_STATUS", id + ":" + exists.getStatus());
         return Result.ok(exists);
-    }
-
-    @Operation(summary = "帖子列表（含评论明细）")
-    @GetMapping("/posts")
-    public Result<List<Map<String, Object>>> posts() {
-        List<Post> posts = postMapper.selectList(new QueryWrapper<Post>().orderByDesc("created_at"));
-        return Result.ok(posts.stream().map(this::postMap).collect(Collectors.toList()));
-    }
-
-    /** 帖子带上评论明细，管理端能直接看到用户最新评论 */
-    private Map<String, Object> postMap(Post p) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", p.getId());
-        map.put("userId", p.getUserId());
-        map.put("name", p.getName());
-        map.put("avatarColor", p.getAvatarColor());
-        map.put("meta", p.getMeta());
-        map.put("badge", p.getBadge());
-        map.put("gender", p.getGender());
-        map.put("styleName", p.getStyleName());
-        map.put("content", p.getContent());
-        map.put("aiImage", p.getAiImage());
-        map.put("afterImage", p.getAfterImage());
-        map.put("score", p.getScore());
-        map.put("likes", p.getLikes());
-        map.put("createdAt", p.getCreatedAt());
-
-        List<Comment> comments = commentMapper.selectList(new QueryWrapper<Comment>()
-                .eq("post_id", p.getId()).orderByAsc("created_at"));
-        map.put("commentCount", comments.size());
-        map.put("comments", comments.stream().map(c -> {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", c.getId());
-            item.put("userName", c.getUserName());
-            item.put("content", c.getContent());
-            item.put("createdAt", c.getCreatedAt());
-            return item;
-        }).collect(Collectors.toList()));
-        return map;
-    }
-
-    @Operation(summary = "删除帖子")
-    @DeleteMapping("/posts/{id}")
-    public Result<Void> deletePost(@PathVariable Long id) {
-        postMapper.deleteById(id);
-        adminLogService.log("DELETE_POST", "post:" + id);
-        return Result.ok();
-    }
-
-    /** 举报列表（含被举报帖子的标题与内容） */
-    @Operation(summary = "举报列表")
-    @GetMapping("/reports")
-    public Result<List<Map<String, Object>>> reports() {
-        List<Report> list = reportMapper.selectList(new QueryWrapper<Report>().orderByDesc("created_at"));
-        return Result.ok(list.stream().map(r -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", r.getId());
-            map.put("postId", r.getPostId());
-            map.put("reason", r.getReason());
-            map.put("status", r.getStatus());
-            map.put("createdAt", r.getCreatedAt());
-            Post post = postMapper.selectById(r.getPostId());
-            map.put("postTitle", post == null ? "帖子已删除" : post.getStyleName());
-            map.put("postContent", post == null ? "" : post.getContent());
-            return map;
-        }).collect(Collectors.toList()));
-    }
-
-    /** 处理举报：handled=已处理，ignored=忽略 */
-    @Operation(summary = "处理举报（handled/ignored）")
-    @PatchMapping("/reports/{id}/status")
-    public Result<Void> handleReport(@PathVariable Long id, @RequestParam String status) {
-        Report report = reportMapper.selectById(id);
-        if (report == null) {
-            throw new BizException("举报不存在");
-        }
-        report.setStatus("handled".equals(status) ? "handled" : "ignored");
-        reportMapper.updateById(report);
-        adminLogService.log("REPORT_" + report.getStatus().toUpperCase(), "report:" + id);
-        return Result.ok();
-    }
-
-    @Operation(summary = "删除评论")
-    @DeleteMapping("/comments/{id}")
-    public Result<Void> deleteComment(@PathVariable Long id) {
-        commentMapper.deleteById(id);
-        adminLogService.log("DELETE_COMMENT", "comment:" + id);
-        return Result.ok();
     }
 
     @Operation(summary = "订单列表")

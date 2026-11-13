@@ -199,14 +199,6 @@ export const API = {
   checkPhoto: (photoUrl) =>
     request({ url: '/api/photo/check', method: 'POST', data: { photoUrl } }),
   consume: (type) => request({ url: '/api/quota/consume', method: 'POST', data: { type } }),
-  posts: (filter) => request({ url: `/api/posts?filter=${encodeURIComponent(filter || '')}` }),
-  createPost: (payload) => request({ url: '/api/posts', method: 'POST', data: payload }),
-  likePost: (id) => request({ url: `/api/posts/${id}/like`, method: 'POST' }),
-  comments: (id) => request({ url: `/api/posts/${id}/comments` }),
-  addComment: (id, content) =>
-    request({ url: `/api/posts/${id}/comments`, method: 'POST', data: { content } }),
-  reportPost: (id, reason) =>
-    request({ url: `/api/posts/${id}/report`, method: 'POST', data: { reason } }),
   mockOrder: (payload) => request({ url: '/api/order/mock', method: 'POST', data: payload }),
   createOrder: (payload) => request({ url: '/api/order/create', method: 'POST', data: payload }),
   orderStatus: (id) => request({ url: `/api/order/${id}` }),

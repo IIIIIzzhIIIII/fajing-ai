@@ -2,7 +2,7 @@
 
 > 剪之前，先看见。
 
-AI 换发型试镜产品：上传一张正脸照，8 秒生成 4 款新发型效果图，支持前后对比、发色预览、理发师沟通卡、付费解锁高清无水印图与发型讨论区。
+AI 换发型试镜产品：上传一张正脸照，8 秒生成 4 款新发型效果图，支持前后对比、发色预览、理发师沟通卡与付费解锁高清无水印图。
 
 视觉与交互以原型 [fajing-ai.html](./fajing-ai/fajing-ai.html) 为准（375px 设计稿，主色 `#C95676`，背景 `#FAF8F7`）。
 
@@ -82,14 +82,11 @@ cd fajing-admin  && npm run build
 | GET | `/api/records` | 试发历史 |
 | GET | `/api/quota` | 今日额度 |
 | POST | `/api/quota/consume` | 消耗额度（free/share/ad） |
-| GET | `/api/posts?filter=` | 讨论区列表 |
-| POST | `/api/posts` | 发帖 |
-| POST | `/api/posts/{id}/like` | 点赞 |
-| GET/POST | `/api/posts/{id}/comments` | 评论列表 / 发表评论 |
-| POST | `/api/order/mock` | 模拟支付 |
+| POST | `/api/photo/check` | 上传照片 AI 审查（是否正脸人像） |
+| POST | `/api/order/create` | 创建解锁订单（本机为模拟支付） |
 | GET | `/api/unlocks` | 已解锁发型 |
 | POST | `/api/share/reward` | 分享奖励（每账号限 1 次） |
-| * | `/api/admin/**` | 管理端接口，需 header `X-Admin-Token: admin-token` |
+| * | `/api/admin/**` | 管理端接口，需 `Authorization: Bearer <管理员 token>` |
 
 统一返回体：`{ "code": 0, "msg": "ok", "data": ... }`，`code != 0` 表示业务错误。
 

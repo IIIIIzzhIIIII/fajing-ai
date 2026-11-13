@@ -1,6 +1,6 @@
 /**
  * 发镜 AI · 静态数据（迁移自 H5 原型 fajing-ai.html）
- * 正式版由后端 /api/hairstyles、/api/colors、/api/posts 提供
+ * 正式版由后端 /api/hairstyles、/api/colors 提供
  */
 
 export const IMG = (p, size) =>
@@ -87,78 +87,3 @@ export const BARBER_FALLBACK = {
   side: '两侧自然过渡',
   tip: '以参考图为准，整体保持蓬松自然'
 }
-
-export const COMM_AI = (en, gender) =>
-  IMG(
-    `${gender === 'male' ? 'young asian man' : 'young asian woman'}, ${en}, ` +
-    'front facing portrait, looking straight at camera, head level and centered, symmetrical frontal face, ' +
-    'no side profile, shoulders up, natural window light, clean neutral background, photorealistic, 85mm lens, high detail',
-    'square'
-  )
-
-export const COMM_REAL = (en, gender) =>
-  IMG(
-    `${gender === 'male' ? 'young asian man' : 'young asian woman'} just got a haircut, ${en}, casual smartphone selfie, indoor bathroom lighting, natural unedited look, real photo, slight grain`,
-    'square'
-  )
-
-export const COMM_POSTS = [
-  {
-    id: 'c1', name: '小鹿', ava: '#E28FA6', meta: '杭州 · 剪后第 2 天', badge: 'real',
-    styleId: 'f1', gender: 'female', styleName: '法式波波头',
-    text: '拿着 AI 图去找托尼，剪完比想象中还服帖！同事都问我在哪家店剪的，圆脸真的可以冲。',
-    ai: COMM_AI('french bob haircut, chin length, soft inward ends', 'female'),
-    after: COMM_REAL('fresh french bob haircut, chin length, soft inward ends', 'female'),
-    score: 96, tags: ['圆脸友好', '显脸小', '好打理'], likes: 128, liked: false,
-    comments: [
-      { n: '莉莉', t: '2 小时前', x: '求问怎么跟托尼描述长度的！' },
-      { n: '小圆', t: '1 小时前', x: '同款脸型，收藏了，周末就去。' }
-    ]
-  },
-  {
-    id: 'c2', name: 'Momo', ava: '#B58BC9', meta: '成都 · 剪后第 1 天', badge: 'real',
-    styleId: 'f2', gender: 'female', styleName: '日系碎短发',
-    text: 'AI 图上是很轻的碎感，剪完层次有点重…算翻车吗？姐妹们帮我看看要不要回去救。',
-    ai: COMM_AI('japanese layered short hair, airy texture', 'female'),
-    after: COMM_REAL('short layered japanese haircut, slightly heavy ends, airy fringe', 'female'),
-    score: 72, tags: ['层次偏重', '求拯救'], likes: 86, liked: false,
-    comments: [
-      { n: '阿柚', t: '3 小时前', x: '不算翻车，吹干的时候用点蓬松喷雾会好很多。' },
-      { n: '托尼老师', t: '2 小时前', x: '发尾再打薄一点就接近了，别自己剪。' },
-      { n: 'Momo', t: '1 小时前', x: '谢谢！明天去店里让师傅修一下发尾。' }
-    ]
-  },
-  {
-    id: 'c3', name: '阿柚', ava: '#7FA6C9', meta: '上海 · 还在纠结', badge: 'ask',
-    styleId: 'f3', gender: 'female', styleName: '港风大波浪',
-    text: '想剪这个港风大波浪，但我的发量偏少，怕烫完撑不起来。有没有同发量的姐妹试过？',
-    ai: COMM_AI('hong kong retro big wavy long hair', 'female'), after: null, score: null,
-    tags: ['发量少', '求建议'], likes: 203, liked: false,
-    comments: [
-      { n: '卷卷', t: '4 小时前', x: '发量少建议先烫根部，卷度选大一号，会蓬很多。' },
-      { n: '小鹿', t: '2 小时前', x: '我发量也少，剪了同款，重点是层次不要太高。' }
-    ]
-  },
-  {
-    id: 'c4', name: '理工男阿哲', ava: '#6E8C7A', meta: '深圳 · 剪后第 3 天', badge: 'real',
-    styleId: 'm2', gender: 'male', styleName: '微分碎盖',
-    text: '第一次拿 AI 效果图去剪，居然没翻车。两侧推了 #2，顶部保留长度，比之前精神多了。',
-    ai: COMM_AI('textured fringe korean men hair with see-through bangs', 'male'),
-    after: COMM_REAL('fresh textured fringe korean men haircut, faded sides, natural fringe', 'male'),
-    score: 93, tags: ['男生可抄', '通勤'], likes: 64, liked: false,
-    comments: [{ n: '阿凯', t: '5 小时前', x: '兄弟，理发师沟通卡也发我一份。' }]
-  },
-  {
-    id: 'c5', name: '卷卷', ava: '#C99A7F', meta: '广州 · 剪后第 5 天', badge: 'real',
-    styleId: 'f7', gender: 'female', styleName: '羊毛卷',
-    text: '羊毛卷真的显发量！就是每天早上要花 10 分钟抓一抓，懒人慎入。',
-    ai: COMM_AI('tight curly wool perm hair with volume', 'female'),
-    after: COMM_REAL('fresh curly perm hair, bouncy volume, natural texture', 'female'),
-    score: 88, tags: ['显发量', '需要打理'], likes: 152, liked: false,
-    comments: [{ n: '小鹿', t: '6 小时前', x: '好看！请问是多大的卷？' }]
-  }
-]
-
-export const COMM_FILTERS = ['全部', '真实作业', '求建议', '女款', '男款', '圆脸友好']
-
-export const COMM_TOPICS = ['# 剪后第 1 天', '# 圆脸友好', '# 发量少', '# 男生可抄', '# 通勤好打理']

@@ -6,11 +6,8 @@ export const useUiStore = defineStore('ui', {
     toastText: '',
     toastVisible: false,
     sheet: '',
-    commentPost: null,
     payPlan: 'all',
     payStyleId: '',
-    /** 发讨论模式：ask=还没剪（只传一张现在的发型），real=交作业（AI 图 + 剪后实拍） */
-    composeMode: 'real',
     quotaReason: ''
   }),
   actions: {

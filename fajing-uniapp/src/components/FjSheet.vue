@@ -132,89 +132,6 @@
       </view>
     </view>
 
-    <!-- 发布讨论 -->
-    <view class="sheet" :class="{ show: ui.sheet === 'compose' }">
-      <view class="sheet-grip" />
-      <view class="sheet-close" @click="ui.close()"><fj-icon name="x" :size="16" /></view>
-      <view class="sheet-title">{{ isAsk ? '还没剪？说说你的纠结' : '交作业到讨论' }}</view>
-      <view class="sheet-sub">
-        {{ isAsk ? '上传一张你现在的发型照，让大家帮你参谋适不适合。' : 'AI 效果图 + 剪后实拍，帮更多人少踩一次雷。' }}
-      </view>
-
-      <view v-if="isAsk" class="compose-slots single">
-        <view class="cslot" :class="{ done: !!compose.self }" @click="pickCompose('self')">
-          <image v-if="compose.self" class="cslot-img" :src="compose.self" mode="aspectFill" />
-          <text v-if="compose.self" class="cslot-tag">现在的发型</text>
-          <template v-if="!compose.self">
-            <fj-icon name="camera" :size="20" />
-            <text>现在的发型照</text>
-            <text class="cslot-hint">从相册上传 1 张</text>
-          </template>
-          <view v-else class="cslot-x" @click.stop="compose.self = ''">
-            <fj-icon name="x" :size="11" color="#FFFFFF" />
-          </view>
-        </view>
-      </view>
-
-      <view v-else class="compose-slots">
-        <view class="cslot" :class="{ done: !!compose.ai }" @click="pickCompose('ai')">
-          <image v-if="compose.ai" class="cslot-img" :src="compose.ai" mode="aspectFill" />
-          <text v-if="compose.ai" class="cslot-tag">AI 效果</text>
-          <template v-if="!compose.ai">
-            <fj-icon name="sparkles" :size="20" />
-            <text>AI 效果图</text>
-            <text class="cslot-hint">用试过的图或上传</text>
-          </template>
-          <view v-else class="cslot-x" @click.stop="compose.ai = ''">
-            <fj-icon name="x" :size="11" color="#FFFFFF" />
-          </view>
-        </view>
-        <view class="cslot" :class="{ done: !!compose.after }" @click="pickCompose('after')">
-          <image v-if="compose.after" class="cslot-img" :src="compose.after" mode="aspectFill" />
-          <text v-if="compose.after" class="cslot-tag">剪后实拍</text>
-          <template v-if="!compose.after">
-            <fj-icon name="camera" :size="20" />
-            <text>剪后实拍</text>
-            <text class="cslot-hint">从相册上传</text>
-          </template>
-          <view v-else class="cslot-x" @click.stop="compose.after = ''">
-            <fj-icon name="x" :size="11" color="#FFFFFF" />
-          </view>
-        </view>
-      </view>
-
-      <input v-model="compose.styleName" class="compose-input" maxlength="20" placeholder="发型名称，如：法式波波头" />
-      <textarea
-        v-model="compose.text"
-        class="compose-input"
-        maxlength="120"
-        :placeholder="isAsk ? '说说你的发量、脸型顾虑，想让大家帮你看看适不适合' : '说说剪完的感受：还原度怎么样？托尼听懂了吗？'"
-      />
-      <button class="btn btn-primary btn-block" style="margin-top:14px" @click="publish">
-        <fj-icon name="share" :size="16" color="#FFFFFF" />发布到讨论
-      </button>
-      <view class="tiny" style="text-align:center;margin-top:9px">发布内容会同步到讨论区</view>
-    </view>
-
-    <!-- 评论 -->
-    <view class="sheet" :class="{ show: ui.sheet === 'comments' }">
-      <view class="sheet-grip" />
-      <view class="sheet-close" @click="ui.close()"><fj-icon name="x" :size="16" /></view>
-      <view class="sheet-title">评论</view>
-      <view class="sheet-sub">{{ ui.commentPost ? ui.commentPost.name + ' · ' + ui.commentPost.styleName : '' }}</view>
-      <view class="cm-list">
-        <view v-for="(c, i) in comments" :key="i" class="cm-item">
-          <text class="cm-name">{{ c.userName || c.n }}</text>
-          <text class="cm-text">{{ c.content || c.x }}</text>
-        </view>
-        <view v-if="!comments.length" class="tiny" style="text-align:center;padding:18px 0">还没有评论，来抢沙发</view>
-      </view>
-      <view class="cm-input">
-        <input v-model="commentText" maxlength="60" placeholder="说点有用的…" />
-        <view class="cm-send" @click="sendComment"><fj-icon name="arrow-right" :size="16" color="#FFFFFF" /></view>
-      </view>
-    </view>
-
     <!-- 隐私与数据 -->
     <view class="sheet" :class="{ show: ui.sheet === 'privacy' }">
       <view class="sheet-grip" />
@@ -251,21 +168,15 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
-import { API, upload } from '@/api/request'
+import { API } from '@/api/request'
 import { saveRemoteImage } from '@/utils/save'
 import { track } from '@/utils/track'
 
 const app = useAppStore()
 const ui = useUiStore()
-
-const comments = ref([])
-const commentText = ref('')
-const compose = reactive({ ai: '', after: '', self: '', styleName: '', text: '' })
-/** ask=还没剪（只传一张现在的发型照），real=交作业（AI 效果图 + 剪后实拍） */
-const isAsk = computed(() => ui.composeMode === 'ask')
 
 /** 微信支付未接入时，iOS 端按平台规则隐藏支付入口，只保留分享解锁 */
 const WXPAY_ENABLED = false
@@ -406,121 +317,12 @@ async function shareTo(channel) {
   ui.toast(`已模拟分享到${channel}，奖励每账号限 1 次`)
 }
 
-function pickCompose(type) {
-  uni.chooseImage({
-    count: 1,
-    sizeType: ['compressed'],
-    sourceType: type === 'ai' ? ['album'] : ['album', 'camera'],
-    success: (res) => {
-      compose[type] = res.tempFilePaths[0]
-    }
-  })
-}
-
-/** 每次打开弹窗都清空上一次选的图，避免第二次还是旧照片 */
-function resetCompose() {
-  compose.ai = ''
-  compose.after = ''
-  compose.self = ''
-  compose.styleName = ''
-  compose.text = ''
-}
-
-/** 本地临时图（blob/临时路径）先上传成可访问的 URL，避免发布后图片失效 */
-async function toRemoteUrl(path) {
-  if (!path || /^https?:\/\//.test(path)) return path
-  try {
-    const data = await upload(path)
-    return (data && (data.url || data.path)) || path
-  } catch (e) {
-    return path
-  }
-}
-
-async function publish() {
-  if (!compose.text.trim()) {
-    ui.toast(isAsk.value ? '说说你的顾虑吧' : '说说剪完的感受吧')
-    return
-  }
-  if (isAsk.value && !compose.self) {
-    ui.toast('先上传一张你现在的发型照')
-    return
-  }
-  if (!isAsk.value && !compose.ai && !compose.after) {
-    ui.toast('至少上传一张 AI 效果图或剪后实拍')
-    return
-  }
-  try {
-    const aiUrl = await toRemoteUrl(isAsk.value ? compose.self : compose.ai || afterImg.value)
-    const afterUrl = isAsk.value ? '' : await toRemoteUrl(compose.after)
-    await API.createPost({
-      badge: isAsk.value ? 'ask' : 'real',
-      gender: app.gender,
-      styleName: compose.styleName || currentStyle.value.name,
-      content: compose.text,
-      aiImage: aiUrl,
-      afterImage: afterUrl,
-      tags: []
-    })
-    ui.toast('发布成功')
-    track('post_create', { badge: isAsk.value ? 'ask' : 'real' })
-    resetCompose()
-    ui.close()
-    uni.$emit('fajing:post-created')
-  } catch (e) {
-    /* 已 toast */
-  }
-}
-
-async function sendComment() {
-  const text = commentText.value.trim()
-  if (!text || !ui.commentPost) return
-  const postId = ui.commentPost.id
-  // mock 帖子的 id 不是数据库主键，只做本地追加
-  if (!/^\d+$/.test(String(postId))) {
-    comments.value.push({ userName: '我', content: text })
-    commentText.value = ''
-    uni.$emit('fajing:comment-created', postId)
-    return
-  }
-  try {
-    const c = await API.addComment(postId, text)
-    comments.value.push(c || { userName: '我', content: text })
-    commentText.value = ''
-    uni.$emit('fajing:comment-created', postId)
-  } catch (e) {
-    /* 已 toast */
-  }
-}
-
 function clearData() {
   app.resetAll()
   ui.toast('已清空本机数据')
   ui.close()
   uni.reLaunch({ url: '/pages/home/home' })
 }
-
-/* 打开弹窗时：发布弹窗清空上次内容，评论弹窗拉取最新评论 */
-function loadComments(post) {
-  if (!post) return
-  comments.value = (post.comments || []).slice()
-  if (!/^\d+$/.test(String(post.id))) return
-  API.comments(post.id)
-    .then((list) => {
-      if (Array.isArray(list) && list.length) comments.value = list
-    })
-    .catch(() => {
-      /* 已统一 toast */
-    })
-}
-
-watch(
-  () => ui.sheet,
-  (sheet) => {
-    if (sheet === 'compose') resetCompose()
-    if (sheet === 'comments') loadComments(ui.commentPost)
-  }
-)
 </script>
 
 <style lang="scss" scoped>
