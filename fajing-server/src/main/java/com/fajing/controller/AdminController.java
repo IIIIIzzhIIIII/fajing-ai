@@ -14,6 +14,8 @@ import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.service.AdminLogService;
+import com.fajing.service.pay.AlipayService;
+import com.fajing.service.pay.WechatPayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -52,6 +55,51 @@ public class AdminController {
     private final GenerationTaskMapper taskMapper;
     private final AiCallLogMapper aiCallLogMapper;
     private final AdminLogMapper adminLogMapper;
+    private final WechatPayService wechatPayService;
+    private final AlipayService alipayService;
+
+    @Operation(summary = "订单退款（微信 / 支付宝）")
+    @PostMapping("/orders/{id}/refund")
+    public Result<Map<String, Object>> refundOrder(@PathVariable Long id,
+                                                   @RequestBody(required = false) Map<String, Object> body) {
+        Order order = orderMapper.selectById(id);
+        if (order == null) {
+            throw new BizException("订单不存在");
+        }
+        if (!"paid".equals(order.getStatus())) {
+            throw new BizException("订单未支付，无法退款");
+        }
+        if ("refunded".equals(order.getRefundStatus())) {
+            throw new BizException("该订单已退款");
+        }
+        BigDecimal amount = body != null && body.get("amount") != null
+                ? new BigDecimal(String.valueOf(body.get("amount"))) : order.getAmount();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(order.getAmount()) > 0) {
+            throw new BizException("退款金额不合法");
+        }
+        String reason = body == null || body.get("reason") == null
+                ? "管理员退款" : String.valueOf(body.get("reason"));
+        String channel = order.getPayChannel() == null ? "" : order.getPayChannel();
+        switch (channel) {
+            case "wx" -> wechatPayService.refund(order.getOutTradeNo(),
+                    "RF" + order.getOutTradeNo() + System.currentTimeMillis(),
+                    amount, order.getAmount(), reason);
+            case "alipay" -> alipayService.refund(order.getOutTradeNo(), amount, reason);
+            case "mock" -> {
+                // 本地模拟订单无需调用渠道
+            }
+            default -> throw new BizException("未知支付渠道，无法退款");
+        }
+        order.setRefundStatus("refunded");
+        order.setRefundAmount(amount);
+        orderMapper.updateById(order);
+        adminLogService.log("ORDER_REFUND", "order:" + id + ",amount:" + amount);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("orderId", id);
+        data.put("refundStatus", "refunded");
+        data.put("refundAmount", amount);
+        return Result.ok(data);
+    }
 
     @Operation(summary = "操作日志")
     @GetMapping("/logs")
