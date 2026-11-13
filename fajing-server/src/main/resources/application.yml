@@ -63,6 +63,8 @@ token:
 pay:
   mock-enabled: ${PAY_MOCK_ENABLED:true}
   wxpay-enabled: ${WXPAY_ENABLED:false}
+  # 支付配置加密口令（至少 32 位），未配置时后台无法保存商户密钥
+  config-secret: ${PAY_CONFIG_SECRET:}
 
 # 单用户每日生成次数上限
 quota:

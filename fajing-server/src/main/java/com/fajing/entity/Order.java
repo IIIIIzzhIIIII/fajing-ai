@@ -20,4 +20,14 @@ public class Order {
     private String status;
     private String styleIds;
     private LocalDateTime createdAt;
+    /** 商户订单号（唯一） */
+    private String outTradeNo;
+    /** wx / alipay / mock */
+    private String payChannel;
+    private String transactionId;
+    private String prepayId;
+    private LocalDateTime paidAt;
+    /** none / refunding / refunded */
+    private String refundStatus;
+    private BigDecimal refundAmount;
 }

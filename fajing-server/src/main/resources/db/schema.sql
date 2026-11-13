@@ -186,3 +186,36 @@ CREATE TABLE IF NOT EXISTS ai_config (
   enabled TINYINT NOT NULL DEFAULT 1,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 支付配置（单行，id 固定为 1）：微信支付 / 支付宝参数，敏感字段 AES-256-GCM 加密入库
+CREATE TABLE IF NOT EXISTS pay_config (
+  id BIGINT PRIMARY KEY,
+  wx_enabled TINYINT NOT NULL DEFAULT 0,
+  wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'virtual',
+  wx_appid VARCHAR(64) NOT NULL DEFAULT '',
+  wx_mch_id VARCHAR(32) NOT NULL DEFAULT '',
+  wx_api_v3_key_enc VARCHAR(512) NOT NULL DEFAULT '',
+  wx_cert_serial_no VARCHAR(64) NOT NULL DEFAULT '',
+  wx_private_key_path VARCHAR(255) NOT NULL DEFAULT '',
+  wx_notify_url VARCHAR(255) NOT NULL DEFAULT '',
+  wx_virtual_appkey_enc VARCHAR(512) NOT NULL DEFAULT '',
+  alipay_enabled TINYINT NOT NULL DEFAULT 0,
+  alipay_app_id VARCHAR(64) NOT NULL DEFAULT '',
+  alipay_private_key_enc VARCHAR(1024) NOT NULL DEFAULT '',
+  alipay_public_key_enc VARCHAR(1024) NOT NULL DEFAULT '',
+  alipay_gateway VARCHAR(255) NOT NULL DEFAULT 'https://openapi.alipay.com/gateway.do',
+  alipay_notify_url VARCHAR(255) NOT NULL DEFAULT '',
+  alipay_return_url VARCHAR(255) NOT NULL DEFAULT '',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 订单支付渠道字段（旧库增量，重复执行由 continue-on-error 跳过）
+ALTER TABLE orders ADD COLUMN out_trade_no VARCHAR(64) NULL;
+ALTER TABLE orders ADD COLUMN pay_channel VARCHAR(16) NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN transaction_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN prepay_id VARCHAR(128) NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN paid_at DATETIME NULL;
+ALTER TABLE orders ADD COLUMN refund_status VARCHAR(16) NOT NULL DEFAULT 'none';
+ALTER TABLE orders ADD COLUMN refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE orders ADD UNIQUE KEY uk_out_trade_no (out_trade_no);
