@@ -489,8 +489,30 @@ onReady(() => {
   measure()
 })
 
+/** 支付宝支付跳转回来后轮询订单状态，成功再刷新解锁 */
+async function checkPendingOrder() {
+  const pending = uni.getStorageSync('fajing_pending_order')
+  if (!pending || !pending.orderId) return
+  uni.removeStorageSync('fajing_pending_order')
+  for (let i = 0; i < 8; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const data = await API.orderStatus(pending.orderId)
+      if (data && data.paid) {
+        await syncUnlocks()
+        ui.toast('支付成功，已解锁高清图')
+        return
+      }
+    } catch (e) {
+      // 继续轮询
+    }
+  }
+  ui.toast('未查询到支付结果，如已付款请稍后刷新')
+}
+
 onShow(() => {
   syncUnlocks()
+  checkPendingOrder()
 })
 </script>
 

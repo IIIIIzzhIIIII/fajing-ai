@@ -252,17 +252,93 @@ function watchAd() {
   ui.close()
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** 小程序调起微信支付 */
+function requestWxPay(payParams) {
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      provider: 'wxpay',
+      ...payParams,
+      success: resolve,
+      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
+    })
+  })
+}
+
+/** 支付后轮询服务端订单，最多约 12 秒 */
+async function pollPaid(orderId) {
+  for (let i = 0; i < 8; i++) {
+    await wait(1500)
+    try {
+      const data = await API.orderStatus(orderId)
+      if (data && data.paid) return true
+    } catch (e) {
+      // 继续轮询
+    }
+  }
+  return false
+}
+
+function payErrorMessage(err) {
+  const msg = String((err && err.message) || '')
+  if (msg.includes('cancel')) return '已取消支付'
+  return msg && msg.length < 40 ? msg : '支付失败，请稍后重试'
+}
+
 async function payNow() {
+  const plan = payPlan.value
+  const styleIds = plan === 'one' ? [payStyle.value.styleId] : lockedUnlockedIds()
+  if (!styleIds.length) {
+    ui.toast('暂无可解锁内容')
+    return
+  }
+  track('pay_click', { plan, count: styleIds.length })
   try {
-    const plan = payPlan.value
-    const styleIds = plan === 'one' ? [payStyle.value.styleId] : lockedUnlockedIds()
-    track('pay_click', { plan, count: styleIds.length })
-    await API.createOrder({ plan, taskId: app.taskId, styleIds })
-    await refreshUnlocks()
-    track('pay_success', { plan, count: styleIds.length })
-    ui.sheet = 'paid'
+    // #ifdef MP-WEIXIN
+    const wxRes = await API.createOrder({ channel: 'wx', plan, taskId: app.taskId, styleIds })
+    if (wxRes && wxRes.mock) {
+      await refreshUnlocks()
+      track('pay_success', { plan, count: styleIds.length })
+      ui.sheet = 'paid'
+      return
+    }
+    if (wxRes && wxRes.payParams) {
+      await requestWxPay(wxRes.payParams)
+      const paid = await pollPaid(wxRes.orderId)
+      if (!paid) {
+        ui.toast('支付结果确认中，请稍后刷新')
+        return
+      }
+      await refreshUnlocks()
+      track('pay_success', { plan, count: styleIds.length })
+      ui.sheet = 'paid'
+      return
+    }
+    throw new Error('未返回微信支付参数')
+    // #endif
+
+    // #ifdef H5
+    const aliRes = await API.createOrder({ channel: 'alipay', plan, taskId: app.taskId, styleIds })
+    if (aliRes && aliRes.mock) {
+      await refreshUnlocks()
+      track('pay_success', { plan, count: styleIds.length })
+      ui.sheet = 'paid'
+      return
+    }
+    if (aliRes && aliRes.payForm) {
+      // 跳转支付宝收银台，返回后由结果页 onShow 轮询订单状态
+      uni.setStorageSync('fajing_pending_order', { orderId: aliRes.orderId, plan })
+      document.write(aliRes.payForm)
+      document.close()
+      return
+    }
+    throw new Error('未返回支付宝支付表单')
+    // #endif
   } catch (e) {
-    /* 已 toast */
+    ui.toast(payErrorMessage(e))
   }
 }
 
