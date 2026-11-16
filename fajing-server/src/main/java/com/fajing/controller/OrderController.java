@@ -13,9 +13,12 @@ import com.fajing.mapper.OrderMapper;
 import com.fajing.service.GenerationService;
 import com.fajing.service.PayConfigService;
 import com.fajing.service.pay.AlipayService;
+import com.fajing.service.pay.DouyinPayService;
 import com.fajing.service.pay.WechatPayService;
+import com.fajing.service.pay.WechatVirtualPayService;
 import com.fajing.util.UserContext;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -37,9 +40,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -61,11 +67,26 @@ public class OrderController {
     private final GenerationService generationService;
     private final PayConfigService payConfigService;
     private final WechatPayService wechatPayService;
+    private final WechatVirtualPayService wechatVirtualPayService;
+    private final DouyinPayService douyinPayService;
     private final AlipayService alipayService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** mock 支付仅在非生产环境开启；生产必须接真实支付 */
-    @Value("${pay.mock-enabled:true}")
+    @Value("${pay.mock-enabled:false}")
     private boolean mockPayEnabled;
+
+    /** 未支付订单复用窗口：微信 prepay_id 有效期 2 小时，这里保守取 30 分钟 */
+    private static final int REUSE_WINDOW_MINUTES = 30;
+
+    /** 同一用户的下单请求按用户串行，避免并发请求同时查不到未支付订单而重复插入 */
+    private static final Object[] CREATE_LOCKS = new Object[64];
+
+    static {
+        for (int i = 0; i < CREATE_LOCKS.length; i++) {
+            CREATE_LOCKS[i] = new Object();
+        }
+    }
 
     @Operation(summary = "创建解锁订单")
     @PostMapping("/create")
@@ -80,6 +101,28 @@ public class OrderController {
             if (task == null || !Long.valueOf(userId).equals(task.getUserId())) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
             }
+            // 只能解锁本任务内的款式，避免构造请求解锁无关款式或跨任务复用
+            if (!splitIds(task.getStyleIds()).containsAll(styleIds)) {
+                throw new BizException("解锁款式与本次生成任务不匹配");
+            }
+        }
+
+        if (styleIds.isEmpty()) {
+            throw new BizException("请选择要解锁的款式");
+        }
+        if (!"one".equals(plan) && !"all".equals(plan)) {
+            throw new BizException("不支持的解锁套餐");
+        }
+        if ("one".equals(plan) && styleIds.size() != 1) {
+            throw new BizException("单张解锁只能选择 1 款发型");
+        }
+        // 仅 1 款待解锁时不提供「本次全部 N 款」套餐，避免用 3 元买走单张 6 元的款式
+        if ("all".equals(plan) && styleIds.size() < 2) {
+            throw new BizException("仅 1 款待解锁，请使用单张解锁");
+        }
+        // 幂等：同一任务下所选款式若已全部解锁，直接拦截，避免重复下单重复扣款
+        if (taskId > 0 && styleIds.stream().allMatch(styleId -> generationService.isUnlocked(userId, taskId, styleId))) {
+            throw new BizException("所选内容已解锁，无需重复支付");
         }
 
         BigDecimal amount = "one".equals(plan)
@@ -88,82 +131,169 @@ public class OrderController {
 
         PayConfig cfg = payConfigService.get();
         boolean wxReady = payConfigService.wxReady(cfg);
+        boolean wxVirtualReady = payConfigService.wxVirtualReady(cfg);
+        boolean douyinReady = payConfigService.douyinReady(cfg);
+        boolean xhsReady = payConfigService.xhsReady(cfg);
         boolean alipayReady = payConfigService.alipayReady(cfg);
+        boolean wxVirtualMode = "virtual".equalsIgnoreCase(cfg.getWxPayMode());
+        String platform = normalizePlatform(body.get("platform") == null ? "" : String.valueOf(body.get("platform")));
         String channel = body.get("channel") == null ? "" : String.valueOf(body.get("channel")).trim();
+        if (platform.isBlank()) {
+            platform = "wx".equals(channel) ? "mp-weixin" : ("alipay".equals(channel) ? "h5" : "");
+        }
         if (channel.isBlank()) {
-            if (wxReady) {
+            if ("h5".equals(platform)) {
+                channel = "alipay";
+            } else if ("mp-weixin".equals(platform)) {
+                channel = "wx";
+            } else if ("mp-toutiao".equals(platform)) {
+                channel = "douyin";
+            } else if ("mp-xhs".equals(platform)) {
+                channel = "xhs";
+            } else if (wxReady) {
                 channel = "wx";
             } else if (alipayReady) {
                 channel = "alipay";
             }
         }
 
-        boolean mock = mockPayEnabled && !wxReady && !alipayReady && !"wx".equals(channel) && !"alipay".equals(channel);
+        boolean channelReady = switch (channel) {
+            case "wx" -> wxReady || wxVirtualReady;
+            case "douyin" -> douyinReady;
+            case "xhs" -> xhsReady;
+            case "alipay" -> alipayReady;
+            default -> false;
+        };
+        boolean mock = mockPayEnabled && ("mock".equals(channel) || !channelReady);
 
-        Order order = new Order();
-        order.setUserId(userId);
-        order.setTaskId(taskId);
-        order.setPlan(plan);
-        order.setAmount(amount);
-        order.setStyleIds(String.join(",", styleIds));
-        order.setOutTradeNo(generateTradeNo());
-        order.setPayChannel(mock ? "mock" : channel);
-        order.setRefundStatus("none");
-        order.setRefundAmount(BigDecimal.ZERO);
-        order.setCreatedAt(LocalDateTime.now());
-        order.setStatus(mock ? "paid" : "created");
-        if (mock) {
-            order.setPaidAt(LocalDateTime.now());
+        if (!mock && "mp-xhs".equals(platform)) {
+            throw new BizException("小红书小程序支付接口需按开放平台文档联调后启用");
         }
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("amount", amount);
-        data.put("mock", mock);
-        data.put("paid", mock);
-
-        if (mock) {
-            orderMapper.insert(order);
-            unlockAll(userId, styleIds, taskId);
-            data.put("orderId", order.getId());
-            data.put("outTradeNo", order.getOutTradeNo());
-            return Result.ok(data);
-        }
-
-        if ("wx".equals(channel)) {
-            if (!wxReady) {
-                throw new BizException("微信支付参数未配置完整，请在管理端「支付配置」补全");
+        synchronized (lockOf(userId)) {
+            // 幂等：同用户 + 同任务 + 同一批款式 + 同渠道同金额，复用窗口内未支付订单并重新下发支付参数
+            Order reused = (mock || wxVirtualMode || "douyin".equals(channel) || "xhs".equals(channel))
+                    ? null : findReusableOrder(userId, taskId, styleIds, amount, channel);
+            if (reused != null) {
+                Map<String, Object> reusedData = new LinkedHashMap<>();
+                reusedData.put("amount", reused.getAmount());
+                reusedData.put("mock", false);
+                reusedData.put("paid", false);
+                reusedData.put("reused", true);
+                reusedData.put("orderId", reused.getId());
+                reusedData.put("outTradeNo", reused.getOutTradeNo());
+                if ("wx".equals(channel)) {
+                    reusedData.put("payParams", wechatPayService.payParams(reused.getPrepayId()));
+                } else {
+                    reusedData.put("payForm", alipayService.buildWapForm(
+                            reused.getOutTradeNo(), reused.getAmount(), "发镜 AI 解锁高清图"));
+                }
+                return Result.ok(reusedData);
             }
-            AppUser user = userMapper.selectById(userId);
-            orderMapper.insert(order);
-            try {
-                String prepayId = wechatPayService.createJsapi(
-                        order.getOutTradeNo(), amount, "发镜 AI 解锁高清图", user == null ? "" : user.getOpenid());
-                order.setPrepayId(prepayId);
-                orderMapper.updateById(order);
+
+            Order order = new Order();
+            order.setUserId(userId);
+            order.setTaskId(taskId);
+            order.setPlan(plan);
+            order.setAmount(amount);
+            order.setStyleIds(String.join(",", styleIds));
+            order.setOutTradeNo(generateTradeNo());
+            order.setPayChannel(mock ? "mock" : channel);
+            order.setPlatform(platform);
+            order.setRefundStatus("none");
+            order.setRefundAmount(BigDecimal.ZERO);
+            order.setCreatedAt(LocalDateTime.now());
+            order.setStatus(mock ? "paid" : "created");
+            if (mock) {
+                order.setPaidAt(LocalDateTime.now());
+            }
+
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("amount", amount);
+            data.put("mock", mock);
+            data.put("paid", mock);
+
+            if (mock) {
+                orderMapper.insert(order);
+                unlockAll(userId, styleIds, taskId);
                 data.put("orderId", order.getId());
                 data.put("outTradeNo", order.getOutTradeNo());
-                data.put("payParams", wechatPayService.payParams(prepayId));
-            } catch (BizException e) {
-                order.setStatus("closed");
-                orderMapper.updateById(order);
-                throw e;
+                return Result.ok(data);
             }
-            return Result.ok(data);
-        }
 
-        if ("alipay".equals(channel)) {
-            if (!alipayReady) {
-                throw new BizException("支付宝参数未配置完整，请在管理端「支付配置」补全");
+            if ("wx".equals(channel)) {
+                if (wxVirtualMode) {
+                    if (!wxVirtualReady) {
+                        throw new BizException("微信虚拟支付参数未配置完整，请在管理端「支付配置」补全");
+                    }
+                    Map<String, Object> virtualPay = wechatVirtualPayService.payParams(
+                            userId, order.getOutTradeNo(), amount, plan, styleIds.size());
+                    orderMapper.insert(order);
+                    data.put("orderId", order.getId());
+                    data.put("outTradeNo", order.getOutTradeNo());
+                    data.put("virtualPay", virtualPay);
+                    return Result.ok(data);
+                }
+                if (!wxReady) {
+                    throw new BizException("微信支付参数未配置完整，请在管理端「支付配置」补全");
+                }
+                AppUser user = userMapper.selectById(userId);
+                orderMapper.insert(order);
+                try {
+                    String prepayId = wechatPayService.createJsapi(
+                            order.getOutTradeNo(), amount, "发镜 AI 解锁高清图", user == null ? "" : user.getOpenid());
+                    order.setPrepayId(prepayId);
+                    orderMapper.updateById(order);
+                    data.put("orderId", order.getId());
+                    data.put("outTradeNo", order.getOutTradeNo());
+                    data.put("payParams", wechatPayService.payParams(prepayId));
+                } catch (BizException e) {
+                    order.setStatus("closed");
+                    orderMapper.updateById(order);
+                    throw e;
+                }
+                return Result.ok(data);
             }
-            orderMapper.insert(order);
-            String form = alipayService.buildWapForm(order.getOutTradeNo(), amount, "发镜 AI 解锁高清图");
-            data.put("orderId", order.getId());
-            data.put("outTradeNo", order.getOutTradeNo());
-            data.put("payForm", form);
-            return Result.ok(data);
-        }
 
-        throw new BizException("不支持的支付渠道：" + channel);
+            if ("douyin".equals(channel)) {
+                if (!douyinReady) {
+                    throw new BizException("抖音支付参数未配置完整，请在管理端「支付配置」补全");
+                }
+                Map<String, Object> douyinPay = douyinPayService.createOrder(order.getOutTradeNo(), amount,
+                        "发镜 AI 解锁高清图", "解锁 " + styleIds.size() + " 款发型高清图", 900);
+                orderMapper.insert(order);
+                data.put("orderId", order.getId());
+                data.put("outTradeNo", order.getOutTradeNo());
+                data.put("douyinPay", douyinPay);
+                return Result.ok(data);
+            }
+
+            if ("xhs".equals(channel)) {
+                throw new BizException("小红书小程序支付接口需按开放平台文档联调后启用");
+            }
+
+            if ("alipay".equals(channel)) {
+                if (!alipayReady) {
+                    throw new BizException("支付宝参数未配置完整，请在管理端「支付配置」补全");
+                }
+                orderMapper.insert(order);
+                String form;
+                try {
+                    form = alipayService.buildWapForm(order.getOutTradeNo(), amount, "发镜 AI 解锁高清图");
+                } catch (RuntimeException e) {
+                    // 与微信分支保持一致：下单失败即关闭订单，避免残留 created 订单影响对账
+                    order.setStatus("closed");
+                    orderMapper.updateById(order);
+                    throw e;
+                }
+                data.put("orderId", order.getId());
+                data.put("outTradeNo", order.getOutTradeNo());
+                data.put("payForm", form);
+                return Result.ok(data);
+            }
+
+            throw new BizException("不支持的支付渠道：" + channel);
+        }
     }
 
     /** 兼容老前端：等同 mock 下单；生产环境关闭 */
@@ -186,14 +316,20 @@ public class OrderController {
         try {
             JsonNode data = wechatPayService.verifyNotify(headers, body == null ? "" : body);
             String tradeState = data.path("trade_state").asText("");
-            if (!tradeState.isBlank() && !"SUCCESS".equals(tradeState)) {
-                throw new BizException("微信交易状态非成功：" + tradeState);
+            if (!"SUCCESS".equals(tradeState)) {
+                throw new BizException("微信交易状态非成功：" + (tradeState.isBlank() ? "未知" : tradeState));
             }
             String outTradeNo = data.path("out_trade_no").asText("");
             int totalCents = data.path("amount").path("total").asInt(-1);
             Order order = findByTradeNo(outTradeNo);
             if (order == null) {
                 throw new BizException("订单不存在：" + outTradeNo);
+            }
+            // 校验商户号/AppID，防止其他商户的有效签名回调被用来标记本商户订单
+            PayConfig cfg = payConfigService.get();
+            if (!String.valueOf(data.path("mchid").asText("")).equals(String.valueOf(cfg.getWxMchId()))
+                    || !String.valueOf(data.path("appid").asText("")).equals(String.valueOf(cfg.getWxAppid()))) {
+                throw new BizException("微信回调商户信息不匹配");
             }
             int expectCents = order.getAmount().multiply(BigDecimal.valueOf(100)).intValueExact();
             if (totalCents != expectCents) {
@@ -252,6 +388,116 @@ public class OrderController {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "接口已废弃，请使用渠道回调地址");
     }
 
+    /** 抖音支付回调：SHA1 验签 → 解析 msg → 校验金额 → 幂等置 paid */
+    @Operation(summary = "抖音支付回调")
+    @PostMapping("/notify/douyin")
+    public Map<String, Object> douyinNotify(@RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> resp = new LinkedHashMap<>();
+        try {
+            if (body == null) {
+                throw new BizException("回调内容为空");
+            }
+            String timestamp = str(body.get("timestamp"));
+            String nonce = str(body.get("nonce"));
+            Object rawMsg = body.get("msg");
+            String msgJson = rawMsg instanceof String text ? text
+                    : objectMapper.writeValueAsString(rawMsg);
+            String signature = str(body.get("msg_signature"));
+            if (!douyinPayService.verifyNotify(timestamp, nonce, msgJson, signature)) {
+                throw new BizException("抖音回调验签失败");
+            }
+            JsonNode msg = objectMapper.readTree(msgJson);
+            Order order = findByTradeNo(msg.path("out_order_no").asText(""));
+            if (order == null) {
+                throw new BizException("抖音订单不存在");
+            }
+            long totalCents = msg.path("total_amount").asLong(-1);
+            if (totalCents >= 0 && BigDecimal.valueOf(totalCents)
+                    .compareTo(order.getAmount().multiply(BigDecimal.valueOf(100))) != 0) {
+                throw new BizException("抖音回调金额不匹配");
+            }
+            markPaid(order, msg.path("trade_no").asText(msg.path("order_id").asText("")));
+            resp.put("err_no", 0);
+            resp.put("err_tips", "success");
+        } catch (Exception e) {
+            log.warn("抖音回调处理失败：{}", e.getMessage());
+            resp.put("err_no", 1);
+            resp.put("err_tips", e.getMessage() == null ? "处理失败" : e.getMessage());
+        }
+        return resp;
+    }
+
+    /** 小红书回调占位：官方支付接口需开放平台文档与资质联调 */
+    @Operation(summary = "小红书支付回调（待接入）")
+    @PostMapping("/notify/xhs")
+    public ResponseEntity<String> xhsNotify() {
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("xhs payment not configured");
+    }
+
+    /** 微信虚拟支付：客户端支付成功后由服务端查单确认并入账 */
+    @Operation(summary = "确认微信虚拟支付结果")
+    @PostMapping("/{id}/virtual-confirm")
+    public Result<Map<String, Object>> virtualConfirm(@PathVariable Long id) {
+        Order order = orderMapper.selectById(id);
+        Long userId = UserContext.require();
+        if (order == null || !Long.valueOf(userId).equals(order.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在");
+        }
+        if (!"paid".equals(order.getStatus())) {
+            String tradeNo = wechatVirtualPayService.queryPaidTradeNo(userId, order.getOutTradeNo());
+            if (!tradeNo.isBlank()) {
+                markPaid(order, tradeNo);
+            }
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("paid", "paid".equals(order.getStatus()));
+        data.put("orderId", order.getId());
+        return Result.ok(data);
+    }
+
+    /** 按运行端下发可用支付方式：H5 支付宝、微信小程序微信支付、抖音/小红书预留 */
+    @Operation(summary = "按运行端查询支付方式")
+    @GetMapping("/pay-methods")
+    public Result<Map<String, Object>> payMethods(@RequestParam(required = false) String platform) {
+        String raw = platform == null ? "" : platform.trim();
+        String p = raw.isBlank() ? "h5" : normalizePlatform(raw);
+        if (p.isBlank()) {
+            throw new BizException("不支持的运行端：" + raw);
+        }
+        PayConfig cfg = payConfigService.get();
+        boolean wxReady = payConfigService.wxReady(cfg);
+        boolean wxVirtualReady = payConfigService.wxVirtualReady(cfg);
+        boolean douyinReady = payConfigService.douyinReady(cfg);
+        boolean xhsReady = payConfigService.xhsReady(cfg);
+        boolean alipayReady = payConfigService.alipayReady(cfg);
+        boolean wxVirtualMode = "virtual".equalsIgnoreCase(cfg.getWxPayMode());
+        List<Map<String, Object>> channels = new ArrayList<>();
+        switch (p) {
+            case "h5" -> channels.add(payMethod("alipay", "支付宝", alipayReady,
+                    "支付宝参数未配置完整，请在管理端「支付参数配置」补全"));
+            case "mp-weixin" -> {
+                if (wxVirtualMode) {
+                    channels.add(payMethod("wx", "微信虚拟支付", wxVirtualReady,
+                            "微信虚拟支付参数未配置完整，请在管理端「支付参数配置」补全"));
+                } else {
+                    channels.add(payMethod("wx", "微信支付", wxReady,
+                            "微信支付参数未配置完整，请在管理端「支付参数配置」补全"));
+                }
+            }
+            case "mp-toutiao" -> channels.add(payMethod("douyin", "抖音收银台（含支付宝 / 微信 / 抖音支付）",
+                    douyinReady, "抖音担保支付参数未配置完整，请在管理端「支付参数配置」补全"));
+            case "mp-xhs" -> channels.add(payMethod("xhs", "小红书收银台（支付方式以平台为准）",
+                    xhsReady, "小红书支付接口需官方文档与资质联调后启用"));
+            default -> throw new BizException("不支持的运行端：" + raw);
+        }
+        boolean anyReady = wxReady || wxVirtualReady || douyinReady || xhsReady || alipayReady;
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("platform", p);
+        data.put("channels", channels);
+        data.put("mock", mockPayEnabled && !anyReady);
+        return Result.ok(data);
+    }
+
     @Operation(summary = "查询订单状态")
     @GetMapping("/{id}")
     public Result<Map<String, Object>> status(@PathVariable Long id) {
@@ -276,6 +522,30 @@ public class OrderController {
 
     /* ---------------- 内部实现 ---------------- */
 
+    private static Map<String, Object> payMethod(String code, String label, boolean ready, String reason) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("code", code);
+        item.put("label", label);
+        item.put("ready", ready);
+        item.put("reason", ready ? "" : reason);
+        return item;
+    }
+
+    private static String str(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static String normalizePlatform(String raw) {
+        String p = raw == null ? "" : raw.trim().toLowerCase();
+        return switch (p) {
+            case "h5", "web" -> "h5";
+            case "mp-weixin", "weixin", "wx" -> "mp-weixin";
+            case "mp-toutiao", "toutiao", "douyin", "tt" -> "mp-toutiao";
+            case "mp-xhs", "xhs", "xiaohongshu" -> "mp-xhs";
+            default -> "";
+        };
+    }
+
     private Order findByTradeNo(String outTradeNo) {
         if (outTradeNo == null || outTradeNo.isBlank()) {
             return null;
@@ -283,9 +553,44 @@ public class OrderController {
         return orderMapper.selectOne(new QueryWrapper<Order>().eq("out_trade_no", outTradeNo).last("limit 1"));
     }
 
-    /** 幂等：已支付订单只补流水号，不重复解锁 */
+    /** 查找可复用的未支付订单：唯一键是「用户 + 任务 + 款式集合 + 渠道 + 金额」，且在下单复用窗口内 */
+    private Order findReusableOrder(Long userId, Long taskId, List<String> styleIds,
+                                    BigDecimal amount, String channel) {
+        if (!"wx".equals(channel) && !"alipay".equals(channel)) {
+            return null;
+        }
+        List<Order> candidates = orderMapper.selectList(new QueryWrapper<Order>()
+                .eq("user_id", userId)
+                .eq("task_id", taskId)
+                .eq("status", "created")
+                .eq("pay_channel", channel)
+                .eq("amount", amount)
+                .ge("created_at", LocalDateTime.now().minusMinutes(REUSE_WINDOW_MINUTES))
+                .orderByDesc("id")
+                .last("limit 5"));
+        Set<String> wanted = new HashSet<>(styleIds);
+        for (Order candidate : candidates) {
+            if (!wanted.equals(new HashSet<>(splitIds(candidate.getStyleIds())))) {
+                continue;
+            }
+            // 微信复用依赖已缓存的 prepay_id；缺失说明上次下单未完成，交给新订单处理
+            if ("wx".equals(channel)
+                    && (candidate.getPrepayId() == null || candidate.getPrepayId().isBlank())) {
+                continue;
+            }
+            return candidate;
+        }
+        return null;
+    }
+
+    private static Object lockOf(Long userId) {
+        return CREATE_LOCKS[Math.floorMod(userId, CREATE_LOCKS.length)];
+    }
+
+    /** 幂等：已支付订单不重复置状态，但仍补齐解锁，修复上次回调「置 paid 成功、解锁失败」的断链 */
     private void markPaid(Order order, String transactionId) {
         if ("paid".equals(order.getStatus())) {
+            unlockAll(order.getUserId(), splitIds(order.getStyleIds()), order.getTaskId());
             return;
         }
         order.setStatus("paid");
@@ -311,10 +616,19 @@ public class OrderController {
     private List<String> styleIdsOf(Map<String, Object> body) {
         Object raw = body.get("styleIds");
         List<String> list = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
         if (raw instanceof List<?> items) {
             for (Object o : items) {
-                if (o != null && !String.valueOf(o).isBlank()) {
-                    list.add(String.valueOf(o));
+                if (o == null) {
+                    continue;
+                }
+                String id = String.valueOf(o).trim();
+                // 款式 ID 会以逗号拼接落库并用于解锁，必须限制字符集与长度，避免注入与超长写入
+                if (!id.matches("[A-Za-z0-9_-]{1,32}")) {
+                    throw new BizException("解锁内容不合法");
+                }
+                if (seen.add(id)) {
+                    list.add(id);
                 }
             }
         }
@@ -329,13 +643,13 @@ public class OrderController {
 
     private Long taskIdOf(Map<String, Object> body) {
         Object raw = body.get("taskId");
-        if (raw == null) {
+        if (raw == null || String.valueOf(raw).isBlank()) {
             return 0L;
         }
         try {
-            return Long.parseLong(String.valueOf(raw));
+            return Long.parseLong(String.valueOf(raw).trim());
         } catch (NumberFormatException e) {
-            return 0L;
+            throw new BizException("任务标识不合法");
         }
     }
 

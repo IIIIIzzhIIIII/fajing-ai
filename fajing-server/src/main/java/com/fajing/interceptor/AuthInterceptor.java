@@ -2,6 +2,8 @@ package com.fajing.interceptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fajing.common.Result;
+import com.fajing.entity.AppUser;
+import com.fajing.mapper.AppUserMapper;
 import com.fajing.util.JwtUtil;
 import com.fajing.util.UserContext;
 import io.jsonwebtoken.Claims;
@@ -23,6 +25,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
+    private final AppUserMapper userMapper;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
@@ -39,12 +42,20 @@ public class AuthInterceptor implements HandlerInterceptor {
             unauthorized(response);
             return false;
         }
+        Long userId;
         try {
-            UserContext.set(Long.valueOf(claims.getSubject()));
+            userId = Long.valueOf(claims.getSubject());
         } catch (NumberFormatException e) {
             unauthorized(response);
             return false;
         }
+        // 校验账号仍启用：禁用账号的旧 token 不再放行
+        AppUser user = userMapper.selectById(userId);
+        if (user == null || (user.getStatus() != null && user.getStatus() == 0)) {
+            unauthorized(response);
+            return false;
+        }
+        UserContext.set(userId);
         return true;
     }
 

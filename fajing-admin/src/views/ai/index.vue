@@ -46,7 +46,7 @@ async function save() {
   saving.value = true
   try {
     await saveAiConfig({ ...form })
-    ElMessage.success('AI 设置已保存，下一张生成立即生效')
+    ElMessage.success('AI 参数配置已保存，下一张生成立即生效')
   } finally {
     saving.value = false
   }
@@ -71,7 +71,7 @@ onMounted(load)
       <el-form label-width="120px">
         <el-form-item label="启用真实出图">
           <el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" />
-          <span class="inline-hint">关闭后使用占位图，仅用于演示</span>
+          <span class="inline-hint">关闭后使用占位图</span>
         </el-form-item>
         <el-form-item label="接口地址">
           <el-input v-model="form.imageBaseUrl" placeholder="https://api.siliconflow.cn/v1" />

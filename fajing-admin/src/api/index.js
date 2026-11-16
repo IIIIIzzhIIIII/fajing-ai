@@ -95,6 +95,24 @@ export function fetchTodayStats() {
   return service.get('/api/admin/stats/today')
 }
 
+export function fetchOverview(params) {
+  return service.get('/api/admin/stats/overview', { params })
+}
+
+export function fetchChannelsStats(days) {
+  return service.get('/api/admin/stats/channels', {
+    params: days ? { days } : {}
+  })
+}
+
+export function fetchTradeRule() {
+  return service.get('/api/admin/trade-rule')
+}
+
+export function saveTradeRule(data) {
+  return service.put('/api/admin/trade-rule', data)
+}
+
 export function fetchAdminLogs(limit) {
   return service.get('/api/admin/logs', { params: limit ? { limit } : {} })
 }

@@ -1,6 +1,8 @@
 # 生产环境：关闭 mock 登录与旧管理端 token，跨域只放正式域名
+# guest 为 H5 浏览器匿名账号入口，生产保留（受每 IP 每日建档上限保护）
 auth:
   mock-enabled: false
+  guest-enabled: ${AUTH_GUEST_ENABLED:true}
 
 admin:
   legacy-token-enabled: false
@@ -15,3 +17,10 @@ storage:
 # 生产环境关闭 mock 支付，必须接入真实微信支付
 pay:
   mock-enabled: false
+
+# 生产环境关闭接口文档，避免暴露内部接口结构
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

@@ -10,6 +10,7 @@ import com.fajing.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -22,6 +23,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * 微信登录：code → openid → 用户建档 → JWT
@@ -31,14 +33,22 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthService {
 
+    /** 游客标识：浏览器本地生成，只允许安全字符，避免写入异常 openid */
+    private static final Pattern GUEST_KEY = Pattern.compile("^[A-Za-z0-9_-]{16,48}$");
+
     private final AppUserMapper userMapper;
     private final JwtUtil jwtUtil;
+    private final RateLimitService rateLimitService;
 
     @Value("${wechat.appid:}")
     private String appid;
 
     @Value("${wechat.secret:}")
     private String secret;
+
+    /** H5 游客登录开关：默认开启，生产也保留（浏览器匿名账号，用于 H5 端可用登录入口） */
+    @Value("${auth.guest-enabled:true}")
+    private boolean guestEnabled;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder()
@@ -69,14 +79,22 @@ public class AuthService {
             user.setStatus(1);
             user.setRegisterAt(LocalDateTime.now());
             user.setLastActiveAt(LocalDateTime.now());
-            userMapper.insert(user);
-        } else {
-            if (user.getStatus() != null && user.getStatus() == 0) {
-                throw new BizException("账号已被限制使用");
+            try {
+                userMapper.insert(user);
+            } catch (DuplicateKeyException e) {
+                // 同一 openid 并发首次登录时可能同时建档，回读已存在账号，避免 500
+                user = userMapper.selectOne(new QueryWrapper<AppUser>()
+                        .eq("openid", openid).last("limit 1"));
+                if (user == null) {
+                    throw e;
+                }
             }
-            user.setLastActiveAt(LocalDateTime.now());
-            userMapper.updateById(user);
         }
+        if (user.getStatus() != null && user.getStatus() == 0) {
+            throw new BizException("账号已被限制使用");
+        }
+        user.setLastActiveAt(LocalDateTime.now());
+        userMapper.updateById(user);
         // session_key 只落库，不下发前端
         if (!sessionKey.isBlank()) {
             user.setSessionKey(sessionKey);
@@ -98,6 +116,53 @@ public class AuthService {
             userMapper.insert(user);
         }
         return tokenPayload(user);
+    }
+
+    /**
+     * H5 游客登录：浏览器本地保存的 guestKey 换取匿名账号。
+     * 同一浏览器复用同一账号，额度与记录都按账号隔离；新账号按 IP 限流，避免批量注册。
+     */
+    public Map<String, Object> guestLogin(String guestKey, String ip) {
+        if (!guestEnabled) {
+            throw new BizException("游客登录未开启");
+        }
+        String key = guestKey == null ? "" : guestKey.trim();
+        if (!GUEST_KEY.matcher(key).matches()) {
+            throw new BizException("游客标识无效，请刷新页面后重试");
+        }
+        String openid = "guest:" + key;
+        AppUser user = findByOpenid(openid);
+        if (user == null) {
+            rateLimitService.checkGuestCreate(ip);
+            user = new AppUser();
+            user.setOpenid(openid);
+            user.setNickname("游客" + key.substring(key.length() - 4));
+            user.setGender("unknown");
+            user.setStatus(1);
+            user.setRegisterAt(LocalDateTime.now());
+            user.setLastActiveAt(LocalDateTime.now());
+            try {
+                userMapper.insert(user);
+            } catch (DuplicateKeyException e) {
+                // 同一浏览器并发发起登录时可能同时建档，取已存在的账号
+                user = findByOpenid(openid);
+                if (user == null) {
+                    throw e;
+                }
+            }
+        } else {
+            if (user.getStatus() != null && user.getStatus() == 0) {
+                throw new BizException("账号已被限制使用");
+            }
+            user.setLastActiveAt(LocalDateTime.now());
+            userMapper.updateById(user);
+        }
+        return tokenPayload(user);
+    }
+
+    private AppUser findByOpenid(String openid) {
+        return userMapper.selectOne(new QueryWrapper<AppUser>()
+                .eq("openid", openid).last("limit 1"));
     }
 
     public Map<String, Object> me(Long userId) {

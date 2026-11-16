@@ -8,22 +8,26 @@ const loading = ref(false)
 const saving = ref(false)
 const verifying = reactive({ wx: false, alipay: false })
 const verifyResult = reactive({ wx: null, alipay: null })
-const ready = reactive({ wx: false, alipay: false })
+const ready = reactive({ wx: false, wxVirtual: false, douyin: false, xhs: false, alipay: false })
 const secretConfigured = ref(true)
-const suggested = reactive({ wxNotifyUrl: '', alipayNotifyUrl: '', alipayReturnUrl: '' })
+const suggested = reactive({ wxNotifyUrl: '', douyinNotifyUrl: '', xhsNotifyUrl: '', alipayNotifyUrl: '' })
 const uploading = ref(false)
 
 /** 掩码原值：聚焦清空、失焦为空时恢复，避免误覆盖 */
 const maskOriginal = reactive({
   wxApiV3KeyEnc: '',
   wxVirtualAppkeyEnc: '',
+  douyinSecretEnc: '',
+  douyinSaltEnc: '',
+  douyinTokenEnc: '',
+  xhsSecretEnc: '',
   alipayPrivateKeyEnc: '',
   alipayPublicKeyEnc: ''
 })
 
 const form = reactive({
   wxEnabled: 0,
-  wxPayMode: 'virtual',
+  wxPayMode: 'miniprogram',
   wxAppid: '',
   wxMchId: '',
   wxApiV3KeyEnc: '',
@@ -31,13 +35,28 @@ const form = reactive({
   wxPrivateKeyPath: '',
   wxNotifyUrl: '',
   wxVirtualAppkeyEnc: '',
+  wxVirtualOfferId: '',
+  wxVirtualEnv: 0,
+  wxVirtualProductOne: '',
+  wxVirtualProductAll: '',
+  douyinEnabled: 0,
+  douyinAppId: '',
+  douyinSecretEnc: '',
+  douyinSaltEnc: '',
+  douyinTokenEnc: '',
+  douyinNotifyUrl: '',
+  douyinSandbox: 0,
+  xhsEnabled: 0,
+  xhsAppId: '',
+  xhsSecretEnc: '',
+  xhsMerchantId: '',
+  xhsNotifyUrl: '',
   alipayEnabled: 0,
   alipayAppId: '',
   alipayPrivateKeyEnc: '',
   alipayPublicKeyEnc: '',
   alipayGateway: 'https://openapi.alipay.com/gateway.do',
-  alipayNotifyUrl: '',
-  alipayReturnUrl: ''
+  alipayNotifyUrl: ''
 })
 
 function applyConfig(config) {
@@ -47,7 +66,20 @@ function applyConfig(config) {
       form[key] = config[key]
     }
   })
-  ;['wxApiV3KeyEnc', 'wxVirtualAppkeyEnc', 'alipayPrivateKeyEnc', 'alipayPublicKeyEnc'].forEach((key) => {
+  // 旧数据的 normal 统一视为微信小程序支付
+  if (form.wxPayMode === 'normal') {
+    form.wxPayMode = 'miniprogram'
+  }
+  ;[
+    'wxApiV3KeyEnc',
+    'wxVirtualAppkeyEnc',
+    'douyinSecretEnc',
+    'douyinSaltEnc',
+    'douyinTokenEnc',
+    'xhsSecretEnc',
+    'alipayPrivateKeyEnc',
+    'alipayPublicKeyEnc'
+  ].forEach((key) => {
     maskOriginal[key] = form[key] || ''
   })
 }
@@ -58,14 +90,17 @@ function load() {
     .then((data) => {
       applyConfig(data.config)
       ready.wx = !!data.wxReady
+      ready.wxVirtual = !!data.wxVirtualReady
+      ready.douyin = !!data.douyinReady
+      ready.xhs = !!data.xhsReady
       ready.alipay = !!data.alipayReady
       secretConfigured.value = !!data.secretConfigured
       suggested.wxNotifyUrl = data.wxNotifyUrlSuggested || ''
+      suggested.douyinNotifyUrl = data.douyinNotifyUrlSuggested || ''
+      suggested.xhsNotifyUrl = data.xhsNotifyUrlSuggested || ''
       suggested.alipayNotifyUrl = data.alipayNotifyUrlSuggested || ''
-      suggested.alipayReturnUrl = data.alipayReturnUrlSuggested || ''
-      if (!form.wxNotifyUrl) form.wxNotifyUrl = suggested.wxNotifyUrl
-      if (!form.alipayNotifyUrl) form.alipayNotifyUrl = suggested.alipayNotifyUrl
-      if (!form.alipayReturnUrl) form.alipayReturnUrl = suggested.alipayReturnUrl
+      if (!form.douyinNotifyUrl) form.douyinNotifyUrl = suggested.douyinNotifyUrl
+      if (!form.xhsNotifyUrl) form.xhsNotifyUrl = suggested.xhsNotifyUrl
     })
     .catch(() => {})
     .finally(() => {
@@ -156,9 +191,9 @@ onMounted(load)
       <el-card shadow="never" class="pay-card">
         <template #header>
           <div class="card-head">
-            <span>微信支付</span>
-            <el-tag :type="ready.wx ? 'success' : 'info'" size="small">
-              {{ ready.wx ? '参数完整' : '参数未完整' }}
+            <span>微信小程序支付</span>
+            <el-tag :type="ready.wx || ready.wxVirtual ? 'success' : 'info'" size="small">
+              {{ ready.wx || ready.wxVirtual ? '参数完整' : '参数未完整' }}
             </el-tag>
           </div>
         </template>
@@ -169,16 +204,15 @@ onMounted(load)
           </el-form-item>
           <el-form-item label="支付模式">
             <el-radio-group v-model="form.wxPayMode">
+              <el-radio value="miniprogram">小程序支付（MINIPROGRAM）</el-radio>
+              <el-radio value="jsapi" disabled>普通 JSAPI</el-radio>
               <el-radio value="virtual">小程序虚拟支付</el-radio>
-              <el-radio value="normal">普通 JSAPI</el-radio>
             </el-radio-group>
-            <div class="field-tip">
-              虚拟商品建议使用小程序虚拟支付；普通 JSAPI 售卖虚拟商品存在审核驳回风险。
-              虚拟支付需先在微信侧开通并完成对接，当前仅保存开关。
-            </div>
+            <div class="field-tip">普通 JSAPI 仅用于公众号 H5，不适用于微信小程序。</div>
+            <div class="field-tip">虚拟商品必须选「小程序虚拟支付」，否则审核驳回。</div>
           </el-form-item>
-          <el-form-item label="AppID">
-            <el-input v-model="form.wxAppid" placeholder="小程序 AppID" />
+          <el-form-item label="微信小程序AppID">
+            <el-input v-model="form.wxAppid" placeholder="微信小程序 AppID" />
           </el-form-item>
           <el-form-item label="商户号">
             <el-input v-model="form.wxMchId" placeholder="微信支付商户号 mchid" />
@@ -206,20 +240,38 @@ onMounted(load)
           </el-form-item>
           <el-form-item label="回调地址">
             <div class="cert-field">
-              <el-input v-model="form.wxNotifyUrl" placeholder="https://api.example.com/api/order/notify/wx" />
+              <el-input
+                v-model="form.wxNotifyUrl"
+                placeholder="${PUBLIC_HTTPS_DOMAIN}/api/pay/wechat/miniprogram/notify"
+              />
               <el-button :icon="CopyDocument" @click="copy(form.wxNotifyUrl)">复制</el-button>
             </div>
-            <div class="field-tip">需为公网 HTTPS 地址，并在商户平台配置。</div>
+            <div class="field-tip">上线前替换为公网 HTTPS 域名，并在商户平台配置。</div>
           </el-form-item>
           <el-form-item label="虚拟支付 AppKey">
             <el-input
               v-model="form.wxVirtualAppkeyEnc"
               type="password"
               show-password
-              placeholder="虚拟支付 AppKey（virtual 模式）"
+              placeholder="虚拟支付基础配置中的 AppKey"
               @focus="onFocusMask('wxVirtualAppkeyEnc')"
               @blur="onBlurMask('wxVirtualAppkeyEnc')"
             />
+          </el-form-item>
+          <el-form-item label="OfferID">
+            <el-input v-model="form.wxVirtualOfferId" placeholder="虚拟支付基础配置中的 OfferID" />
+          </el-form-item>
+          <el-form-item label="支付环境">
+            <el-radio-group v-model="form.wxVirtualEnv">
+              <el-radio :value="0">现网环境</el-radio>
+              <el-radio :value="1">沙箱环境</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="单张道具 ID">
+            <el-input v-model="form.wxVirtualProductOne" placeholder="单价 6 元的道具 productId" />
+          </el-form-item>
+          <el-form-item label="全部道具 ID">
+            <el-input v-model="form.wxVirtualProductAll" placeholder="单价 3 元的道具 productId（按数量购买）" />
           </el-form-item>
           <el-form-item>
             <el-button :icon="Connection" :loading="verifying.wx" @click="verify('wx')">测试微信连接</el-button>
@@ -237,17 +289,21 @@ onMounted(load)
       <el-card shadow="never" class="pay-card">
         <template #header>
           <div class="card-head">
-            <span>支付宝（仅 H5）</span>
+            <span>支付宝</span>
             <el-tag :type="ready.alipay ? 'success' : 'info'" size="small">
               {{ ready.alipay ? '参数完整' : '参数未完整' }}
             </el-tag>
           </div>
         </template>
 
+        <div class="card-tip">本配置仅用于 H5 网页支付和支付宝小程序，微信 / 抖音 / 小红书小程序请勿引用此配置。</div>
+
         <el-form label-width="120px">
           <el-form-item label="启用支付宝">
             <el-switch v-model="form.alipayEnabled" :active-value="1" :inactive-value="0" />
-            <div class="field-tip">仅 H5 生效，小程序内不可用（平台规则限制）。</div>
+            <div class="field-tip">
+              支付宝与微信支付按实际接入的小程序平台展示；抖音 / 小红书走各自平台收银台。
+            </div>
           </el-form-item>
           <el-form-item label="应用 APPID">
             <el-input v-model="form.alipayAppId" placeholder="支付宝开放平台应用 APPID" />
@@ -277,12 +333,14 @@ onMounted(load)
           </el-form-item>
           <el-form-item label="异步通知地址">
             <div class="cert-field">
-              <el-input v-model="form.alipayNotifyUrl" placeholder="https://api.example.com/api/order/notify/alipay" />
+              <el-input
+                v-model="form.alipayNotifyUrl"
+                placeholder="${PUBLIC_HTTPS_DOMAIN}/api/pay/alipay/notify"
+              />
               <el-button :icon="CopyDocument" @click="copy(form.alipayNotifyUrl)">复制</el-button>
             </div>
-          </el-form-item>
-          <el-form-item label="同步跳回地址">
-            <el-input v-model="form.alipayReturnUrl" placeholder="https://example.com/#/pages/result/result" />
+            <div class="field-tip">上线前替换为公网 HTTPS 域名。</div>
+            <div class="field-tip">必填：付款结果只以该地址的异步通知为准，缺失时用户付款后不会自动解锁。</div>
           </el-form-item>
           <el-form-item>
             <el-button :icon="Connection" :loading="verifying.alipay" @click="verify('alipay')">
@@ -297,6 +355,147 @@ onMounted(load)
             </el-tag>
           </el-form-item>
         </el-form>
+      </el-card>
+
+      <el-card shadow="never" class="pay-card">
+        <template #header>
+          <div class="card-head">
+            <span>抖音小程序支付</span>
+            <el-tag :type="ready.douyin ? 'success' : 'info'" size="small">
+              {{ ready.douyin ? '参数完整' : '参数未完整' }}
+            </el-tag>
+          </div>
+        </template>
+
+        <el-form label-width="120px">
+          <el-form-item label="启用抖音支付">
+            <el-switch v-model="form.douyinEnabled" :active-value="1" :inactive-value="0" />
+            <div class="field-tip">走抖音担保支付收银台，收银台内可选支付宝 / 微信 / 抖音支付。</div>
+          </el-form-item>
+          <el-form-item label="小程序 AppID">
+            <el-input v-model="form.douyinAppId" placeholder="tt 开头的小程序 AppID" />
+          </el-form-item>
+          <el-form-item label="AppSecret">
+            <el-input
+              v-model="form.douyinSecretEnc"
+              type="password"
+              show-password
+              placeholder="抖音开放平台 AppSecret"
+              @focus="onFocusMask('douyinSecretEnc')"
+              @blur="onBlurMask('douyinSecretEnc')"
+            />
+          </el-form-item>
+          <el-form-item label="支付 SALT">
+            <el-input
+              v-model="form.douyinSaltEnc"
+              type="password"
+              show-password
+              placeholder="担保支付设置中的 SALT"
+              @focus="onFocusMask('douyinSaltEnc')"
+              @blur="onBlurMask('douyinSaltEnc')"
+            />
+          </el-form-item>
+          <el-form-item label="回调 Token">
+            <el-input
+              v-model="form.douyinTokenEnc"
+              type="password"
+              show-password
+              placeholder="支付设置中的 Token（回调验签用）"
+              @focus="onFocusMask('douyinTokenEnc')"
+              @blur="onBlurMask('douyinTokenEnc')"
+            />
+          </el-form-item>
+          <el-form-item label="回调地址">
+            <div class="cert-field">
+              <el-input v-model="form.douyinNotifyUrl" placeholder="https://api.example.com/api/order/notify/douyin" />
+              <el-button :icon="CopyDocument" @click="copy(form.douyinNotifyUrl)">复制</el-button>
+            </div>
+            <div class="field-tip">必须为公网 HTTPS 地址，并在抖音开放平台支付设置中配置。</div>
+          </el-form-item>
+          <el-form-item label="沙箱环境">
+            <el-switch v-model="form.douyinSandbox" :active-value="1" :inactive-value="0" />
+          </el-form-item>
+        </el-form>
+      </el-card>
+
+      <el-card shadow="never" class="pay-card">
+        <template #header>
+          <div class="card-head">
+            <span>小红书小程序支付</span>
+            <el-tag :type="ready.xhs ? 'success' : 'info'" size="small">
+              {{ ready.xhs ? '参数完整' : '待联调' }}
+            </el-tag>
+          </div>
+        </template>
+
+        <el-form label-width="120px">
+          <el-form-item label="启用小红书支付">
+            <el-switch v-model="form.xhsEnabled" :active-value="1" :inactive-value="0" />
+            <div class="field-tip">需先在小红书开放平台开通交易能力；支付接口需按官方文档完成联调。</div>
+          </el-form-item>
+          <el-form-item label="小程序 AppID">
+            <el-input v-model="form.xhsAppId" placeholder="小红书小程序 AppID" />
+          </el-form-item>
+          <el-form-item label="AppSecret">
+            <el-input
+              v-model="form.xhsSecretEnc"
+              type="password"
+              show-password
+              placeholder="小红书开放平台 AppSecret"
+              @focus="onFocusMask('xhsSecretEnc')"
+              @blur="onBlurMask('xhsSecretEnc')"
+            />
+          </el-form-item>
+          <el-form-item label="商户号">
+            <el-input v-model="form.xhsMerchantId" placeholder="担保支付商户号" />
+          </el-form-item>
+          <el-form-item label="回调地址">
+            <div class="cert-field">
+              <el-input v-model="form.xhsNotifyUrl" placeholder="https://api.example.com/api/order/notify/xhs" />
+              <el-button :icon="CopyDocument" @click="copy(form.xhsNotifyUrl)">复制</el-button>
+            </div>
+          </el-form-item>
+        </el-form>
+      </el-card>
+
+      <el-card shadow="never" class="pay-card is-wide">
+        <template #header>
+          <div class="card-head">
+            <span>小程序平台接入</span>
+            <el-tag type="info" size="small">按平台展示支付</el-tag>
+          </div>
+        </template>
+
+        <div class="reserve-list">
+          <div class="reserve-row">
+            <span class="reserve-name">微信小程序</span>
+            <span class="reserve-desc">
+              {{ form.wxPayMode === 'virtual' ? '虚拟支付，客户端拉起微信收银台' : '普通 JSAPI 支付' }}
+            </span>
+            <el-tag :type="ready.wx || ready.wxVirtual ? 'success' : 'info'" size="small">
+              {{ ready.wx || ready.wxVirtual ? '参数完整' : '待配置' }}
+            </el-tag>
+          </div>
+          <div class="reserve-row">
+            <span class="reserve-name">抖音小程序</span>
+            <span class="reserve-desc">
+              担保支付收银台（tt.pay），收银台内可选支付宝 / 微信 / 抖音支付。
+            </span>
+            <el-tag :type="ready.douyin ? 'success' : 'info'" size="small">
+              {{ ready.douyin ? '参数完整' : '待配置' }}
+            </el-tag>
+          </div>
+          <div class="reserve-row">
+            <span class="reserve-name">小红书小程序</span>
+            <span class="reserve-desc">
+              担保支付收银台，需先开通交易能力并完成官方接口联调。
+            </span>
+            <el-tag type="info" size="small">{{ ready.xhs ? '参数完整' : '待联调' }}</el-tag>
+          </div>
+        </div>
+        <div class="field-tip">
+          支付方式按当前实际接入的小程序平台展示；保存后可在用户端解锁弹层直接选择对应支付方式。
+        </div>
       </el-card>
     </div>
 
@@ -318,6 +517,31 @@ onMounted(load)
 }
 .pay-card {
   border-radius: 12px;
+
+  &.is-wide {
+    grid-column: 1 / -1;
+  }
+}
+.reserve-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.reserve-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.reserve-name {
+  flex: 0 0 100px;
+  font-weight: 600;
+  color: #3b3337;
+}
+.reserve-desc {
+  flex: 1;
+  color: #7d7278;
+  line-height: 1.6;
 }
 .card-head {
   display: flex;
@@ -326,6 +550,15 @@ onMounted(load)
   font-size: 15px;
   font-weight: 600;
   color: #2b2628;
+}
+.card-tip {
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #a0601a;
+  background: #fff7ea;
+  border-radius: 8px;
 }
 .field-tip {
   width: 100%;

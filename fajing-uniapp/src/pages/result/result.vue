@@ -192,7 +192,6 @@ import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { saveRemoteImage } from '@/utils/save'
 import { track } from '@/utils/track'
-import { DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -212,15 +211,11 @@ const unlockedKeys = computed(() => app.unlocks)
 const current = computed(
   () => styles.value[activeIndex.value] || { styleId: '', name: '', len: '', face: '', cat: '', img: '' }
 )
-const beforeImg = computed(() => (app.result && app.result.before) || app.photoPath || DEMO_BEFORE)
+const beforeImg = computed(() => (app.result && app.result.before) || app.photoPath || '')
 const unlocked = computed(() => {
-  const item = current.value
-  if (!item || !item.styleId) return false
-  // 优先用服务端在 result 里给出的 unlocked，本地缓存只兜底
-  if (item.unlocked === true) return true
-  return isUnlocked(item)
+  return isOpen(current.value)
 })
-const lockedList = computed(() => styles.value.filter((item) => !isFailed(item) && !isUnlocked(item)))
+const lockedList = computed(() => styles.value.filter((item) => !isFailed(item) && !isOpen(item)))
 const failedList = computed(() => styles.value.filter(isFailed))
 const remaining = computed(() => lockedList.value.length)
 
@@ -285,6 +280,12 @@ function isUnlocked(item) {
   return !!item && !!item.styleId && unlockedKeys.value.includes(`${taskId.value}:${item.styleId}`)
 }
 
+/** 服务端 result.unlocked 优先，本地缓存兜底，避免已付费款式再次弹付费墙 */
+function isOpen(item) {
+  if (!item) return false
+  return item.unlocked === true || isUnlocked(item)
+}
+
 /** 服务端标记失败的款式：无图即视为失败 */
 function isFailed(item) {
   return !!item && (item.failed === true || !item.img)
@@ -338,7 +339,8 @@ function unlockStyles(styleIds) {
 /** 打开付费墙：带上具体款式时默认按「单张解锁」计价 */
 function openPay(styleId) {
   ui.payStyleId = styleId || ''
-  if (styleId) ui.payPlan = 'one'
+  // 指定款式按单张计价；整批解锁入口默认回到「本次全部 N 款」，避免沿用上次的单张选择
+  ui.payPlan = styleId ? 'one' : 'all'
   ui.openSheet('pay')
 }
 
@@ -356,7 +358,7 @@ function selectStyle(i) {
     return
   }
   // 未解锁内容只给付费提示，不切换、不展示
-  if (!isUnlocked(styles.value[i])) {
+  if (!isOpen(styles.value[i])) {
     openPay(styles.value[i].styleId)
     return
   }
@@ -370,7 +372,7 @@ function openFromGrid(i) {
     retryOne(styles.value[i])
     return
   }
-  if (!isUnlocked(styles.value[i])) {
+  if (!isOpen(styles.value[i])) {
     openPay(styles.value[i].styleId)
     return
   }
@@ -420,7 +422,7 @@ function onPrimary() {
 }
 
 function shuffleBatch() {
-  ui.toast('已重新生成，去挑一批新款')
+  ui.toast('去挑一批新的发型')
   uni.redirectTo({
     url: '/pages/styles/styles',
     fail: () => ui.toast('选款页暂未开放')
@@ -428,7 +430,20 @@ function shuffleBatch() {
 }
 
 function openCard() {
-  uni.navigateTo({ url: '/pages/card/card' })
+  const item = current.value
+  if (isFailed(item)) {
+    ui.toast('当前款式生成失败，请重试后再生成沟通卡')
+    return
+  }
+  // 沟通卡展示的是无水印原图，未解锁时不开放，避免绕过付费墙
+  if (!isOpen(item)) {
+    openPay(item && item.styleId)
+    return
+  }
+  const styleId = item && item.styleId
+  uni.navigateTo({
+    url: '/pages/card/card' + (styleId ? `?styleId=${encodeURIComponent(styleId)}` : '')
+  })
 }
 
 function goBack() {
@@ -459,7 +474,24 @@ async function syncUnlocks() {
 onLoad(async (options) => {
   // 从「试发记录」进来的，返回时回到记录页；生成流程进来的，返回直接回首页
   fromHistory.value = !!(options && options.from === 'history')
-  const hasStyles = !!(app.result && app.result.styles && app.result.styles.length)
+  let hasStyles = !!(app.result && app.result.styles && app.result.styles.length)
+  // H5 支付宝支付会整页跳走，返回时内存状态已丢失，先尝试恢复支付前落下的快照
+  if (!hasStyles) {
+    try {
+      const snapRaw = uni.getStorageSync('fajing_pending_result')
+      if (snapRaw) {
+        uni.removeStorageSync('fajing_pending_result')
+        const snap = typeof snapRaw === 'string' ? JSON.parse(snapRaw) : snapRaw
+        const snapResult = snap && snap.result ? snap.result : snap
+        if (snapResult && snapResult.styles && snapResult.styles.length) {
+          app.setResult({ ...snapResult, taskId: snapResult.taskId || (snap && snap.taskId) || '' })
+          hasStyles = true
+        }
+      }
+    } catch (e) {
+      // 快照损坏时继续走正常兜底
+    }
+  }
   if (!hasStyles && app.taskId) {
     try {
       const res = await API.task(app.taskId)
@@ -477,9 +509,9 @@ onLoad(async (options) => {
     return
   }
 
-  // 初始仅免费开放 1 款，其余按付费解锁处理
+  // 初始仅免费开放 1 款（取第一款生成成功的，与后端免费解锁规则一致）
   if (!styles.value.some(isUnlocked)) {
-    const first = styles.value[0]
+    const first = styles.value.find((s) => !isFailed(s))
     if (first && first.styleId) unlockStyles([first.styleId])
   }
   track('result_view', { taskId: taskId.value, styleCount: styles.value.length })

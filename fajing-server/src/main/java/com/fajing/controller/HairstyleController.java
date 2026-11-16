@@ -1,7 +1,6 @@
 package com.fajing.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.entity.HairColor;
 import com.fajing.entity.Hairstyle;
@@ -74,7 +73,8 @@ public class HairstyleController {
             return s.getImgUrl();
         }
         if (s.getEn() == null || s.getEn().isBlank()) {
-            throw new BizException("发型数据缺少图片描述");
+            // 单条数据缺英文提示词不应导致整个发型列表接口 500
+            return "";
         }
         String person = "male".equals(s.getGender()) ? "young asian man" : "young asian woman";
         String prompt = person + ", " + s.getEn()

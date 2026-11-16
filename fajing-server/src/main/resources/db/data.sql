@@ -2,7 +2,7 @@
 INSERT IGNORE INTO hairstyle (id, name, gender, cat, len, face, en, img_url, status, sort) VALUES
 ('f1','法式波波头','female','波波头','肩部以上','圆脸 / 鹅蛋脸','french bob haircut, chin length, soft inward ends','',1,1),
 ('f2','日系碎短发','female','短发','耳下','小脸 / 心形脸','japanese layered short hair, airy texture','',1,2),
-('f3','港风大波浪','female','卷发','胸上','鹅蛋脸 / 方脸','hong kong retro big wavy long hair','',1,3),
+('f3','港风大波浪','female','卷发','胸上','鹅蛋脸 / 方脸','modern soft big wavy long hair, layered volume, glossy finish','',1,3),
 ('f4','空气感齐刘海','female','齐刘海','肩部','长脸 / 鹅蛋脸','see-through blunt bangs with medium straight hair','',1,4),
 ('f5','挂耳短发','female','短发','耳上','小脸 / 圆脸','sleek ear-tuck short bob','',1,5),
 ('f6','中长直发','female','中长发','锁骨','所有脸型','glossy medium length straight hair, collarbone length','',1,6),
@@ -14,11 +14,11 @@ INSERT IGNORE INTO hairstyle (id, name, gender, cat, len, face, en, img_url, sta
 ('f12','公主切','female','齐刘海','中长','小脸 / 心形脸','hime cut with blunt side locks and straight bangs','',1,12),
 ('m1','栗子头','male','短发','耳上','圆脸 / 学生感','korean chestnut cut short hair with rounded fringe','',1,13),
 ('m2','微分碎盖','male','短发','眉上','鹅蛋脸 / 长脸','textured fringe korean men hair with see-through bangs','',1,14),
-('m3','韩式纹理烫','male','纹理烫','耳下','所有脸型','korean texture perm men hair with wavy volume','',1,15),
-('m4','侧推背头','male','背头','短','方脸 / 成熟','side part slick back men hair with faded sides','',1,16),
+('m3','韩式纹理烫','male','纹理烫','耳下','所有脸型','korean texture perm men hair, soft natural waves, light airy volume, modern trendy style','',1,15),
+('m4','侧推背头','male','背头','短','方脸 / 成熟','modern slick back men hair with low fade, clean tapered sides, natural shine','',1,16),
 ('m5','法式短寸','male','寸头','极短','硬朗 / 方脸','french crop buzz cut men hair','',1,17),
-('m6','狼尾鲻鱼头','male','狼尾','颈后','心形脸 / 潮男','mullet wolf cut men hair with shaved sides','',1,18),
-('m7','三七分毛流','male','短发','耳上','长脸 / 鹅蛋脸','side part men hair with natural hair flow','',1,19),
+('m6','狼尾鲻鱼头','male','狼尾','颈后','心形脸 / 潮男','modern mullet men hair, soft layers, shaved sides, trendy korean style','',1,18),
+('m7','三七分毛流','male','短发','耳上','长脸 / 鹅蛋脸','modern korean side part men hair, soft natural flow, light airy volume, exposed forehead, tapered sides','',1,19),
 ('m8','圆寸','male','寸头','极短','所有脸型','round buzz cut men hair, very short','',1,20);
 
 INSERT IGNORE INTO hair_color (id, name, en, bg, sort) VALUES
@@ -36,10 +36,3 @@ VALUES (1, 1, CURDATE(), 0, 0, NOW());
 
 INSERT IGNORE INTO app_user (id, nickname, gender, status, register_at, last_active_at)
 VALUES (1, '发镜体验用户', 'female', 1, NOW(), NOW());
-
--- 发型描述更新：统一为现代流行款式描述（幂等，可重复执行）
-UPDATE hairstyle SET en='modern soft big wavy long hair, layered volume, glossy finish' WHERE id='f3';
-UPDATE hairstyle SET en='korean texture perm men hair, soft natural waves, light airy volume, modern trendy style' WHERE id='m3';
-UPDATE hairstyle SET en='modern slick back men hair with low fade, clean tapered sides, natural shine' WHERE id='m4';
-UPDATE hairstyle SET en='modern mullet men hair, soft layers, shaved sides, trendy korean style' WHERE id='m6';
-UPDATE hairstyle SET en='modern korean side part men hair, soft natural flow, light airy volume, exposed forehead, tapered sides' WHERE id='m7';

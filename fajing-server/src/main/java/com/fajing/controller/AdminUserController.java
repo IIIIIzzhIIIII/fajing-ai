@@ -66,7 +66,9 @@ public class AdminUserController {
         Map<Long, Long> unlockCounts = toCountMap(unlockMapper.selectMaps(new QueryWrapper<UserUnlock>()
                 .select("user_id AS userId", "COUNT(*) AS cnt").groupBy("user_id")));
         Map<Long, BigDecimal> paidSums = toSumMap(orderMapper.selectMaps(new QueryWrapper<Order>()
-                .select("user_id AS userId", "IFNULL(SUM(amount),0) AS total").groupBy("user_id")));
+                .select("user_id AS userId", "IFNULL(SUM(amount),0) AS total")
+                .eq("status", "paid")
+                .groupBy("user_id")));
 
         return Result.ok(users.stream().map(u -> {
             Map<String, Object> map = new LinkedHashMap<>();
@@ -93,7 +95,10 @@ public class AdminUserController {
         if (user == null) {
             throw new BizException("用户不存在");
         }
-        user.setStatus(status != null && status == 1 ? 1 : 0);
+        if (status == null || (status != 0 && status != 1)) {
+            throw new BizException("用户状态不合法");
+        }
+        user.setStatus(status);
         userMapper.updateById(user);
         adminLogService.log("USER_STATUS", id + ":" + user.getStatus());
         return Result.ok(user);

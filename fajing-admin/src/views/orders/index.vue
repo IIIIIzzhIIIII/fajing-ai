@@ -44,6 +44,7 @@ function planLabel(plan) {
 function statusMeta(status) {
   const map = {
     paid: { label: '已支付', type: 'success' },
+    created: { label: '待支付', type: 'warning' },
     pending: { label: '待支付', type: 'warning' },
     refunded: { label: '已退款', type: 'info' },
     closed: { label: '已关闭', type: 'info' }
@@ -59,7 +60,7 @@ function unlockCount(styleIds) {
 function channelLabel(channel) {
   if (channel === 'wx') return '微信支付'
   if (channel === 'alipay') return '支付宝'
-  if (channel === 'mock') return '模拟支付'
+  if (channel === 'mock') return '测试支付'
   return channel || '-'
 }
 
@@ -80,6 +81,10 @@ async function submitRefund() {
   if (!refundRow.value) return
   if (!(refundForm.amount > 0)) {
     ElMessage.warning('请输入正确的退款金额')
+    return
+  }
+  if (refundForm.amount > (Number(refundRow.value.amount) || 0)) {
+    ElMessage.warning('退款金额不能超过订单金额')
     return
   }
   refundSubmitting.value = true
@@ -212,7 +217,7 @@ onMounted(loadList)
         <el-form-item label="订单号">#{{ refundRow ? refundRow.id : '' }}</el-form-item>
         <el-form-item label="订单金额">¥ {{ refundRow ? formatMoney(refundRow.amount) : '0.00' }}</el-form-item>
         <el-form-item label="退款金额">
-          <el-input-number v-model="refundForm.amount" :min="0.01" :precision="2" style="width: 100%" />
+          <el-input-number v-model="refundForm.amount" :min="0.01" :max="refundRow ? Number(refundRow.amount) : undefined" :precision="2" style="width: 100%" />
         </el-form-item>
         <el-form-item label="退款原因">
           <el-input v-model="refundForm.reason" placeholder="选填" maxlength="64" />

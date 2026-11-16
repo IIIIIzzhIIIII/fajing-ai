@@ -27,7 +27,7 @@ onMounted(load)
 <template>
   <div>
     <div class="toolbar">
-      <div class="toolbar-title">操作日志</div>
+      <div class="toolbar-title">发布与日志</div>
       <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
     </div>
 

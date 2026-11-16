@@ -1,6 +1,7 @@
 package com.fajing.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.entity.AdminLog;
@@ -14,6 +15,8 @@ import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.service.AdminLogService;
+import com.fajing.service.ChannelStatsService;
+import com.fajing.service.TradeRuleService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.WechatPayService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,6 +60,8 @@ public class AdminController {
     private final AdminLogMapper adminLogMapper;
     private final WechatPayService wechatPayService;
     private final AlipayService alipayService;
+    private final ChannelStatsService channelStatsService;
+    private final TradeRuleService tradeRuleService;
 
     @Operation(summary = "订单退款（微信 / 支付宝）")
     @PostMapping("/orders/{id}/refund")
@@ -72,23 +77,50 @@ public class AdminController {
         if ("refunded".equals(order.getRefundStatus())) {
             throw new BizException("该订单已退款");
         }
-        BigDecimal amount = body != null && body.get("amount") != null
-                ? new BigDecimal(String.valueOf(body.get("amount"))) : order.getAmount();
+        Integer refundDays = tradeRuleService.get().getRefundDays();
+        if (refundDays != null && refundDays > 0 && order.getPaidAt() != null
+                && order.getPaidAt().plusDays(refundDays).isBefore(LocalDateTime.now())) {
+            throw new BizException("已超过售后期限（" + refundDays + " 天），无法退款");
+        }
+        BigDecimal amount;
+        try {
+            amount = body != null && body.get("amount") != null
+                    ? new BigDecimal(String.valueOf(body.get("amount"))) : order.getAmount();
+        } catch (NumberFormatException e) {
+            throw new BizException("退款金额格式不正确");
+        }
         if (amount.compareTo(BigDecimal.ZERO) <= 0 || amount.compareTo(order.getAmount()) > 0) {
             throw new BizException("退款金额不合法");
         }
         String reason = body == null || body.get("reason") == null
                 ? "管理员退款" : String.valueOf(body.get("reason"));
         String channel = order.getPayChannel() == null ? "" : order.getPayChannel();
-        switch (channel) {
-            case "wx" -> wechatPayService.refund(order.getOutTradeNo(),
-                    "RF" + order.getOutTradeNo() + System.currentTimeMillis(),
-                    amount, order.getAmount(), reason);
-            case "alipay" -> alipayService.refund(order.getOutTradeNo(), amount, reason);
-            case "mock" -> {
-                // 本地模拟订单无需调用渠道
+        // 以退款状态做条件更新，避免并发点击或重复提交造成重复退款
+        int locked = orderMapper.update(null, new UpdateWrapper<Order>()
+                .eq("id", id)
+                .and(w -> w.eq("refund_status", "none").or().isNull("refund_status"))
+                .set("refund_status", "refunding"));
+        if (locked == 0) {
+            throw new BizException("该订单正在退款或已退款");
+        }
+        try {
+            switch (channel) {
+                case "wx" -> wechatPayService.refund(order.getOutTradeNo(),
+                        "RF" + order.getOutTradeNo() + System.currentTimeMillis(),
+                        amount, order.getAmount(), reason);
+                case "alipay" -> alipayService.refund(order.getOutTradeNo(), amount, reason);
+                case "mock" -> {
+                    // 本地模拟订单无需调用渠道
+                }
+                default -> throw new BizException("未知支付渠道，无法退款");
             }
-            default -> throw new BizException("未知支付渠道，无法退款");
+        } catch (RuntimeException e) {
+            // 渠道退款失败时回滚为可退款，便于人工重试
+            orderMapper.update(null, new UpdateWrapper<Order>()
+                    .eq("id", id)
+                    .eq("refund_status", "refunding")
+                    .set("refund_status", "none"));
+            throw e;
         }
         order.setRefundStatus("refunded");
         order.setRefundAmount(amount);
@@ -144,6 +176,13 @@ public class AdminController {
         data.put("generateUsers", generateUsers);
         data.put("conversionRate", generateUsers == 0 ? 0 : Math.round(payingUsers * 1000.0 / generateUsers) / 10.0);
         return Result.ok(data);
+    }
+
+    @Operation(summary = "渠道与传播数据（按小程序 / H5 聚合）")
+    @GetMapping("/stats/channels")
+    public Result<Map<String, Object>> channelStats(
+            @RequestParam(required = false, defaultValue = "7") Integer days) {
+        return Result.ok(channelStatsService.stats(days));
     }
 
     private long sumOf(List<Map<String, Object>> rows) {
@@ -217,11 +256,14 @@ public class AdminController {
     @Operation(summary = "上架/下架发型")
     @PatchMapping("/hairstyles/{id}/status")
     public Result<Hairstyle> status(@PathVariable String id, @RequestParam Integer status) {
+        if (status == null || (status != 0 && status != 1)) {
+            throw new BizException("状态值不合法");
+        }
         Hairstyle exists = hairstyleMapper.selectById(id);
         if (exists == null) {
             throw new BizException("发型不存在");
         }
-        exists.setStatus(status != null && status == 1 ? 1 : 0);
+        exists.setStatus(status);
         hairstyleMapper.updateById(exists);
         adminLogService.log("HAIRSTYLE_STATUS", id + ":" + exists.getStatus());
         return Result.ok(exists);

@@ -16,7 +16,34 @@ function apiBase() {
   return BASE_URL
 }
 
-/** 登录：小程序用 wx.login 的 code 换 token；H5 走演示登录 */
+/** H5 游客账号标识：保存在浏览器本地，清缓存后会生成新账号 */
+const GUEST_KEY = 'fajing_guest_key'
+
+function guestKey() {
+  try {
+    const saved = uni.getStorageSync(GUEST_KEY)
+    if (saved && typeof saved === 'string') return saved
+  } catch (e) {
+    // 读取失败按首次登录处理
+  }
+  let key = ''
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      key = crypto.randomUUID().replace(/-/g, '')
+    }
+  } catch (e) {
+    key = ''
+  }
+  if (!key) key = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12)
+  try {
+    uni.setStorageSync(GUEST_KEY, key)
+  } catch (e) {
+    // 本地存不下时本次登录仍可用，下次会生成新账号
+  }
+  return key
+}
+
+/** 登录：小程序用 wx.login 的 code 换 token；H5 用浏览器本地 guestKey 换游客账号 */
 export function login() {
   return new Promise((resolve, reject) => {
     const base = apiBase()
@@ -26,8 +53,10 @@ export function login() {
     }
     // #ifdef H5
     uni.request({
-      url: base + '/api/auth/login/mock',
+      url: base + '/api/auth/login/guest',
       method: 'POST',
+      data: { guestKey: guestKey() },
+      header: { 'Content-Type': 'application/json' },
       timeout: 15000,
       success: (res) => {
         const body = res.data || {}
@@ -35,10 +64,14 @@ export function login() {
           setToken(body.data.token)
           resolve(body.data)
         } else {
+          fail((body && body.msg) || '登录失败')
           reject(new Error((body && body.msg) || '登录失败'))
         }
       },
-      fail: reject
+      fail: (err) => {
+        fail('登录失败，请检查网络后重试')
+        reject(err)
+      }
     })
     // #endif
 
@@ -194,6 +227,7 @@ export const API = {
   retryStyle: (taskId, styleId) =>
     request({ url: `/api/generate/${taskId}/retry`, method: 'POST', data: { styleId } }),
   records: () => request({ url: '/api/records' }),
+  clearRecords: () => request({ url: '/api/records', method: 'DELETE' }),
   deleteRecord: (id) => request({ url: `/api/records/${id}`, method: 'DELETE' }),
   quota: () => request({ url: '/api/quota' }),
   checkPhoto: (photoUrl) =>
@@ -201,6 +235,9 @@ export const API = {
   consume: (type) => request({ url: '/api/quota/consume', method: 'POST', data: { type } }),
   mockOrder: (payload) => request({ url: '/api/order/mock', method: 'POST', data: payload }),
   createOrder: (payload) => request({ url: '/api/order/create', method: 'POST', data: payload }),
+  payMethods: (platform) =>
+    request({ url: `/api/order/pay-methods?platform=${encodeURIComponent(platform || '')}` }),
+  virtualConfirm: (id) => request({ url: `/api/order/${id}/virtual-confirm`, method: 'POST' }),
   orderStatus: (id) => request({ url: `/api/order/${id}` }),
   unlocks: () => request({ url: '/api/unlocks' }),
   shareReward: () => request({ url: '/api/share/reward', method: 'POST' })

@@ -30,4 +30,6 @@ public class Order {
     /** none / refunding / refunded */
     private String refundStatus;
     private BigDecimal refundAmount;
+    /** 下单来源端：h5 / mp-weixin / mp-toutiao / mp-xhs */
+    private String platform;
 }

@@ -36,18 +36,43 @@ public class GenerationService {
     private final ObjectMapper objectMapper;
 
     public GenerationTask create(String photoUrl, String gender, String mode, List<String> styleIds, String colorId) {
-        if (styleIds == null || styleIds.isEmpty()) {
+        if (photoUrl == null || photoUrl.isBlank()) {
+            throw new BizException("请先上传照片");
+        }
+        // 去重并保持用户选择顺序：重复/无效 ID 会导致出图数量与所选不一致
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        if (styleIds != null) {
+            for (String id : styleIds) {
+                if (id != null && !id.isBlank()) {
+                    ids.add(id.trim());
+                }
+            }
+        }
+        if (ids.isEmpty()) {
             throw new BizException("请先选择发型");
         }
-        if (styleIds.size() > 4) {
+        if (ids.size() > 4) {
             throw new BizException("最多同时生成 4 款");
+        }
+        long validCount = hairstyleMapper.selectBatchIds(ids).stream()
+                .filter(s -> s.getStatus() != null && s.getStatus() == 1)
+                .count();
+        if (validCount != ids.size()) {
+            throw new BizException("所选发型不存在或已下架，请刷新后重试");
         }
         GenerationTask task = new GenerationTask();
         task.setUserId(UserContext.require());
         task.setPhotoUrl(photoUrl == null ? "" : photoUrl);
         task.setGender("male".equals(gender) ? "male" : "female");
-        task.setMode(colorId == null || colorId.isEmpty() ? "hair" : mode);
-        task.setStyleIds(String.join(",", styleIds));
+        // mode 枚举归一化：只接受 hair / hairColor，非法值回退 hair，避免后续流程解析失败
+        String validMode;
+        if (colorId != null && !colorId.isBlank()) {
+            validMode = "hairColor".equals(mode) ? "hairColor" : "hair";
+        } else {
+            validMode = "hair";
+        }
+        task.setMode(validMode);
+        task.setStyleIds(String.join(",", ids));
         task.setColorId(colorId == null ? "" : colorId);
         task.setStatus("pending");
         task.setProgress(0);
@@ -58,13 +83,13 @@ public class GenerationService {
     }
 
     public void updateProgress(Long taskId, int progress) {
-        GenerationTask task = taskMapper.selectById(taskId);
-        if (task == null) {
-            return;
-        }
-        task.setProgress(progress);
-        task.setStatus(progress >= 100 ? "success" : "pending");
-        taskMapper.updateById(task);
+        // 原子更新且不覆盖终态：超时后仍在跑的 AI 线程不能把 success/failed 回退成 pending
+        int bounded = Math.max(0, Math.min(99, progress));
+        taskMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<GenerationTask>()
+                .eq("id", taskId)
+                .notIn("status", "success", "failed")
+                .set("progress", bounded)
+                .set("status", "pending"));
     }
 
     /** 生成完成：写入 result_json、历史记录，并默认解锁第 1 款；失败款不再回退假图 */
@@ -80,7 +105,8 @@ public class GenerationService {
             result.put("faceShape", task.getGender().equals("male") ? "方脸" : "鹅蛋脸");
             result.put("score", ThreadLocalRandom.current().nextInt(88, 98));
             List<Map<String, Object>> items = new ArrayList<>();
-            int index = 0;
+            // 免费解锁给第一款「生成成功」的款式，避免第一张失败时免费额度落在空图上
+            String freeStyleId = null;
             for (Hairstyle s : styles) {
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("styleId", s.getId());
@@ -95,11 +121,13 @@ public class GenerationService {
                 item.put("failed", isFailed);
                 if (isFailed) {
                     item.put("failReason", "生成超时/服务异常");
+                } else if (freeStyleId == null) {
+                    freeStyleId = s.getId();
                 }
-                // 第 1 款免费解锁，其余以服务端 user_unlock 为准
-                item.put("unlocked", !isFailed && (index == 0 || isUnlocked(task.getUserId(), taskId, s.getId())));
+                // 第 1 款（成功的）免费解锁，其余以服务端 user_unlock 为准
+                item.put("unlocked", !isFailed
+                        && (s.getId().equals(freeStyleId) || isUnlocked(task.getUserId(), taskId, s.getId())));
                 items.add(item);
-                index++;
             }
             result.put("styles", items);
 
@@ -123,8 +151,10 @@ public class GenerationService {
                 record.setCreatedAt(LocalDateTime.now());
                 recordMapper.insert(record);
 
-                // 第 1 款默认免费解锁（按任务维度）
-                unlock(task.getUserId(), styles.get(0).getId(), taskId);
+                // 第一款成功的款式默认免费解锁（按任务维度）
+                if (freeStyleId != null) {
+                    unlock(task.getUserId(), freeStyleId, taskId);
+                }
             }
         } catch (Exception e) {
             log.error("生成结果写入失败 taskId={}", taskId, e);
@@ -149,7 +179,6 @@ public class GenerationService {
                 return;
             }
             boolean changed = false;
-            int index = 0;
             for (Object o : list) {
                 if (o instanceof Map<?, ?> raw) {
                     @SuppressWarnings("unchecked")
@@ -163,12 +192,11 @@ public class GenerationService {
                         } else {
                             item.put("failReason", "生成超时/服务异常");
                         }
-                        item.put("unlocked", ok && (index == 0 || isUnlocked(task.getUserId(), taskId, styleId)));
+                        item.put("unlocked", ok && isUnlocked(task.getUserId(), taskId, styleId));
                         changed = true;
                         break;
                     }
                 }
-                index++;
             }
             if (!changed) {
                 return;
@@ -220,7 +248,12 @@ public class GenerationService {
         unlock.setTaskId(taskId == null ? 0L : taskId);
         unlock.setStyleId(styleId);
         unlock.setCreatedAt(LocalDateTime.now());
-        unlockMapper.insert(unlock);
+        try {
+            unlockMapper.insert(unlock);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            // 并发回调/重复通知下唯一索引兜底，视为已解锁
+            log.debug("解锁记录已存在 user={} task={} style={}", userId, taskId, styleId);
+        }
     }
 
     public Map<String, Object> toMap(GenerationTask task) {

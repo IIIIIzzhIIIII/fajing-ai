@@ -21,6 +21,12 @@ const routes = [
         meta: { title: '数据看板' }
       },
       {
+        path: 'channels',
+        name: 'Channels',
+        component: () => import('@/views/channels/index.vue'),
+        meta: { title: '渠道与传播' }
+      },
+      {
         path: 'hairstyles',
         name: 'Hairstyles',
         component: () => import('@/views/hairstyles/index.vue'),
@@ -30,13 +36,13 @@ const routes = [
         path: 'logs',
         name: 'Logs',
         component: () => import('@/views/logs/index.vue'),
-        meta: { title: '操作日志' }
+        meta: { title: '发布与日志' }
       },
       {
         path: 'orders',
         name: 'Orders',
         component: () => import('@/views/orders/index.vue'),
-        meta: { title: '订单列表' }
+        meta: { title: '订单管理' }
       },
       {
         path: 'users',
@@ -54,13 +60,19 @@ const routes = [
         path: 'pay',
         name: 'PayConfig',
         component: () => import('@/views/pay/index.vue'),
-        meta: { title: '支付配置' }
+        meta: { title: '支付参数配置' }
+      },
+      {
+        path: 'rules',
+        name: 'TradeRule',
+        component: () => import('@/views/rules/index.vue'),
+        meta: { title: '交易与售后规则' }
       },
       {
         path: 'ai',
         name: 'AiConfig',
         component: () => import('@/views/ai/index.vue'),
-        meta: { title: 'AI 设置' }
+        meta: { title: 'AI 参数配置' }
       }
     ]
   },

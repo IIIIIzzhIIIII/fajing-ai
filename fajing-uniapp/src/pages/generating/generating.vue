@@ -34,7 +34,7 @@
       </view>
 
       <view class="gen-title">{{ title }}</view>
-      <view class="gen-count">已出图 {{ shown }} / {{ total }} 张</view>
+      <view class="gen-count">{{ shown > 0 ? `已出图 ${shown} / ${total} 张` : `正在生成 ${total} 张效果图` }}</view>
 
       <view class="gen-thumbs">
         <view v-for="(t, i) in thumbs" :key="t.key" class="gen-thumb" :class="{ on: i < shown }">
@@ -81,6 +81,9 @@ import { STYLES, COLORS, PORTRAIT, DEMO_BEFORE } from '@/mock/constants'
 const app = useAppStore()
 const ui = useUiStore()
 
+/** 仅本地开发允许接口失败后走模拟兜底；线上失败直接提示，避免把占位图当成出图结果 */
+const localDemoEnabled = !!(import.meta.env && import.meta.env.DEV)
+
 const steps = ['识别人脸 · 定位五官与发际线', '匹配发型 · 调整轮廓与发量', '渲染效果 · 融合光影与发丝']
 const titles = ['正在识别人脸特征…', '匹配最适合你的发型…', '渲染效果中…']
 
@@ -97,6 +100,9 @@ let simStart = 0
 let localMode = false
 let finished = false
 let failures = 0
+/** 轮询总超时：服务端最坏 4 款 × 2 并发 × 200s ≈ 400s，留余量避免把慢任务误判为超时 */
+const POLL_TIMEOUT_MS = 8 * 60 * 1000
+let pollStartAt = 0
 
 const total = computed(() => Math.min(4, Math.max(1, picked.value.length || (app.selectedStyleIds || []).length || 4)))
 
@@ -194,6 +200,7 @@ function stopAll() {
 
 function startPolling() {
   stopPolling()
+  if (!pollStartAt) pollStartAt = Date.now()
   pollTask()
   pollTimer = setInterval(pollTask, 1000)
 }
@@ -215,6 +222,9 @@ async function pollTask() {
       finishSuccess(data.result)
     } else if (data.status === 'failed') {
       finishFail()
+    } else if (pollStartAt && Date.now() - pollStartAt > POLL_TIMEOUT_MS) {
+      // 服务重启等异常会让任务长期停在 pending，避免无限轮询
+      finishTimeout()
     }
   } catch (e) {
     failures += 1
@@ -235,6 +245,8 @@ async function submit() {
     if (!id) throw new Error('missing taskId')
     taskId = id
     app.taskId = id
+    // 服务端已在创建任务时扣减额度，这里同步真实剩余次数
+    syncQuota()
     track('generate_start', { styleCount: (app.selectedStyleIds || []).length })
     startPolling()
   } catch (e) {
@@ -242,8 +254,21 @@ async function submit() {
   }
 }
 
+/** 额度以服务端为准：失败或批次全部失败后重新拉取，展示真实剩余次数 */
+async function syncQuota() {
+  try {
+    app.setQuota(await API.quota())
+  } catch (e) {
+    /* 同步失败不影响结果展示 */
+  }
+}
+
 function fallbackLocal() {
   if (finished || localMode) return
+  if (!localDemoEnabled) {
+    finishFail()
+    return
+  }
   localMode = true
   apiProgress.value = null
   taskId = ''
@@ -260,6 +285,9 @@ function finishSuccess(result) {
   progress.value = 100
   const payload = Object.assign({}, result || {})
   if (!payload.taskId) payload.taskId = taskId
+  const styles = payload.styles || []
+  // 整批全部失败时后端会自动退还 1 次额度，这里以服务端返回的剩余额度为准
+  if (styles.length > 0 && styles.every((s) => s.failed)) syncQuota()
   app.setResult(payload)
   track('generate_success', { taskId: payload.taskId, styleCount: (payload.styles || []).length })
   setTimeout(() => {
@@ -272,10 +300,25 @@ function finishFail() {
   finished = true
   stopAll()
   app.taskId = ''
-  ui.toast('生成失败，请重试')
+  // 是否退还额度由服务端决定，这里只同步真实剩余次数
+  syncQuota()
+  ui.toast('生成失败，请稍后重试')
   setTimeout(() => {
     goBack()
   }, 900)
+}
+
+function finishTimeout() {
+  if (finished) return
+  finished = true
+  stopAll()
+  app.taskId = ''
+  // 是否退还额度由服务端决定，这里只同步真实剩余次数
+  syncQuota()
+  ui.toast('生成超时，可在「我的记录」查看结果')
+  setTimeout(() => {
+    goBack()
+  }, 1200)
 }
 
 function buildLocalResult() {
@@ -315,6 +358,15 @@ onLoad(() => {
   if (app.taskId) {
     taskId = app.taskId
     startPolling()
+    return
+  }
+  // 直接打开本页（刷新/回退/外部链接）时没有选款或照片，不能发起生成，
+  // 更不能走失败退款分支给本机凭空加额度
+  if (!(app.selectedStyleIds || []).length || !(app.photoUrl || app.photoPath)) {
+    finished = true
+    stopAll()
+    ui.toast('请先上传照片并选择发型')
+    setTimeout(() => goBack(), 900)
     return
   }
   submit()

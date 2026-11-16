@@ -106,6 +106,9 @@ public class RecordController {
                     item.put("styleId", src.get("styleId"));
                     item.put("name", src.get("name"));
                     item.put("img", src.get("img"));
+                    // 失败款无图，记录页需要区分「生成失败」与「未解锁」
+                    item.put("failed", Boolean.TRUE.equals(src.get("failed")) || src.get("img") == null);
+                    item.put("unlocked", Boolean.TRUE.equals(src.get("unlocked")));
                     items.add(item);
                 }
             }

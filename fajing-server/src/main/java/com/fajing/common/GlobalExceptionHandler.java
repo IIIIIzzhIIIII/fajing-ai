@@ -3,10 +3,13 @@ package com.fajing.common;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.NoHandlerFoundException;
@@ -41,6 +44,15 @@ public class GlobalExceptionHandler {
             msg = ex.getBindingResult().getFieldError().getDefaultMessage();
         }
         return Result.fail(msg);
+    }
+
+    /** 缺失请求参数、参数类型不匹配、请求体无法解析：属于客户端错误，返回 400 而不是「服务器开小差」 */
+    @ExceptionHandler({MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class,
+            HttpMessageNotReadableException.class})
+    public ResponseEntity<Result<Void>> handleBadRequest(Exception e) {
+        log.warn("请求参数不合法: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.fail("请求参数不合法"));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

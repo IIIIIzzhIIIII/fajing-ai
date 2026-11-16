@@ -8,7 +8,12 @@
 
     <view class="login-main">
       <view class="login-title">上传一张正脸照，先看看新发型</view>
+      <!-- #ifdef H5 -->
+      <view class="login-sub">无需注册即可试用，照片仅用于本次生成，24 小时自动删除。</view>
+      <!-- #endif -->
+      <!-- #ifndef H5 -->
       <view class="login-sub">微信一键登录，照片仅用于本次生成，24 小时自动删除。</view>
+      <!-- #endif -->
     </view>
 
     <view class="login-foot">

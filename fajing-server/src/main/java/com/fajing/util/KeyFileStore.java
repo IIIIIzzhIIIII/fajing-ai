@@ -13,7 +13,8 @@ import java.util.UUID;
 
 /**
  * 商户私钥文件落盘：只保存路径，不把私钥内容写进数据库。
- * 文件存放在 ${fajing.upload-dir}/cert/ 下，不进 Git。
+ * 私钥必须放在静态上传目录之外，否则会被 /uploads/** 公开下载；
+ * 默认使用 upload-dir 的同级目录 fajing-cert，可用 fajing.cert-dir 覆盖。
  */
 @Component
 public class KeyFileStore {
@@ -22,6 +23,9 @@ public class KeyFileStore {
 
     @Value("${fajing.upload-dir}")
     private String uploadDir;
+
+    @Value("${fajing.cert-dir:}")
+    private String certDir;
 
     public String save(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -39,7 +43,7 @@ public class KeyFileStore {
             if (!content.contains("PRIVATE KEY")) {
                 throw new BizException("文件内容不是有效的私钥（缺少 PRIVATE KEY）");
             }
-            Path dir = Paths.get(uploadDir, "cert");
+            Path dir = resolveDir();
             Files.createDirectories(dir);
             Path target = dir.resolve(UUID.randomUUID().toString().replace("-", "") + ".pem");
             Files.write(target, file.getBytes());
@@ -49,5 +53,14 @@ public class KeyFileStore {
         } catch (Exception e) {
             throw new BizException("私钥保存失败：" + e.getMessage());
         }
+    }
+
+    private Path resolveDir() {
+        if (certDir != null && !certDir.isBlank()) {
+            return Paths.get(certDir.trim()).toAbsolutePath().normalize();
+        }
+        Path upload = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path parent = upload.getParent();
+        return (parent == null ? upload : parent).resolve("fajing-cert");
     }
 }

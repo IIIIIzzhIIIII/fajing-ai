@@ -7,6 +7,8 @@ build/
 
 # 运行时数据
 uploads/
+# 支付商户私钥（默认在上传目录同级，绝不能进仓库）
+fajing-cert/
 logs/
 *.log
 *.log.gz

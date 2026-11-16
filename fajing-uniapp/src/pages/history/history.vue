@@ -26,10 +26,14 @@
               v-for="(s, i) in rec.styles"
               :key="(s.styleId || 's') + '-' + i"
               class="hist-thumb"
-              :class="{ locked: !isUnlocked(rec, s, i) }"
+              :class="{ locked: !s.failed && !isUnlocked(rec, s, i) }"
             >
               <image v-if="s.img" :src="s.img" mode="aspectFill" class="hist-thumb-img" />
-              <view v-if="!isUnlocked(rec, s, i)" class="hist-lock">
+              <view v-if="s.failed" class="hist-lock">
+                <fj-icon name="refresh" :size="14" color="#FFFFFF" />
+                <text class="hist-lock-t">生成失败</text>
+              </view>
+              <view v-else-if="!isUnlocked(rec, s, i)" class="hist-lock">
                 <fj-icon name="lock" :size="14" color="#FFFFFF" />
                 <text class="hist-lock-t">付费解锁</text>
               </view>
@@ -79,11 +83,17 @@ function normalizeRecord(r, i) {
         ? r.results
         : []
   const styles = items
-    .map((it) => ({
-      styleId: it.styleId || it.id || '',
-      name: it.name || it.styleName || '',
-      img: it.img || it.image || it.url || ''
-    }))
+    .map((it) => {
+      const img = it.img || it.image || it.url || ''
+      return {
+        styleId: it.styleId || it.id || '',
+        name: it.name || it.styleName || '',
+        img,
+        // 失败款没有图，不能按「付费解锁」展示，否则会误导用户重复付款
+        failed: it.failed === true || !img,
+        unlocked: it.unlocked === true
+      }
+    })
     .filter((it) => it.styleId || it.img)
   return {
     key: r.id || r.taskId || `rec-${i}`,
@@ -99,8 +109,28 @@ function normalizeRecord(r, i) {
 
 /** 每批生成第 1 款免费；从第 2 款起需要在该批次内付费解锁 */
 function isUnlocked(rec, style, index) {
-  if (index === 0) return true
-  return !!style && !!style.styleId && app.unlocks.includes(`${rec.taskId}:${style.styleId}`)
+  if (!style || style.failed) return false
+  if (style.unlocked === true) return true
+  if (!style.styleId) return index === 0
+  const taskId = rec.taskId
+  if (taskId && app.unlocks.includes(`${taskId}:${style.styleId}`)) return true
+  // 本地已有该批次的解锁数据时以服务端结果为准，避免把已付费款误标为锁定
+  if (taskId && app.unlocks.some((key) => key.startsWith(`${taskId}:`))) return false
+  return index === 0
+}
+
+/** 换设备/清缓存后本地解锁为空，进入记录页时以服务端为准补齐 */
+async function syncUnlocks() {
+  try {
+    const res = await API.unlocks()
+    const list = Array.isArray(res) ? res : (res && (res.styleIds || res.ids)) || []
+    const keys = list
+      .map((item) => (item && item.styleId ? `${item.taskId || 0}:${item.styleId}` : ''))
+      .filter(Boolean)
+    app.setUnlocks(keys)
+  } catch (e) {
+    // 接口失败时沿用本地解锁状态
+  }
 }
 
 async function loadRecords() {
@@ -114,7 +144,10 @@ async function loadRecords() {
   }
 }
 
-onShow(loadRecords)
+onShow(() => {
+  loadRecords()
+  syncUnlocks()
+})
 
 function back() {
   goBack('/pages/profile/profile')

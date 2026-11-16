@@ -45,6 +45,10 @@ public class AdminPayConfigController {
     @Value("${fajing.base-url:http://localhost:8081}")
     private String baseUrl;
 
+    /** H5 用户端站点地址（与 API 域名分离时配置），用于生成支付宝回跳地址 */
+    @Value("${fajing.h5-base-url:}")
+    private String h5BaseUrl;
+
     @Operation(summary = "读取支付配置（密钥掩码）")
     @GetMapping
     public Result<Map<String, Object>> get() {
@@ -52,12 +56,20 @@ public class AdminPayConfigController {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("config", payConfigService.masked(cfg));
         data.put("wxReady", payConfigService.wxReady(cfg));
+        data.put("wxVirtualReady", payConfigService.wxVirtualReady(cfg));
+        data.put("douyinReady", payConfigService.douyinReady(cfg));
+        data.put("xhsReady", payConfigService.xhsReady(cfg));
         data.put("alipayReady", payConfigService.alipayReady(cfg));
         data.put("secretConfigured", secretCodec.configured());
         String base = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        data.put("wxNotifyUrlSuggested", base + "/api/order/notify/wx");
-        data.put("alipayNotifyUrlSuggested", base + "/api/order/notify/alipay");
-        data.put("alipayReturnUrlSuggested", base + "/#/pages/result/result");
+        // 回跳地址必须落在 H5 站点域名，API 子域无法承载前端路由
+        String h5Base = (h5BaseUrl == null || h5BaseUrl.isBlank() ? baseUrl : h5BaseUrl.trim());
+        h5Base = h5Base.endsWith("/") ? h5Base.substring(0, h5Base.length() - 1) : h5Base;
+        data.put("wxNotifyUrlSuggested", base + "/api/pay/wechat/miniprogram/notify");
+        data.put("douyinNotifyUrlSuggested", base + "/api/order/notify/douyin");
+        data.put("xhsNotifyUrlSuggested", base + "/api/order/notify/xhs");
+        data.put("alipayNotifyUrlSuggested", base + "/api/pay/alipay/notify");
+        data.put("alipayReturnUrlSuggested", h5Base + "/#/pages/result/result");
         return Result.ok(data);
     }
 

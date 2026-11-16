@@ -55,12 +55,15 @@ public class WechatPayService {
 
     private final Map<String, X509Certificate> platformCerts = new ConcurrentHashMap<>();
     private volatile long certFetchedAt = 0;
+    /** 平台证书缓存对应的商户号，切换商户号时需要强制刷新 */
+    private volatile String certMchId = "";
 
     /** JSAPI 下单，返回 prepay_id */
     public String createJsapi(String outTradeNo, BigDecimal amountYuan, String description, String openid) {
         PayConfig cfg = requireWxReady();
-        if (!"normal".equalsIgnoreCase(cfg.getWxPayMode())) {
-            throw new BizException("当前为小程序虚拟支付模式，需先在微信侧开通虚拟支付并完成对接；可先将支付模式改为 normal");
+        if (!"normal".equalsIgnoreCase(cfg.getWxPayMode())
+                && !"miniprogram".equalsIgnoreCase(cfg.getWxPayMode())) {
+            throw new BizException("当前为小程序虚拟支付模式，需先在微信侧开通虚拟支付并完成对接；可先将支付模式改为小程序支付（MINIPROGRAM）");
         }
         if (openid == null || openid.isBlank()) {
             throw new BizException("缺少用户 openid，无法发起微信支付");
@@ -273,8 +276,14 @@ public class WechatPayService {
     }
 
     private synchronized void refreshCertificates(PayConfig cfg) {
-        if (System.currentTimeMillis() - certFetchedAt < 12 * 3600_000L && !platformCerts.isEmpty()) {
+        String mchId = String.valueOf(cfg.getWxMchId());
+        boolean merchantChanged = !mchId.equals(certMchId);
+        if (!merchantChanged && System.currentTimeMillis() - certFetchedAt < 12 * 3600_000L && !platformCerts.isEmpty()) {
             return;
+        }
+        if (merchantChanged) {
+            // 管理端切换商户号后旧平台证书不再适用，清空缓存强制重新拉取
+            platformCerts.clear();
         }
         JsonNode root = request(cfg, "GET", "/v3/certificates", null);
         JsonNode data = root.path("data");
@@ -297,6 +306,7 @@ public class WechatPayService {
             }
         }
         certFetchedAt = System.currentTimeMillis();
+        certMchId = mchId;
         if (platformCerts.isEmpty()) {
             throw new BizException("微信平台证书解析失败，请检查 APIv3 密钥");
         }

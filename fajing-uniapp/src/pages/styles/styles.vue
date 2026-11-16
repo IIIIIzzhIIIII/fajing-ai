@@ -78,7 +78,7 @@
           <view class="style-thumb">
             <image v-if="styleImg(s)" class="style-img" :src="styleImg(s)" mode="aspectFill" />
             <view v-if="!browse && faceShape && matchesFace(s)" class="style-rec">适你</view>
-            <view v-if="!browse && i === 0" class="style-free">免费</view>
+            <view v-if="!browse && (selected.length ? orderOf(s.id) === 1 : i === 0)" class="style-free">免费</view>
             <view v-if="!browse && isSelected(s.id)" class="style-badge">{{ orderOf(s.id) }}</view>
           </view>
           <view class="style-name">{{ s.name }}</view>
@@ -304,26 +304,37 @@ async function loadColors() {
   }
 }
 
-function startGenerate() {
+async function startGenerate() {
   if (!selected.value.length) return
   const ids = selected.value.slice()
   app.setSelection({
     gender: gender.value,
     mode: mode.value,
     styleIds: ids,
-    colorId: colorId.value
+    // 仅「换发色」模式携带发色，避免切回「只换发型」后仍按发色生成
+    colorId: mode.value === 'color' ? colorId.value : ''
   })
   try {
-    const picked = allStyles.value.filter((s) => ids.indexOf(s.id) > -1)
+    const picked = ids
+      .map((id) => allStyles.value.find((s) => s.id === id))
+      .filter(Boolean)
     uni.setStorageSync('fajing_picked_styles', JSON.stringify(picked))
   } catch (e) {
     // 本地缓存失败不影响生成
   }
-  if (app.quota.freeLeft <= 0) {
-    ui.openSheet('quota')
-    return
+  // 额度只在服务端 /api/generate 扣减一次；这里只做进入前的余量提示，避免重复扣减
+  try {
+    const q = await API.quota()
+    if (q) app.setQuota(q)
+    if (Number(q && q.freeLeft) <= 0) {
+      ui.openSheet('quota')
+      return
+    }
+  } catch (e) {
+    // 额度查询失败不阻断生成，服务端仍会兜底校验
   }
-  app.useFreeQuota()
+  // 进入新一轮生成前清理上一批任务，避免生成页复用旧 taskId 直接展示上一次的结果
+  app.taskId = ''
   uni.navigateTo({ url: '/pages/generating/generating' })
 }
 

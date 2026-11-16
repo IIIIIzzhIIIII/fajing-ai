@@ -97,7 +97,7 @@ public class AlipayService {
             PayConfig cfg = payConfigService.get();
             if (!payConfigService.alipayReady(cfg)) {
                 result.put("ok", false);
-                result.put("msg", "支付宝参数不完整：需 APPID、应用私钥、支付宝公钥、网关");
+                result.put("msg", "支付宝参数不完整：需 APPID、应用私钥、支付宝公钥、网关、异步通知地址");
                 return result;
             }
             Map<String, String> biz = new LinkedHashMap<>();

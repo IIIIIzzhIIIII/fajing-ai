@@ -26,7 +26,10 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns("/api/admin/login");
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/login", "/api/auth/login/mock", "/api/auth/logout", "/api/admin/**");
+                .excludePathPatterns("/api/auth/login", "/api/auth/login/mock", "/api/auth/login/guest",
+                        "/api/auth/logout", "/api/admin/**",
+                        // 支付渠道服务端回调不带用户 token，需放行（回调内部自行验签）
+                        "/api/order/notify", "/api/order/notify/**", "/api/pay/**");
     }
 
     @Override

@@ -13,7 +13,7 @@
         </view>
         <view>
           <view style="font-size:17px;font-weight:800;letter-spacing:-.3px">{{ me.nickname || '发型试镜用户' }}</view>
-          <view style="font-size:11px;color:var(--muted);margin-top:3px">微信登录 · 试发记录已同步</view>
+          <view style="font-size:11px;color:var(--muted);margin-top:3px">{{ loginLabel }} · 试发记录已同步</view>
         </view>
       </view>
 
@@ -60,7 +60,7 @@
 
       <view class="logout-btn" @click="logout">退出登录</view>
 
-      <view class="tiny" style="text-align:center;padding:20px">发镜 AI v0.1 · 原型演示版本</view>
+      <view class="tiny" style="text-align:center;padding:20px">发镜 AI v0.1</view>
     </scroll-view>
 
     <fj-tabbar active="profile" />
@@ -81,6 +81,11 @@ const app = useAppStore()
 const ui = useUiStore()
 
 const me = ref({ nickname: '', avatar: '' })
+/** 登录方式文案：H5 为游客登录，小程序为微信登录 */
+let loginLabel = '微信登录'
+// #ifdef H5
+loginLabel = '游客登录'
+// #endif
 /** 试发记录条数 / 试过的发型款数：以服务端记录为准，生成后回到本页会刷新 */
 const recordCount = ref(0)
 const styleCount = ref(0)
@@ -97,7 +102,8 @@ async function loadMe() {
 async function refreshQuota() {
   try {
     const q = await API.quota()
-    if (q && typeof q.freeLeft === 'number') app.quota = { ...app.quota, ...q }
+    // 额度以服务端为唯一权威：整包覆盖本地展示值
+    if (q) app.setQuota(q)
   } catch (e) {
     /* request 已统一 toast */
   }
@@ -147,7 +153,7 @@ function openPrivacy() {
 }
 
 function contact() {
-  ui.toast('客服微信：fajing-ai（原型演示）')
+  ui.toast('客服微信：fajing-ai')
 }
 
 function about() {

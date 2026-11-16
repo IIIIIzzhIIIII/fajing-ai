@@ -2,21 +2,38 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Document, MagicStick, Picture, Scissor, SwitchButton, Tickets, User, Wallet } from '@element-plus/icons-vue'
+import { DataLine, Document, MagicStick, Picture, Scissor, SetUp, SwitchButton, Tickets, TrendCharts, User, Wallet } from '@element-plus/icons-vue'
 import { clearToken } from '@/utils/auth'
 
 const route = useRoute()
 const router = useRouter()
 
-const menus = [
-  { path: '/dashboard', title: '数据看板', icon: DataLine },
-  { path: '/hairstyles', title: '发型库', icon: Scissor },
-  { path: '/orders', title: '订单列表', icon: Tickets },
-  { path: '/users', title: '用户管理', icon: User },
-  { path: '/logs', title: '操作日志', icon: Document },
-  { path: '/ai-model', title: 'AI 模特照', icon: Picture },
-  { path: '/pay', title: '支付配置', icon: Wallet },
-  { path: '/ai', title: 'AI 设置', icon: MagicStick }
+const menuSections = [
+  {
+    title: '工作空间',
+    items: [
+      { path: '/dashboard', title: '数据看板', icon: DataLine },
+      { path: '/channels', title: '渠道与传播', icon: TrendCharts },
+      { path: '/orders', title: '订单管理', icon: Tickets },
+      { path: '/users', title: '用户管理', icon: User }
+    ]
+  },
+  {
+    title: '前台配置',
+    items: [
+      { path: '/hairstyles', title: '发型库', icon: Scissor },
+      { path: '/ai-model', title: 'AI 模特照', icon: Picture }
+    ]
+  },
+  {
+    title: '系统管理',
+    items: [
+      { path: '/ai', title: 'AI 参数配置', icon: MagicStick },
+      { path: '/pay', title: '支付参数配置', icon: Wallet },
+      { path: '/rules', title: '交易与售后规则', icon: SetUp },
+      { path: '/logs', title: '发布与日志', icon: Document }
+    ]
+  }
 ]
 
 const activeMenu = computed(() => route.path)
@@ -48,10 +65,13 @@ function handleLogout() {
         text-color="rgba(255, 255, 255, 0.66)"
         active-text-color="#ffffff"
       >
-        <el-menu-item v-for="item in menus" :key="item.path" :index="item.path">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.title }}</span>
-        </el-menu-item>
+        <template v-for="section in menuSections" :key="section.title">
+          <div class="menu-section">{{ section.title }}</div>
+          <el-menu-item v-for="item in section.items" :key="item.path" :index="item.path">
+            <el-icon><component :is="item.icon" /></el-icon>
+            <span>{{ item.title }}</span>
+          </el-menu-item>
+        </template>
       </el-menu>
 
       <div class="side-footer">发镜 AI · 管理端</div>
@@ -140,7 +160,23 @@ $sidebar-width: 232px;
 
 .side-menu {
   flex: 1;
-  padding: 16px 12px;
+  padding: 8px 12px 16px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+
+  .menu-section {
+    padding: 14px 10px 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.32);
+    letter-spacing: 1.5px;
+
+    &:first-child {
+      padding-top: 4px;
+    }
+  }
 
   :deep(.el-menu-item) {
     height: 44px;

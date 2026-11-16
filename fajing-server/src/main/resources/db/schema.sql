@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS orders (
   amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   status VARCHAR(16) NOT NULL DEFAULT 'paid',
   style_ids VARCHAR(255) NOT NULL DEFAULT '',
+  platform VARCHAR(16) NOT NULL DEFAULT '',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -191,7 +192,7 @@ CREATE TABLE IF NOT EXISTS ai_config (
 CREATE TABLE IF NOT EXISTS pay_config (
   id BIGINT PRIMARY KEY,
   wx_enabled TINYINT NOT NULL DEFAULT 0,
-  wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'virtual',
+  wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'miniprogram',
   wx_appid VARCHAR(64) NOT NULL DEFAULT '',
   wx_mch_id VARCHAR(32) NOT NULL DEFAULT '',
   wx_api_v3_key_enc VARCHAR(512) NOT NULL DEFAULT '',
@@ -199,6 +200,22 @@ CREATE TABLE IF NOT EXISTS pay_config (
   wx_private_key_path VARCHAR(255) NOT NULL DEFAULT '',
   wx_notify_url VARCHAR(255) NOT NULL DEFAULT '',
   wx_virtual_appkey_enc VARCHAR(512) NOT NULL DEFAULT '',
+  wx_virtual_offer_id VARCHAR(64) NOT NULL DEFAULT '',
+  wx_virtual_env TINYINT NOT NULL DEFAULT 0,
+  wx_virtual_product_one VARCHAR(64) NOT NULL DEFAULT '',
+  wx_virtual_product_all VARCHAR(64) NOT NULL DEFAULT '',
+  douyin_enabled TINYINT NOT NULL DEFAULT 0,
+  douyin_app_id VARCHAR(64) NOT NULL DEFAULT '',
+  douyin_secret_enc VARCHAR(512) NOT NULL DEFAULT '',
+  douyin_salt_enc VARCHAR(512) NOT NULL DEFAULT '',
+  douyin_token_enc VARCHAR(512) NOT NULL DEFAULT '',
+  douyin_notify_url VARCHAR(255) NOT NULL DEFAULT '',
+  douyin_sandbox TINYINT NOT NULL DEFAULT 0,
+  xhs_enabled TINYINT NOT NULL DEFAULT 0,
+  xhs_app_id VARCHAR(64) NOT NULL DEFAULT '',
+  xhs_secret_enc VARCHAR(512) NOT NULL DEFAULT '',
+  xhs_merchant_id VARCHAR(64) NOT NULL DEFAULT '',
+  xhs_notify_url VARCHAR(255) NOT NULL DEFAULT '',
   alipay_enabled TINYINT NOT NULL DEFAULT 0,
   alipay_app_id VARCHAR(64) NOT NULL DEFAULT '',
   alipay_private_key_enc VARCHAR(1024) NOT NULL DEFAULT '',
@@ -218,4 +235,33 @@ ALTER TABLE orders ADD COLUMN prepay_id VARCHAR(128) NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN paid_at DATETIME NULL;
 ALTER TABLE orders ADD COLUMN refund_status VARCHAR(16) NOT NULL DEFAULT 'none';
 ALTER TABLE orders ADD COLUMN refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE orders ADD COLUMN platform VARCHAR(16) NOT NULL DEFAULT '';
 ALTER TABLE orders ADD UNIQUE KEY uk_out_trade_no (out_trade_no);
+
+-- 支付配置：多平台接入字段（旧库增量）
+ALTER TABLE pay_config MODIFY wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'miniprogram';
+ALTER TABLE pay_config ADD COLUMN wx_virtual_offer_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN wx_virtual_env TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE pay_config ADD COLUMN wx_virtual_product_one VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN wx_virtual_product_all VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN douyin_enabled TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE pay_config ADD COLUMN douyin_app_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN douyin_secret_enc VARCHAR(512) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN douyin_salt_enc VARCHAR(512) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN douyin_token_enc VARCHAR(512) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN douyin_notify_url VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN douyin_sandbox TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE pay_config ADD COLUMN xhs_enabled TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE pay_config ADD COLUMN xhs_app_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN xhs_secret_enc VARCHAR(512) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN xhs_merchant_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN xhs_notify_url VARCHAR(255) NOT NULL DEFAULT '';
+
+-- 交易与售后规则（单行，id 固定为 1）
+CREATE TABLE IF NOT EXISTS trade_rule (
+  id BIGINT PRIMARY KEY,
+  refund_days INT NOT NULL DEFAULT 7,
+  after_sale_text VARCHAR(500) NOT NULL DEFAULT '',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

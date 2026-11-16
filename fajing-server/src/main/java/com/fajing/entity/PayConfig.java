@@ -26,6 +26,28 @@ public class PayConfig {
     private String wxPrivateKeyPath;
     private String wxNotifyUrl;
     private String wxVirtualAppkeyEnc;
+    private String wxVirtualOfferId;
+    private Integer wxVirtualEnv;
+    /** 单张解锁的虚拟道具 ID（价格 6 元） */
+    private String wxVirtualProductOne;
+    /** 全部解锁的虚拟道具 ID（单价 3 元，按数量购买） */
+    private String wxVirtualProductAll;
+
+    private Integer douyinEnabled;
+    private String douyinAppId;
+    private String douyinSecretEnc;
+    /** 担保支付 SALT（请求签名用） */
+    private String douyinSaltEnc;
+    /** 支付设置中的 Token（回调签名用） */
+    private String douyinTokenEnc;
+    private String douyinNotifyUrl;
+    private Integer douyinSandbox;
+
+    private Integer xhsEnabled;
+    private String xhsAppId;
+    private String xhsSecretEnc;
+    private String xhsMerchantId;
+    private String xhsNotifyUrl;
 
     private Integer alipayEnabled;
     private String alipayAppId;

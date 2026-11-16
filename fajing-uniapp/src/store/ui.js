@@ -8,6 +8,7 @@ export const useUiStore = defineStore('ui', {
     sheet: '',
     payPlan: 'all',
     payStyleId: '',
+    payChannel: '',
     quotaReason: ''
   }),
   actions: {

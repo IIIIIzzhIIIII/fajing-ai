@@ -45,10 +45,6 @@
           </view>
         </view>
       </view>
-
-      <view class="tiny" style="text-align:center;padding:12px 20px 0">
-        卡片数据为原型 mock，正式版按脸型与发质自动生成
-      </view>
     </scroll-view>
 
     <view class="bottom-bar">
@@ -73,7 +69,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { BARBER_SPEC, BARBER_FALLBACK, DEMO_BEFORE } from '@/mock/constants'
@@ -81,6 +78,12 @@ import { goBack as navBack } from '@/utils/nav'
 
 const app = useAppStore()
 const ui = useUiStore()
+
+/** 从结果页进入时携带当前浏览的款式，避免沟通卡固定取第一款（可能是失败款） */
+const activeStyleId = ref('')
+onLoad((query) => {
+  activeStyleId.value = (query && query.styleId) || ''
+})
 
 const FALLBACK_STYLE = {
   styleId: 'mock',
@@ -93,7 +96,13 @@ const FALLBACK_STYLE = {
 
 const current = computed(() => {
   const list = (app.result && app.result.styles) || []
-  return list[0] || FALLBACK_STYLE
+  const usable = list.filter((s) => s && s.img)
+  return (
+    usable.find((s) => s.styleId === activeStyleId.value) ||
+    usable[0] ||
+    list[0] ||
+    FALLBACK_STYLE
+  )
 })
 
 const spec = computed(() => {
@@ -130,11 +139,11 @@ function copyText() {
 }
 
 function saveCard() {
-  ui.toast('原型阶段：请直接截图保存这张卡片')
+  ui.toast('请直接截图保存这张卡片')
 }
 
 function sendToBarber() {
-  ui.toast('原型演示：已生成沟通卡，可发微信给理发师')
+  ui.toast('已生成沟通卡，可发微信给理发师')
 }
 
 function goBack() {

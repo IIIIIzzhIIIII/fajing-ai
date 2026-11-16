@@ -152,7 +152,8 @@ public class AiImageService {
     public String toDataUri(String photoUrl) throws Exception {
         byte[] raw = null;
         String name = fileNameOf(photoUrl);
-        if (!name.isBlank()) {
+        // 仅允许读取上传目录内的普通文件名，避免 photoUrl 中携带 ..\ 等片段造成路径穿越
+        if (isSafeUploadName(name)) {
             File f = new File(uploadDir, name);
             if (f.exists() && f.isFile()) {
                 raw = Files.readAllBytes(f.toPath());
@@ -321,6 +322,13 @@ public class AiImageService {
         String clean = q > -1 ? url.substring(0, q) : url;
         int slash = clean.lastIndexOf('/');
         return slash > -1 ? clean.substring(slash + 1) : "";
+    }
+
+    /** 上传目录文件名白名单：字母数字点下划线连字符，且不含 ..（防止 Windows 下反斜杠穿越） */
+    private static boolean isSafeUploadName(String name) {
+        return name != null && !name.isBlank()
+                && !name.contains("..")
+                && name.matches("[A-Za-z0-9._-]+");
     }
 
     private static String trimSlash(String s) {

@@ -29,6 +29,7 @@ import java.util.Map;
 public class EventController {
 
     private static final int MAX_BATCH = 50;
+    private static final int MAX_PAYLOAD = 2000;
 
     private final EventLogMapper eventLogMapper;
     private final ObjectMapper objectMapper;
@@ -59,7 +60,11 @@ public class EventController {
                 String eventName = String.valueOf(name);
                 row.setEvent(eventName.length() > 48 ? eventName.substring(0, 48) : eventName);
                 Object payload = event.get("payload");
-                row.setPayloadJson(payload == null ? null : objectMapper.writeValueAsString(payload));
+                String payloadJson = payload == null ? null : objectMapper.writeValueAsString(payload);
+                if (payloadJson != null && payloadJson.length() > MAX_PAYLOAD) {
+                    payloadJson = payloadJson.substring(0, MAX_PAYLOAD);
+                }
+                row.setPayloadJson(payloadJson);
                 row.setCreatedAt(LocalDateTime.now());
                 eventLogMapper.insert(row);
                 count++;

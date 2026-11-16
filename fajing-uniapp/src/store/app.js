@@ -2,6 +2,14 @@ import { defineStore } from 'pinia'
 
 const KEY = 'fajing_state_v1'
 
+/** 本地日期（YYYY-MM-DD），用于每日额度重置 */
+function todayKey() {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
 /**
  * 全局业务状态
  * 注意：分享奖励每账号终身仅 1 次（shareClaimed 一旦为 true 不再重置）
@@ -16,7 +24,7 @@ export const useAppStore = defineStore('app', {
     selectedColorId: '',
     taskId: '',
     result: null,
-    quota: { freeLeft: 1, shareClaimed: false, adLeft: 1, adUsed: false },
+    quota: { freeLeft: 1, shareClaimed: false, adUsed: false, quotaDate: '' },
     unlocks: [],
     history: [],
     lastOrder: null
@@ -38,10 +46,19 @@ export const useAppStore = defineStore('app', {
           }
           if (Array.isArray(data.history)) this.history = data.history
         }
+        this.resetDailyQuota()
       } catch (e) {
         // 本地缓存损坏时静默重置
         uni.removeStorageSync(KEY)
+        this.resetDailyQuota()
       }
+    },
+    /** 每天重置 1 次免费额度与广告奖励标记（分享奖励终身 1 次，不重置） */
+    resetDailyQuota() {
+      const today = todayKey()
+      if (this.quota.quotaDate === today) return
+      this.quota = { ...this.quota, freeLeft: 1, adUsed: false, quotaDate: today }
+      this.persist()
     },
     persist() {
       uni.setStorageSync(
@@ -63,22 +80,14 @@ export const useAppStore = defineStore('app', {
       if (styleIds) this.selectedStyleIds = styleIds
       if (colorId !== undefined) this.selectedColorId = colorId
     },
-    useFreeQuota() {
-      if (this.quota.freeLeft > 0) {
-        this.quota.freeLeft -= 1
-        this.persist()
-        return true
-      }
-      return false
-    },
-    grantQuota(type) {
-      if (type === 'share') {
-        this.quota.shareClaimed = true
-      } else {
-        this.quota.adLeft = 1
-        this.quota.adUsed = true
-      }
-      this.quota.freeLeft += 1
+    /** 服务端额度为唯一权威：整包覆盖本地展示值 */
+    setQuota(quota) {
+      if (!quota) return
+      const next = { ...this.quota, ...quota }
+      // 服务端返回的 freeLeft 是当日权威值，同步标记本地日期，
+      // 避免下次启动 resetDailyQuota 又把它重置成默认的 1 次
+      if (quota.freeLeft !== undefined) next.quotaDate = todayKey()
+      this.quota = next
       this.persist()
     },
     addUnlocks(ids) {
@@ -100,7 +109,7 @@ export const useAppStore = defineStore('app', {
       this.taskId = result && result.taskId ? result.taskId : ''
     },
     resetAll() {
-      this.quota = { freeLeft: 1, shareClaimed: false, adLeft: 1, adUsed: false }
+      this.quota = { freeLeft: 1, shareClaimed: false, adUsed: false, quotaDate: '' }
       this.unlocks = []
       this.history = []
       this.photoPath = ''
@@ -108,6 +117,9 @@ export const useAppStore = defineStore('app', {
       this.result = null
       this.taskId = ''
       uni.removeStorageSync(KEY)
+      uni.removeStorageSync('fajing_pending_order')
+      uni.removeStorageSync('fajing_pending_result')
+      uni.removeStorageSync('fajing_picked_styles')
     }
   }
 })

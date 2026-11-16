@@ -67,6 +67,8 @@ public class GenerationProcessor {
 
         List<Hairstyle> styles = resolveStyles(task);
         if (styles.isEmpty()) {
+            // 发型被删除/下架导致无可生成内容时，本次额度已扣减，需要退还
+            quotaService.refund(task.getUserId(), taskId, "无可生成的发型");
             generationService.finish(taskId, Map.of(), Set.of());
             return;
         }
@@ -113,12 +115,11 @@ public class GenerationProcessor {
             }
         }
 
-        generationService.finish(taskId, images, failed);
-
-        // 整批全部失败：自动退还 1 次额度并记流水
-        if (!styles.isEmpty() && failed.size() == styles.size()) {
+        // 整批全部失败：先退还 1 次额度再落结果，保证前端看到 success 时额度已回退
+        if (failed.size() == styles.size()) {
             quotaService.refund(task.getUserId(), taskId, "生成全部失败");
         }
+        generationService.finish(taskId, images, failed);
     }
 
     /** 单款重试：只重跑失败的那一款，成功后回写结果 */

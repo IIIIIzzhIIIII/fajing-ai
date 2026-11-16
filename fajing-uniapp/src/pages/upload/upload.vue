@@ -38,8 +38,6 @@
           </view>
         </view>
 
-        <view class="tiny demo-link" @click="useDemo">没有合适的照片？用示例照片走一遍流程</view>
-
         <view class="tips">
           <view class="tip">
             <view class="tip-emoji">🙂</view>
@@ -78,11 +76,6 @@
             <text class="hl">人脸信息单独同意：</text>我同意收集并处理我上传的人脸照片（敏感个人信息），仅用于本次 AI 换发预览，不建人脸库、不用于训练，生成结束 24 小时内删除原图。
           </view>
         </view>
-
-        <view class="tiny" style="margin:12px 2px 0;display:flex;gap:6px;align-items:flex-start">
-          <fj-icon name="shield" :size="13" style="margin-top:2px" />
-          <text>人脸校验在你的设备上模拟完成，正式版接入火山引擎人脸检测。</text>
-        </view>
       </view>
     </scroll-view>
 
@@ -107,7 +100,6 @@ import { useUiStore } from '@/store/ui'
 import { upload, API } from '@/api/request'
 import { track } from '@/utils/track'
 import { goBack } from '@/utils/nav'
-import { DEMO_BEFORE } from '@/mock/constants'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -142,13 +134,15 @@ function pickPhoto(source) {
   })
 }
 
-function useDemo() {
-  app.setPhoto(DEMO_BEFORE, DEMO_BEFORE)
-}
-
 async function next() {
   if (busy.value) return
   if (!photoSrc.value || !privacyAgreed.value || !faceAgreed.value) return
+  // 先用服务端额度校准本地展示，避免只按本机缓存判断
+  try {
+    app.setQuota(await API.quota())
+  } catch (e) {
+    /* 拉取失败时按本地展示判断，最终以选款页服务端扣减结果为准 */
+  }
   if (app.quota.freeLeft <= 0) {
     ui.openSheet('quota')
     return
@@ -165,8 +159,10 @@ async function next() {
       app.setPhoto(localPath, url || localPath)
       track('upload_success', { remote: !!url })
     } catch (e) {
-      // 上传失败时降级使用本地路径，request 已统一提示
-      app.setPhoto(localPath, localPath)
+      // 上传失败不能带着本地临时路径继续，否则生成必然失败还白扣额度
+      busy.value = false
+      ui.toast('照片上传失败，请检查网络后重试')
+      return
     }
   }
 
@@ -193,15 +189,6 @@ async function next() {
 <style lang="scss" scoped>
 .dropzone {
   height: 402px;
-}
-.demo-link {
-  width: 100%;
-  margin-top: 10px;
-  text-align: center;
-  color: var(--pink-600);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 .consent-t {
   flex: 1;
