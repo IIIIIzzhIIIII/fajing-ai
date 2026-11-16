@@ -164,10 +164,13 @@ public class PayConfigService {
 
     /** 微信小程序虚拟支付：用 offerId + AppKey 签名，由客户端拉起 wx.requestVirtualPayment */
     public boolean wxVirtualReady(PayConfig cfg) {
+        // 两个道具都要配：首单 5 折用 ¥3 道具，优惠用完后用 ¥6 道具按数量购买
         return cfg != null && Integer.valueOf(1).equals(cfg.getWxEnabled())
                 && "virtual".equalsIgnoreCase(cfg.getWxPayMode())
                 && notBlank(cfg.getWxVirtualOfferId())
-                && notBlank(codec.decryptOrNull(cfg.getWxVirtualAppkeyEnc()));
+                && notBlank(codec.decryptOrNull(cfg.getWxVirtualAppkeyEnc()))
+                && notBlank(cfg.getWxVirtualProductOne())
+                && notBlank(cfg.getWxVirtualProductAll());
     }
 
     public boolean douyinReady(PayConfig cfg) {
@@ -179,12 +182,9 @@ public class PayConfigService {
                 && notBlank(cfg.getDouyinNotifyUrl());
     }
 
+    /** 小红书担保支付接口尚未联调，参数齐全也不下发到用户端，避免出现必然失败的支付方式 */
     public boolean xhsReady(PayConfig cfg) {
-        return cfg != null && Integer.valueOf(1).equals(cfg.getXhsEnabled())
-                && notBlank(cfg.getXhsAppId())
-                && notBlank(codec.decryptOrNull(cfg.getXhsSecretEnc()))
-                && notBlank(cfg.getXhsMerchantId())
-                && notBlank(cfg.getXhsNotifyUrl());
+        return false;
     }
 
     public String douyinSecret(PayConfig cfg) {

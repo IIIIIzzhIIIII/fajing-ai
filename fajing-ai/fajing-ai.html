@@ -1303,7 +1303,7 @@ textarea.compose-input{resize:none;line-height:1.6}
     <div class="plan" data-plan="all" onclick="pickPlan('all')">
       <div class="plan-radio"></div>
       <div>
-        <div class="plan-t" id="payAllTitle">本次全部 4 款 <span class="plan-tag">限时 5 折</span></div>
+        <div class="plan-t" id="payAllTitle">本次全部 4 款 <span class="plan-tag">首单 5 折</span></div>
         <div class="plan-d" id="payAllDesc">平均 ¥3.0/张 · 推荐</div>
       </div>
       <div class="plan-price"><span class="plan-old" id="payAllOld">¥24</span>¥<span id="payAllPrice">12</span><small>/全部</small></div>
@@ -2686,7 +2686,7 @@ textarea.compose-input{resize:none;line-height:1.6}
     const full = lk * 6;
     const saved = full - price;
     document.getElementById('payAllTitle').innerHTML = '解锁剩余 ' + lk + ' 款' +
-      (saved > 0 ? ' <span class="plan-tag">限时特惠</span>' : '');
+      (saved > 0 ? ' <span class="plan-tag">首单特惠</span>' : '');
     document.getElementById('payAllDesc').textContent = saved > 0
       ? '比单张省 ¥' + saved + ' · 推荐'
       : '一次解锁，免重复付费';

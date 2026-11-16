@@ -11,6 +11,7 @@ import com.fajing.mapper.AppUserMapper;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.service.GenerationService;
+import com.fajing.service.GenerationProcessor;
 import com.fajing.service.PayConfigService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.DouyinPayService;
@@ -65,6 +66,7 @@ public class OrderController {
     private final GenerationTaskMapper taskMapper;
     private final AppUserMapper userMapper;
     private final GenerationService generationService;
+    private final GenerationProcessor generationProcessor;
     private final PayConfigService payConfigService;
     private final WechatPayService wechatPayService;
     private final WechatVirtualPayService wechatVirtualPayService;
@@ -78,6 +80,11 @@ public class OrderController {
 
     /** 未支付订单复用窗口：微信 prepay_id 有效期 2 小时，这里保守取 30 分钟 */
     private static final int REUSE_WINDOW_MINUTES = 30;
+
+    /** 单张解锁原价 */
+    private static final BigDecimal UNIT_PRICE = new BigDecimal("6.00");
+    /** 首单「全部解锁」5 折后的每款单价 */
+    private static final BigDecimal FIRST_ALL_UNIT_PRICE = new BigDecimal("3.00");
 
     /** 同一用户的下单请求按用户串行，避免并发请求同时查不到未支付订单而重复插入 */
     private static final Object[] CREATE_LOCKS = new Object[64];
@@ -96,17 +103,6 @@ public class OrderController {
         String plan = body.get("plan") == null ? "all" : String.valueOf(body.get("plan"));
         Long userId = UserContext.require();
 
-        if (taskId > 0) {
-            GenerationTask task = taskMapper.selectById(taskId);
-            if (task == null || !Long.valueOf(userId).equals(task.getUserId())) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
-            }
-            // 只能解锁本任务内的款式，避免构造请求解锁无关款式或跨任务复用
-            if (!splitIds(task.getStyleIds()).containsAll(styleIds)) {
-                throw new BizException("解锁款式与本次生成任务不匹配");
-            }
-        }
-
         if (styleIds.isEmpty()) {
             throw new BizException("请选择要解锁的款式");
         }
@@ -116,18 +112,31 @@ public class OrderController {
         if ("one".equals(plan) && styleIds.size() != 1) {
             throw new BizException("单张解锁只能选择 1 款发型");
         }
+        if (taskId > 0) {
+            GenerationTask task = taskMapper.selectById(taskId);
+            if (task == null || !Long.valueOf(userId).equals(task.getUserId())) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+            }
+            // 只能解锁本任务内的款式，避免构造请求解锁无关款式或跨任务复用
+            if (!splitIds(task.getStyleIds()).containsAll(styleIds)) {
+                throw new BizException("解锁款式与本次生成任务不匹配");
+            }
+            // 已解锁款式不计入本次订单，避免用户为已拥有内容重复付费
+            List<String> locked = new ArrayList<>();
+            for (String styleId : styleIds) {
+                if (!generationService.isUnlocked(userId, taskId, styleId)) {
+                    locked.add(styleId);
+                }
+            }
+            styleIds = locked;
+            if (styleIds.isEmpty()) {
+                throw new BizException("所选内容已解锁，无需重复支付");
+            }
+        }
         // 仅 1 款待解锁时不提供「本次全部 N 款」套餐，避免用 3 元买走单张 6 元的款式
         if ("all".equals(plan) && styleIds.size() < 2) {
             throw new BizException("仅 1 款待解锁，请使用单张解锁");
         }
-        // 幂等：同一任务下所选款式若已全部解锁，直接拦截，避免重复下单重复扣款
-        if (taskId > 0 && styleIds.stream().allMatch(styleId -> generationService.isUnlocked(userId, taskId, styleId))) {
-            throw new BizException("所选内容已解锁，无需重复支付");
-        }
-
-        BigDecimal amount = "one".equals(plan)
-                ? new BigDecimal("6.00")
-                : new BigDecimal(styleIds.size() * 3).setScale(2);
 
         PayConfig cfg = payConfigService.get();
         boolean wxReady = payConfigService.wxReady(cfg);
@@ -171,6 +180,10 @@ public class OrderController {
         }
 
         synchronized (lockOf(userId)) {
+            // 首单优惠：每个用户首次「全部解锁」享 5 折，之后恢复原价；金额只以服务端计算为准
+            boolean firstAllDiscount = "all".equals(plan) && firstAllDiscountAvailable(userId);
+            BigDecimal amount = priceOf(plan, styleIds.size(), firstAllDiscount);
+
             // 幂等：同用户 + 同任务 + 同一批款式 + 同渠道同金额，复用窗口内未支付订单并重新下发支付参数
             Order reused = (mock || wxVirtualMode || "douyin".equals(channel) || "xhs".equals(channel))
                     ? null : findReusableOrder(userId, taskId, styleIds, amount, channel);
@@ -210,12 +223,17 @@ public class OrderController {
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("amount", amount);
+            data.put("firstAllDiscount", firstAllDiscount);
             data.put("mock", mock);
             data.put("paid", mock);
 
             if (mock) {
                 orderMapper.insert(order);
                 unlockAll(userId, styleIds, taskId);
+                // 本地模拟支付同样按需生成付费款，保证流程与真实支付一致
+                if (taskId > 0) {
+                    generationProcessor.generatePaidStyles(taskId, styleIds);
+                }
                 data.put("orderId", order.getId());
                 data.put("outTradeNo", order.getOutTradeNo());
                 return Result.ok(data);
@@ -228,6 +246,7 @@ public class OrderController {
                     }
                     Map<String, Object> virtualPay = wechatVirtualPayService.payParams(
                             userId, order.getOutTradeNo(), amount, plan, styleIds.size());
+                    order.setPayChannel("wx-virtual");
                     orderMapper.insert(order);
                     data.put("orderId", order.getId());
                     data.put("outTradeNo", order.getOutTradeNo());
@@ -411,6 +430,17 @@ public class OrderController {
             if (order == null) {
                 throw new BizException("抖音订单不存在");
             }
+            // 只接受支付成功的通知，避免非成功事件（关闭/失败）被误记成已支付
+            String tradeStatus = msg.path("status").asText("");
+            if (!tradeStatus.isBlank() && !"SUCCESS".equalsIgnoreCase(tradeStatus)) {
+                throw new BizException("抖音交易状态非成功：" + tradeStatus);
+            }
+            // 校验 app_id，防止其他应用的合法签名回调被用来标记本应用订单
+            PayConfig cfg = payConfigService.get();
+            String notifyAppId = msg.path("app_id").asText("");
+            if (!notifyAppId.isBlank() && !notifyAppId.equals(cfg.getDouyinAppId())) {
+                throw new BizException("抖音回调 app_id 不匹配");
+            }
             long totalCents = msg.path("total_amount").asLong(-1);
             if (totalCents >= 0 && BigDecimal.valueOf(totalCents)
                     .compareTo(order.getAmount().multiply(BigDecimal.valueOf(100))) != 0) {
@@ -444,10 +474,20 @@ public class OrderController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "订单不存在");
         }
         if (!"paid".equals(order.getStatus())) {
-            String tradeNo = wechatVirtualPayService.queryPaidTradeNo(userId, order.getOutTradeNo());
-            if (!tradeNo.isBlank()) {
+            WechatVirtualPayService.VirtualOrder snapshot =
+                    wechatVirtualPayService.queryOrder(userId, order.getOutTradeNo());
+            if (snapshot.paid) {
+                BigDecimal paidYuan = BigDecimal.valueOf(snapshot.paidFee).divide(BigDecimal.valueOf(100));
+                if (paidYuan.compareTo(order.getAmount()) != 0) {
+                    throw new BizException("虚拟支付金额与订单金额不一致");
+                }
+                String tradeNo = snapshot.wxOrderId.isBlank() ? order.getOutTradeNo() : snapshot.wxOrderId;
                 markPaid(order, tradeNo);
             }
+        }
+        if ("paid".equals(order.getStatus())) {
+            // 重复确认时也补发发货通知：上次可能已入账但通知微信失败
+            wechatVirtualPayService.notifyProvided(order.getOutTradeNo());
         }
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("paid", "paid".equals(order.getStatus()));
@@ -498,6 +538,19 @@ public class OrderController {
         return Result.ok(data);
     }
 
+    @Operation(summary = "查询解锁单价与首单优惠状态")
+    @GetMapping("/pricing")
+    public Result<Map<String, Object>> pricing() {
+        Long userId = UserContext.get();
+        boolean firstAllDiscount = userId != null && firstAllDiscountAvailable(userId);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("oneUnitPrice", UNIT_PRICE);
+        data.put("listUnitPrice", UNIT_PRICE);
+        data.put("allUnitPrice", firstAllDiscount ? FIRST_ALL_UNIT_PRICE : UNIT_PRICE);
+        data.put("firstAllDiscount", firstAllDiscount);
+        return Result.ok(data);
+    }
+
     @Operation(summary = "查询订单状态")
     @GetMapping("/{id}")
     public Result<Map<String, Object>> status(@PathVariable Long id) {
@@ -521,6 +574,25 @@ public class OrderController {
     }
 
     /* ---------------- 内部实现 ---------------- */
+
+    /** 首单优惠判定：该用户从未有过已支付且未退款的「全部解锁」订单 */
+    private boolean firstAllDiscountAvailable(Long userId) {
+        Long paidAll = orderMapper.selectCount(new QueryWrapper<Order>()
+                .eq("user_id", userId)
+                .eq("plan", "all")
+                .eq("status", "paid")
+                // 已退款/退款中的订单不算消耗首单资格；refund_status 为空的历史单按未退款处理
+                .and(w -> w.isNull("refund_status").or().notIn("refund_status", "refunded", "refunding")));
+        return paidAll == null || paidAll == 0;
+    }
+
+    private static BigDecimal priceOf(String plan, int count, boolean firstAllDiscount) {
+        if ("one".equals(plan)) {
+            return UNIT_PRICE;
+        }
+        BigDecimal unit = firstAllDiscount ? FIRST_ALL_UNIT_PRICE : UNIT_PRICE;
+        return unit.multiply(BigDecimal.valueOf(count)).setScale(2);
+    }
 
     private static Map<String, Object> payMethod(String code, String label, boolean ready, String reason) {
         Map<String, Object> item = new LinkedHashMap<>();
@@ -598,7 +670,12 @@ public class OrderController {
         order.setPaidAt(LocalDateTime.now());
         order.setRefundStatus("none");
         orderMapper.updateById(order);
-        unlockAll(order.getUserId(), splitIds(order.getStyleIds()), order.getTaskId());
+        List<String> paidStyleIds = splitIds(order.getStyleIds());
+        unlockAll(order.getUserId(), paidStyleIds, order.getTaskId());
+        // 付费款在下单时未生成，支付成功后按需补图
+        if (order.getTaskId() != null && order.getTaskId() > 0) {
+            generationProcessor.generatePaidStyles(order.getTaskId(), paidStyleIds);
+        }
     }
 
     private void unlockAll(Long userId, List<String> styleIds, Long taskId) {

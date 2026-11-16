@@ -26,7 +26,12 @@
         </view>
 
         <view v-if="view === 'compare'">
-          <view v-if="isFailed(current)" class="res-fail" @click="retryCurrent">
+          <view v-if="isPending(current)" class="res-fail">
+            <fj-icon name="crown" :size="24" color="#C68A25" />
+            <text class="res-fail-t">支付后自动生成</text>
+            <text class="res-fail-d">解锁后会立即生成这张效果图</text>
+          </view>
+          <view v-else-if="isFailed(current)" class="res-fail" @click="retryCurrent">
             <fj-icon name="refresh" :size="24" color="#8B9295" />
             <text class="res-fail-t">{{ retrying ? '正在重新生成…' : '生成失败，点击重试' }}</text>
             <text class="res-fail-d">{{ current.failReason || '生成超时/服务异常' }}</text>
@@ -95,11 +100,12 @@
         <view v-if="remaining > 0" class="unlock-bar" @click="openPay()">
           <view class="ub-thumbs">
             <view v-for="item in lockedList.slice(0, 3)" :key="item.styleId" class="ub-thumb">
-              <image class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+              <image v-if="item.img" class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+              <view v-else class="ub-thumb-empty">待生成</view>
             </view>
           </view>
           <view class="ub-main">
-            <view class="ub-t">还有 {{ remaining }} 款效果已生成</view>
+            <view class="ub-t">还有 {{ remaining }} 款效果待解锁</view>
             <view class="ub-d">{{ unlockSub }}</view>
           </view>
           <text class="ub-btn">解锁</text>
@@ -114,7 +120,14 @@
               :class="{ on: i === activeIndex, locked: !isUnlocked(item) }"
               @click="openFromGrid(i)"
             >
-              <image v-if="!isFailed(item)" class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+              <image
+                v-if="!isFailed(item) && !isPending(item)"
+                class="thumb-img"
+                :src="item.img"
+                mode="aspectFill"
+                style="width:100%;height:100%"
+              />
+              <view v-else-if="isPending(item)" class="fail-thumb"><text>支付后生成</text></view>
               <view v-else class="fail-thumb"><text>生成失败</text></view>
               <text class="res-cell-idx">{{ i + 1 }}</text>
               <view v-if="!isUnlocked(item)" class="res-cell-lock">
@@ -150,7 +163,14 @@
           :class="{ on: i === activeIndex, locked: !isUnlocked(item) }"
           @click="selectStyle(i)"
         >
-          <image v-if="!isFailed(item)" class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
+          <image
+            v-if="!isFailed(item) && !isPending(item)"
+            class="thumb-img"
+            :src="item.img"
+            mode="aspectFill"
+            style="width:100%;height:100%"
+          />
+          <view v-else-if="isPending(item)" class="fail-thumb"><text>待生成</text></view>
           <view v-else class="fail-thumb"><text>失败</text></view>
           <text class="r-thumb-idx">{{ i + 1 }}</text>
           <view v-if="!isUnlocked(item)" class="r-thumb-lock">
@@ -203,6 +223,8 @@ const baPct = ref(50)
 const retrying = ref(false)
 /** 是否从试发记录进入（决定返回目标） */
 const fromHistory = ref(false)
+/** 解锁单价与首单优惠状态由服务端下发，前端不写死价格 */
+const pricing = ref({ oneUnitPrice: 6, allUnitPrice: 6, firstAllDiscount: false })
 
 const styles = computed(() => (app.result && app.result.styles) || [])
 /** 当前这批生成的任务 ID：解锁按「任务 + 款式」计算，第 2 张起需要重新付费 */
@@ -259,16 +281,23 @@ const primaryTitle = computed(() => {
   if (failedList.value.length > 0) return '部分生成失败 · 点击重试'
   return '已解锁全部 · 保存高清图'
 })
-/** 只剩 1 款时按单张 ¥6 计价，多款按 ¥3/款 打包 */
-const unlockPrice = computed(() => (remaining.value > 1 ? remaining.value * 3 : 6))
+/** 只剩 1 款时按单张原价，多款走「全部」套餐（首单 5 折，仅限一次） */
+const unlockPrice = computed(() =>
+  remaining.value > 1
+    ? pricing.value.allUnitPrice * remaining.value
+    : pricing.value.oneUnitPrice
+)
 const primarySub = computed(() =>
   remaining.value > 0 ? `高清无水印 · ¥${unlockPrice.value}` : '高清无水印 · 可直接保存'
 )
-const unlockSub = computed(() =>
-  remaining.value > 1
-    ? `限时 ¥${unlockPrice.value} 全部解锁 · 高清无水印`
-    : `¥${unlockPrice.value} 解锁高清无水印版`
-)
+const unlockSub = computed(() => {
+  if (remaining.value <= 1) {
+    return `¥${unlockPrice.value} 解锁高清无水印版`
+  }
+  return pricing.value.firstAllDiscount
+    ? `首单 5 折 · ¥${unlockPrice.value} 全部解锁`
+    : `¥${unlockPrice.value} 全部解锁 · 高清无水印`
+})
 
 const sliderRef = ref(null)
 
@@ -286,9 +315,14 @@ function isOpen(item) {
   return item.unlocked === true || isUnlocked(item)
 }
 
-/** 服务端标记失败的款式：无图即视为失败 */
+/** 服务端标记失败的款式：无图且不是待支付生成 */
 function isFailed(item) {
-  return !!item && (item.failed === true || !item.img)
+  return !!item && !isPending(item) && (item.failed === true || !item.img)
+}
+
+/** 付费款在支付前不生成，由服务端标记 pending */
+function isPending(item) {
+  return !!item && item.pending === true
 }
 
 /** 重试当前这款（对比位或失败缩略图点击） */
@@ -509,10 +543,12 @@ onLoad(async (options) => {
     return
   }
 
-  // 初始仅免费开放 1 款（取第一款生成成功的，与后端免费解锁规则一致）
+  // 免费款固定为本批第 1 款（与后端一致）：仅它生成成功时本地补解锁，避免把待付费款误判为已解锁
   if (!styles.value.some(isUnlocked)) {
-    const first = styles.value.find((s) => !isFailed(s))
-    if (first && first.styleId) unlockStyles([first.styleId])
+    const first = styles.value[0]
+    if (first && first.styleId && !isFailed(first) && !isPending(first)) {
+      unlockStyles([first.styleId])
+    }
   }
   track('result_view', { taskId: taskId.value, styleCount: styles.value.length })
 })
@@ -521,30 +557,89 @@ onReady(() => {
   measure()
 })
 
-/** 支付宝支付跳转回来后轮询订单状态，成功再刷新解锁 */
+/** 支付宝支付跳转回来后轮询订单状态，成功再刷新解锁；未确认前保留标记，下次进入继续查 */
+let checkingOrder = false
 async function checkPendingOrder() {
+  if (checkingOrder) return
   const pending = uni.getStorageSync('fajing_pending_order')
   if (!pending || !pending.orderId) return
-  uni.removeStorageSync('fajing_pending_order')
-  for (let i = 0; i < 8; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+  checkingOrder = true
+  try {
+    // 支付宝异步通知可能延迟，最多等约 30 秒
+    for (let i = 0; i < 15; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      try {
+        const data = await API.orderStatus(pending.orderId)
+        if (data && data.paid) {
+          uni.removeStorageSync('fajing_pending_order')
+          await syncUnlocks()
+          ui.toast('支付成功，已解锁高清图')
+          pollPendingImages()
+          return
+        }
+      } catch (e) {
+        // 继续轮询
+      }
+    }
+    ui.toast('支付结果确认中，稍后回到本页会自动刷新')
+  } finally {
+    checkingOrder = false
+  }
+}
+
+async function checkPendingVirtualOrder() {
+  const pending = uni.getStorageSync('fajing_pending_virtual_order')
+  if (!pending || !pending.orderId) return
+  try {
+    const data = await API.virtualConfirm(pending.orderId)
+    if (data && data.paid) {
+      uni.removeStorageSync('fajing_pending_virtual_order')
+      await syncUnlocks()
+      ui.toast('支付成功，已解锁高清图')
+      pollPendingImages()
+    }
+  } catch (e) {
+    // 查单失败时保留待确认单，下次进入结果页继续确认
+  }
+}
+
+async function pollPendingImages() {
+  if (!styles.value.some(isPending)) return
+  for (let i = 0; i < 40; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
     try {
-      const data = await API.orderStatus(pending.orderId)
-      if (data && data.paid) {
-        await syncUnlocks()
-        ui.toast('支付成功，已解锁高清图')
-        return
+      const res = await API.task(taskId.value)
+      const data = (res && res.result) || res
+      if (data && data.styles) {
+        app.setResult({ ...data, taskId: taskId.value })
+        if (!data.styles.some((s) => s.pending === true)) return
       }
     } catch (e) {
       // 继续轮询
     }
   }
-  ui.toast('未查询到支付结果，如已付款请稍后刷新')
+}
+
+async function loadPricing() {
+  try {
+    const data = await API.pricing()
+    pricing.value = {
+      oneUnitPrice: Number(data && data.oneUnitPrice) || 6,
+      allUnitPrice: Number(data && data.allUnitPrice) || 6,
+      firstAllDiscount: !!(data && data.firstAllDiscount)
+    }
+  } catch (e) {
+    // 取不到价格时按原价展示，实际金额仍以服务端下单结果为准
+    pricing.value = { oneUnitPrice: 6, allUnitPrice: 6, firstAllDiscount: false }
+  }
 }
 
 onShow(() => {
+  loadPricing()
   syncUnlocks()
   checkPendingOrder()
+  checkPendingVirtualOrder()
+  pollPendingImages()
 })
 </script>
 
@@ -595,6 +690,16 @@ onShow(() => {
 .ub-thumb .thumb-img {
   filter: blur(30px);
   transform: scale(2.4);
+}
+.ub-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 9px;
+  color: #b7a8af;
+  background: #f6edf0;
 }
 .r-thumb-lock {
   flex-direction: column;

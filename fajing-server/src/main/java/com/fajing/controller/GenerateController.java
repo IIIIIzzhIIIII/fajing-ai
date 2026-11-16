@@ -128,6 +128,9 @@ public class GenerateController {
         for (Object o : list) {
             if (!(o instanceof Map<?, ?> item)) continue;
             if (!styleId.equals(String.valueOf(item.get("styleId")))) continue;
+            if (Boolean.TRUE.equals(item.get("pending"))) {
+                throw new BizException("该款式需先解锁，支付成功后会自动生成");
+            }
             boolean failed = Boolean.TRUE.equals(item.get("failed"));
             Object img = item.get("img");
             boolean hasImg = img != null && !String.valueOf(img).isBlank();

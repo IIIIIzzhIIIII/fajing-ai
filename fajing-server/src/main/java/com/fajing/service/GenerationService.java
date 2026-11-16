@@ -105,8 +105,9 @@ public class GenerationService {
             result.put("faceShape", task.getGender().equals("male") ? "方脸" : "鹅蛋脸");
             result.put("score", ThreadLocalRandom.current().nextInt(88, 98));
             List<Map<String, Object>> items = new ArrayList<>();
-            // 免费解锁给第一款「生成成功」的款式，避免第一张失败时免费额度落在空图上
-            String freeStyleId = null;
+            // 免费款固定为用户选择的第一款，不再顺延到后续成功的款式
+            String freeStyleId = styles.isEmpty() ? null : styles.get(0).getId();
+            boolean freeGenerated = false;
             for (Hairstyle s : styles) {
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("styleId", s.getId());
@@ -115,18 +116,22 @@ public class GenerationService {
                 item.put("face", s.getFace());
                 item.put("cat", s.getCat());
                 String aiUrl = images == null ? null : images.get(s.getId());
-                boolean isFailed = aiUrl == null || aiUrl.isBlank()
-                        || (failed != null && failed.contains(s.getId()));
-                item.put("img", isFailed ? null : aiUrl);
-                item.put("failed", isFailed);
-                if (isFailed) {
+                boolean hasImage = aiUrl != null && !aiUrl.isBlank()
+                        && (failed == null || !failed.contains(s.getId()));
+                boolean isFree = s.getId().equals(freeStyleId);
+                boolean pending = !hasImage && !isFree;
+                item.put("img", hasImage ? aiUrl : null);
+                item.put("failed", !hasImage && isFree);
+                item.put("pending", pending);
+                if (!hasImage && isFree) {
                     item.put("failReason", "生成超时/服务异常");
-                } else if (freeStyleId == null) {
-                    freeStyleId = s.getId();
                 }
-                // 第 1 款（成功的）免费解锁，其余以服务端 user_unlock 为准
-                item.put("unlocked", !isFailed
-                        && (s.getId().equals(freeStyleId) || isUnlocked(task.getUserId(), taskId, s.getId())));
+                if (hasImage && isFree) {
+                    freeGenerated = true;
+                }
+                // 免费款生成成功才解锁；付费款以 user_unlock 为准，未生成前保持锁定
+                item.put("unlocked", hasImage
+                        && (isFree || isUnlocked(task.getUserId(), taskId, s.getId())));
                 items.add(item);
             }
             result.put("styles", items);
@@ -151,8 +156,8 @@ public class GenerationService {
                 record.setCreatedAt(LocalDateTime.now());
                 recordMapper.insert(record);
 
-                // 第一款成功的款式默认免费解锁（按任务维度）
-                if (freeStyleId != null) {
+                // 免费款生成成功才解锁；失败时不再顺延
+                if (freeGenerated && freeStyleId != null) {
                     unlock(task.getUserId(), freeStyleId, taskId);
                 }
             }
@@ -187,6 +192,14 @@ public class GenerationService {
                         boolean ok = img != null && !img.isBlank();
                         item.put("img", ok ? img : null);
                         item.put("failed", !ok);
+                        item.remove("pending");
+                        if (ok) {
+                            String[] ids = task.getStyleIds() == null ? new String[0] : task.getStyleIds().split(",");
+                            if (ids.length > 0 && styleId.equals(ids[0].trim())) {
+                                // 免费款重试成功后补解锁，避免首款失败后免费资格丢失
+                                unlock(task.getUserId(), styleId, taskId);
+                            }
+                        }
                         if (ok) {
                             item.remove("failReason");
                         } else {
@@ -224,6 +237,33 @@ public class GenerationService {
         return taskMapper.selectById(taskId);
     }
 
+    /** 判断某款是否已经有生成图，避免支付后重复生成历史任务里已存在的图片 */
+    public boolean hasStyleImage(Long taskId, String styleId) {
+        GenerationTask task = taskMapper.selectById(taskId);
+        if (task == null || task.getResultJson() == null || task.getResultJson().isBlank()) {
+            return false;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = objectMapper.readValue(task.getResultJson(), Map.class);
+            Object stylesObj = result.get("styles");
+            if (!(stylesObj instanceof List<?> list)) {
+                return false;
+            }
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> item
+                        && styleId.equals(String.valueOf(item.get("styleId")))) {
+                    Object img = item.get("img");
+                    return img != null && !String.valueOf(img).isBlank()
+                            && !Boolean.TRUE.equals(item.get("failed"));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("读取任务图片状态失败 taskId={} styleId={}: {}", taskId, styleId, e.getMessage());
+        }
+        return false;
+    }
+
     /** 解锁判定唯一入口：按「用户 + 任务 + 款式」查 user_unlock */
     public boolean isUnlocked(Long userId, Long taskId, String styleId) {
         Long count = unlockMapper.selectCount(
@@ -254,6 +294,22 @@ public class GenerationService {
             // 并发回调/重复通知下唯一索引兜底，视为已解锁
             log.debug("解锁记录已存在 user={} task={} style={}", userId, taskId, styleId);
         }
+    }
+
+    /** 全额退款后收回解锁：部分退款不调用，避免用户既没拿到全款又失去内容 */
+    public void revokeUnlocks(Long userId, Long taskId, String styleIds) {
+        if (userId == null || taskId == null || taskId <= 0 || styleIds == null || styleIds.isBlank()) {
+            return;
+        }
+        List<String> ids = Arrays.stream(styleIds.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+        if (ids.isEmpty()) {
+            return;
+        }
+        unlockMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserUnlock>()
+                .eq("user_id", userId)
+                .eq("task_id", taskId)
+                .in("style_id", ids));
     }
 
     public Map<String, Object> toMap(GenerationTask task) {

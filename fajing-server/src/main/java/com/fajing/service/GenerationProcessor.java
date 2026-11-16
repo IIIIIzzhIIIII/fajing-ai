@@ -65,13 +65,15 @@ public class GenerationProcessor {
         // 进度只在关键节点写值：任务领取 5% → AI 调用开始 10% → 每完成一张推进 → finish 置 100%
         generationService.updateProgress(taskId, 5);
 
-        List<Hairstyle> styles = resolveStyles(task);
-        if (styles.isEmpty()) {
+        List<Hairstyle> allStyles = resolveStyles(task);
+        if (allStyles.isEmpty()) {
             // 发型被删除/下架导致无可生成内容时，本次额度已扣减，需要退还
             quotaService.refund(task.getUserId(), taskId, "无可生成的发型");
             generationService.finish(taskId, Map.of(), Set.of());
             return;
         }
+        // 先只生成第一张（免费款），其余款在支付成功后按需生成，避免未付费也承担模型成本
+        List<Hairstyle> styles = List.of(allStyles.get(0));
         generationService.updateProgress(taskId, 10);
 
         Map<String, String> images = new ConcurrentHashMap<>();
@@ -120,6 +122,50 @@ public class GenerationProcessor {
             quotaService.refund(task.getUserId(), taskId, "生成全部失败");
         }
         generationService.finish(taskId, images, failed);
+    }
+
+    /** 支付成功后生成剩余款式：只补未生成过的款，成功后回写结果 */
+    @Async
+    public void generatePaidStyles(Long taskId, List<String> styleIds) {
+        GenerationTask task = generationService.getTask(taskId);
+        if (task == null || styleIds == null || styleIds.isEmpty()) {
+            return;
+        }
+        List<Hairstyle> targets = resolveStyles(task).stream()
+                .filter(s -> styleIds.contains(s.getId()))
+                .filter(s -> !generationService.hasStyleImage(taskId, s.getId()))
+                .toList();
+        if (targets.isEmpty()) {
+            return;
+        }
+        String colorName = colorName(task.getColorId());
+        String colorEn = colorEn(task.getColorId());
+        ExecutorService pool = Executors.newFixedThreadPool(Math.max(1, Math.min(2, targets.size())));
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (Hairstyle s : targets) {
+                futures.add(pool.submit(() -> {
+                    try {
+                        String url = generateOne(task, s, colorName, colorEn);
+                        generationService.patchStyle(taskId, s.getId(), url);
+                        logCall(task, true);
+                    } catch (Exception e) {
+                        log.warn("付费款生成失败 taskId={} style={}: {}", taskId, s.getName(), e.getMessage());
+                        generationService.patchStyle(taskId, s.getId(), null);
+                        logCall(task, false);
+                    }
+                }));
+            }
+            for (Future<?> f : futures) {
+                try {
+                    f.get(200, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    log.warn("等待付费款出图超时 taskId={}: {}", taskId, e.getMessage());
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     /** 单款重试：只重跑失败的那一款，成功后回写结果 */

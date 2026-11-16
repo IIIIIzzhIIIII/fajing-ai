@@ -40,15 +40,18 @@
           <view class="plan-t">单张解锁</view>
           <view class="plan-d">仅解锁当前这 1 张</view>
         </view>
-        <view class="plan-price">¥6<text class="plan-unit">/张</text></view>
+        <view class="plan-price">¥{{ pricing.oneUnitPrice }}<text class="plan-unit">/张</text></view>
       </view>
       <view v-if="allPlanAvailable" class="plan" :class="{ on: payPlan === 'all' }" @click="ui.payPlan = 'all'">
         <view class="plan-radio" />
         <view style="flex:1">
-          <view class="plan-t">本次全部 {{ lockedCount }} 款 <text class="plan-tag">限时 5 折</text></view>
-          <view class="plan-d">平均 ¥3.0/张 · 推荐</view>
+          <view class="plan-t">
+            本次全部 {{ lockedCount }} 款
+            <text v-if="pricing.firstAllDiscount" class="plan-tag">首单 5 折</text>
+          </view>
+          <view class="plan-d">{{ allPlanDesc }}</view>
         </view>
-        <view class="plan-price"><text class="plan-old">¥{{ lockedCount * 6 }}</text>¥{{ lockedCount * 3 }}<text class="plan-unit">/全部</text></view>
+        <view class="plan-price"><text v-if="pricing.firstAllDiscount" class="plan-old">¥{{ lockedCount * pricing.listUnitPrice }}</text>¥{{ lockedCount * pricing.allUnitPrice }}<text class="plan-unit">/全部</text></view>
       </view>
       <view class="pay-methods">
         <view class="pay-methods-title">选择支付方式</view>
@@ -199,12 +202,28 @@ const methods = ref({ channels: [], mock: false })
 const selectedChannel = ref('')
 /** 下单中禁止重复点击，避免同一批次生成多笔订单 */
 const paying = ref(false)
+/** 服务端下发的解锁单价与首单优惠状态，前端不再自行算价 */
+const pricing = ref({ oneUnitPrice: 6, listUnitPrice: 6, allUnitPrice: 6, firstAllDiscount: false })
 
 /** 只展示后台已启用且参数完整的支付方式，避免未开通渠道仍可下单 */
 const channelOptions = computed(() =>
   (methods.value.channels || []).filter((item) => item.ready)
 )
+/** H5 在微信内置浏览器打开时无法调起支付宝，需要引导用户换浏览器 */
+function isWechatBrowser() {
+  let wechat = false
+  // #ifdef H5
+  wechat = /MicroMessenger/i.test(
+    (typeof navigator !== 'undefined' && navigator.userAgent) || ''
+  )
+  // #endif
+  return wechat
+}
+
 const payMethodHint = computed(() => {
+  if (isWechatBrowser()) {
+    return '微信内无法调起支付宝，请点右上角「在浏览器打开」后再支付，或分享给好友获得免费次数'
+  }
   const first = (methods.value.channels || [])[0]
   return (first && first.reason) || '当前环境暂不支持在线支付，可通过下方分享获得免费次数'
 })
@@ -237,13 +256,32 @@ async function loadPayMethods() {
   }
 }
 
+/** 首单优惠状态：只有从未付费过「全部解锁」的用户才享 5 折 */
+async function loadPricing() {
+  try {
+    const data = await API.pricing()
+    pricing.value = {
+      oneUnitPrice: Number(data && data.oneUnitPrice) || 6,
+      listUnitPrice: Number(data && data.listUnitPrice) || 6,
+      allUnitPrice: Number(data && data.allUnitPrice) || 6,
+      firstAllDiscount: !!(data && data.firstAllDiscount)
+    }
+  } catch (e) {
+    pricing.value = { oneUnitPrice: 6, listUnitPrice: 6, allUnitPrice: 6, firstAllDiscount: false }
+  }
+}
+
 watch(
   () => ui.sheet,
   (sheet) => {
-    if (sheet === 'pay') loadPayMethods()
+    if (sheet === 'pay') {
+      loadPayMethods()
+      loadPricing()
+    }
   }
 )
 loadPayMethods()
+loadPricing()
 
 const currentStyle = computed(() => {
   const list = (app.result && app.result.styles) || []
@@ -254,8 +292,14 @@ const beforeImg = computed(() => (app.result && app.result.before) || app.photoP
 /** 解锁按「任务 + 款式」计算，避免旧批次解锁让新一批出图免费 */
 const taskKey = computed(() => String((app.result && app.result.taskId) || app.taskId || ''))
 const isUnlocked = (styleId) => !!styleId && app.unlocks.includes(`${taskKey.value}:${styleId}`)
-/** 生成失败（无图）的款式不能解锁，也不应计入「全部 N 款」的套餐价格 */
-const isPayable = (s) => !!s && !!s.styleId && !s.failed && !!s.img && s.unlocked !== true && !isUnlocked(s.styleId)
+/** 生成失败（无图）的款式不能解锁；待支付生成的 pending 款可以付费 */
+const isPayable = (s) =>
+  !!s &&
+  !!s.styleId &&
+  !s.failed &&
+  (s.pending === true || !!s.img) &&
+  s.unlocked !== true &&
+  !isUnlocked(s.styleId)
 const payableStyles = computed(() => {
   const list = (app.result && app.result.styles) || []
   return list.filter(isPayable)
@@ -276,7 +320,16 @@ const lockedCount = computed(() => payableStyles.value.length)
 // 只有 1 款待解锁时，"全部"与"单张"重复，直接隐藏全部套餐并按单张计价
 const allPlanAvailable = computed(() => lockedCount.value > 1)
 const payPlan = computed(() => (allPlanAvailable.value ? ui.payPlan : 'one'))
-const payAmount = computed(() => (payPlan.value === 'one' ? 6 : lockedCount.value * 3))
+const payAmount = computed(() =>
+  payPlan.value === 'one'
+    ? pricing.value.oneUnitPrice
+    : pricing.value.allUnitPrice * lockedCount.value
+)
+const allPlanDesc = computed(() =>
+  pricing.value.firstAllDiscount
+    ? `平均 ¥${pricing.value.allUnitPrice}/张 · 首单限用 1 次`
+    : `¥${pricing.value.allUnitPrice}/张 · 一次解锁全部`
+)
 const payTitle = computed(() => (payPlan.value === 'one' ? '解锁高清无水印版' : '解锁本次全部效果'))
 const quotaSub = computed(() =>
   app.quota.shareClaimed
@@ -370,9 +423,30 @@ function requestDouyinPay(payload) {
 }
 
 async function finishPaid(plan, styleIds, channel) {
+  uni.removeStorageSync('fajing_pending_virtual_order')
   await refreshUnlocks()
   track('pay_success', { plan, count: styleIds.length, channel })
   ui.sheet = 'paid'
+  pollPaidImages()
+}
+
+/** 支付成功后轮询任务，等待剩余款式生成完成 */
+async function pollPaidImages() {
+  const taskId = Number((app.result && app.result.taskId) || app.taskId || 0)
+  if (!taskId) return
+  for (let i = 0; i < 40; i++) {
+    await wait(1500)
+    try {
+      const res = await API.task(taskId)
+      const data = (res && res.result) || res
+      if (data && data.styles) {
+        app.setResult({ ...data, taskId })
+        if (!data.styles.some((s) => s.pending === true)) return
+      }
+    } catch (e) {
+      // 继续轮询
+    }
+  }
 }
 
 /** 支付后轮询服务端订单，最多约 12 秒 */
@@ -429,11 +503,38 @@ async function payNow() {
     ui.toast('请选择支付方式')
     return
   }
+  if (channel === 'alipay' && isWechatBrowser()) {
+    ui.toast('微信内无法直接调起支付宝，请用手机浏览器打开后再支付')
+    return
+  }
   track('pay_click', { plan, count: styleIds.length, channel })
   // 从「试发记录」进入结果页时 app.taskId 为空，任务 ID 只在 result 里，必须优先取 result.taskId
   const payTaskId = Number((app.result && app.result.taskId) || app.taskId || 0)
   paying.value = true
   try {
+    // #ifdef MP-WEIXIN
+    // 上一笔虚拟支付可能已扣款但确认失败，先查单，确认未支付再发起新订单
+    const pendingPay = uni.getStorageSync('fajing_pending_virtual_order')
+    if (pendingPay && pendingPay.orderId) {
+      try {
+        let confirmed = null
+        // 连续查 3 次，避免上一笔仍在支付处理中时又发起新订单
+        for (let i = 0; i < 3; i++) {
+          confirmed = await API.virtualConfirm(pendingPay.orderId)
+          if (confirmed && confirmed.paid) break
+          await wait(800)
+        }
+        if (confirmed && confirmed.paid) {
+          await finishPaid(pendingPay.plan || plan, pendingPay.styleIds || styleIds, channel)
+          return
+        }
+        uni.removeStorageSync('fajing_pending_virtual_order')
+      } catch (e) {
+        ui.toast('上一笔支付结果确认中，请稍后重试')
+        return
+      }
+    }
+    // #endif
     const res = await API.createOrder({
       platform: currentPlatform(),
       channel,
@@ -441,6 +542,18 @@ async function payNow() {
       taskId: payTaskId,
       styleIds
     })
+    // 金额以服务端为准：若与页面展示不一致，先同步价格再让用户确认，避免展示价与实扣价不同
+    const serverAmount = Number(res && res.amount)
+    if (
+      !(res && res.mock) &&
+      !(res && res.paid) &&
+      Number.isFinite(serverAmount) &&
+      Math.abs(serverAmount - payAmount.value) >= 0.01
+    ) {
+      await loadPricing()
+      ui.toast(`实际应付 ¥${serverAmount}，请确认后重新支付`)
+      return
+    }
     if (res && res.mock) {
       await refreshUnlocks()
       track('pay_success', { plan, count: styleIds.length, channel })
@@ -449,13 +562,18 @@ async function payNow() {
     }
     // #ifdef MP-WEIXIN
     if (res && res.virtualPay) {
+      uni.setStorageSync('fajing_pending_virtual_order', {
+        orderId: res.orderId,
+        plan,
+        styleIds
+      })
       await requestVirtualPay(res.virtualPay)
       // 客户端成功回调可能丢失，以服务端查单结果为准
       const confirmed = await API.virtualConfirm(res.orderId).catch(() => null)
       if (!(confirmed && confirmed.paid)) {
         const paid = await pollPaid(res.orderId)
         if (!paid) {
-          ui.toast('支付结果确认中，请稍后刷新')
+          ui.toast('支付结果确认中，稍后会自动确认')
           return
         }
       }
@@ -509,6 +627,8 @@ async function payNow() {
     // #endif
     throw new Error('未返回支付参数')
   } catch (e) {
+    // 未完成支付时清掉待确认单；已完成但确认失败的情况保留，供下次查单
+    uni.removeStorageSync('fajing_pending_virtual_order')
     ui.toast(payErrorMessage(e))
   } finally {
     paying.value = false

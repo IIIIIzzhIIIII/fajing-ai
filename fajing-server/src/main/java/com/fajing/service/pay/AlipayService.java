@@ -100,6 +100,12 @@ public class AlipayService {
                 result.put("msg", "支付宝参数不完整：需 APPID、应用私钥、支付宝公钥、网关、异步通知地址");
                 return result;
             }
+            // H5 付款后需要回跳地址才能回到 App 确认结果，缺失时付款即断链
+            if (!notBlank(cfg.getAlipayReturnUrl())) {
+                result.put("ok", false);
+                result.put("msg", "缺少同步回跳地址：H5 付款后将停留在支付宝页面，无法自动解锁");
+                return result;
+            }
             Map<String, String> biz = new LinkedHashMap<>();
             biz.put("out_trade_no", "FJVERIFY" + System.currentTimeMillis());
             Map<String, String> params = baseParams(cfg, "alipay.trade.query");

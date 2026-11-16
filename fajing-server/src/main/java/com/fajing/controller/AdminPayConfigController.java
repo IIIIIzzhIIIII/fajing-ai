@@ -7,6 +7,7 @@ import com.fajing.service.AdminLogService;
 import com.fajing.service.PayConfigService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.WechatPayService;
+import com.fajing.service.pay.WechatVirtualPayService;
 import com.fajing.util.KeyFileStore;
 import com.fajing.util.SecretCodec;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +38,7 @@ public class AdminPayConfigController {
 
     private final PayConfigService payConfigService;
     private final WechatPayService wechatPayService;
+    private final WechatVirtualPayService wechatVirtualPayService;
     private final AlipayService alipayService;
     private final KeyFileStore keyFileStore;
     private final AdminLogService adminLogService;
@@ -88,7 +90,11 @@ public class AdminPayConfigController {
     public Result<Map<String, Object>> verify(@RequestBody(required = false) Map<String, String> body) {
         String channel = body == null ? "" : String.valueOf(body.getOrDefault("channel", ""));
         if ("wx".equalsIgnoreCase(channel)) {
-            return Result.ok(wechatPayService.verifyConnection());
+            // 虚拟支付与普通 JSAPI 的校验口径不同：虚拟支付只需要 OfferID/AppKey/道具 + access_token
+            PayConfig cfg = payConfigService.get();
+            boolean virtual = "virtual".equalsIgnoreCase(cfg.getWxPayMode());
+            return Result.ok(virtual ? wechatVirtualPayService.verifyConnection()
+                    : wechatPayService.verifyConnection());
         }
         if ("alipay".equalsIgnoreCase(channel)) {
             return Result.ok(alipayService.verifyConnection());

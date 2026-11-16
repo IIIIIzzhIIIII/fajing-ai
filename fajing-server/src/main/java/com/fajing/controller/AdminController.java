@@ -19,6 +19,7 @@ import com.fajing.service.ChannelStatsService;
 import com.fajing.service.TradeRuleService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.WechatPayService;
+import com.fajing.service.pay.WechatVirtualPayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +63,8 @@ public class AdminController {
     private final AlipayService alipayService;
     private final ChannelStatsService channelStatsService;
     private final TradeRuleService tradeRuleService;
+    private final WechatVirtualPayService wechatVirtualPayService;
+    private final com.fajing.service.GenerationService generationService;
 
     @Operation(summary = "订单退款（微信 / 支付宝）")
     @PostMapping("/orders/{id}/refund")
@@ -108,6 +111,8 @@ public class AdminController {
                 case "wx" -> wechatPayService.refund(order.getOutTradeNo(),
                         "RF" + order.getOutTradeNo() + System.currentTimeMillis(),
                         amount, order.getAmount(), reason);
+                case "wx-virtual" -> wechatVirtualPayService.refund(order.getUserId(),
+                        order.getOutTradeNo(), amount, reason);
                 case "alipay" -> alipayService.refund(order.getOutTradeNo(), amount, reason);
                 case "mock" -> {
                     // 本地模拟订单无需调用渠道
@@ -122,13 +127,19 @@ public class AdminController {
                     .set("refund_status", "none"));
             throw e;
         }
-        order.setRefundStatus("refunded");
+        // 虚拟支付退款是异步任务，先保持 refunding，最终结果以微信查单为准
+        String refundStatus = "wx-virtual".equals(channel) ? "refunding" : "refunded";
+        order.setRefundStatus(refundStatus);
         order.setRefundAmount(amount);
         orderMapper.updateById(order);
+        // 全额退款收回对应解锁，避免退款后仍保留付费内容；部分退款与虚拟支付退款中不回收
+        if ("refunded".equals(refundStatus) && amount.compareTo(order.getAmount()) == 0) {
+            generationService.revokeUnlocks(order.getUserId(), order.getTaskId(), order.getStyleIds());
+        }
         adminLogService.log("ORDER_REFUND", "order:" + id + ",amount:" + amount);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("orderId", id);
-        data.put("refundStatus", "refunded");
+        data.put("refundStatus", refundStatus);
         data.put("refundAmount", amount);
         return Result.ok(data);
     }

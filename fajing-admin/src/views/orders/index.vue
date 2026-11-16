@@ -59,6 +59,7 @@ function unlockCount(styleIds) {
 
 function channelLabel(channel) {
   if (channel === 'wx') return '微信支付'
+  if (channel === 'wx-virtual') return '微信虚拟支付'
   if (channel === 'alipay') return '支付宝'
   if (channel === 'mock') return '测试支付'
   return channel || '-'

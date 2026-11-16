@@ -106,8 +106,11 @@ public class RecordController {
                     item.put("styleId", src.get("styleId"));
                     item.put("name", src.get("name"));
                     item.put("img", src.get("img"));
-                    // 失败款无图，记录页需要区分「生成失败」与「未解锁」
-                    item.put("failed", Boolean.TRUE.equals(src.get("failed")) || src.get("img") == null);
+                    // 付费款在支付前不生成（pending），不能标记为失败，否则记录页会隐藏解锁入口
+                    boolean pending = Boolean.TRUE.equals(src.get("pending"));
+                    item.put("pending", pending);
+                    item.put("failed", !pending
+                            && (Boolean.TRUE.equals(src.get("failed")) || src.get("img") == null));
                     item.put("unlocked", Boolean.TRUE.equals(src.get("unlocked")));
                     items.add(item);
                 }

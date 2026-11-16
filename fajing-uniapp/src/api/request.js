@@ -119,7 +119,7 @@ function ensureLogin() {
   return loginPromise
 }
 
-export function request({ url, method = 'GET', data = {}, header = {}, retry = true }) {
+export function request({ url, method = 'GET', data = {}, header = {}, retry = true, silent = false }) {
   return new Promise((resolve, reject) => {
     const base = apiBase()
     if (!base) {
@@ -158,19 +158,19 @@ export function request({ url, method = 'GET', data = {}, header = {}, retry = t
         }
         const body = res.data
         if (res.statusCode !== 200) {
-          fail(`服务异常（${res.statusCode}）`)
+          if (!silent) fail(`服务异常（${res.statusCode}）`)
           reject(new Error(`HTTP ${res.statusCode}`))
           return
         }
         if (!body || body.code !== 0) {
-          fail(body && body.msg ? body.msg : '请求失败')
+          if (!silent) fail(body && body.msg ? body.msg : '请求失败')
           reject(new Error((body && body.msg) || 'business error'))
           return
         }
         resolve(body.data)
       },
       fail: (err) => {
-        fail('网络异常，请检查后端是否启动')
+        if (!silent) fail('网络异常，请检查后端是否启动')
         reject(err)
       }
     })
@@ -237,6 +237,8 @@ export const API = {
   createOrder: (payload) => request({ url: '/api/order/create', method: 'POST', data: payload }),
   payMethods: (platform) =>
     request({ url: `/api/order/pay-methods?platform=${encodeURIComponent(platform || '')}` }),
+  /** 价格与首单优惠只影响展示，取不到时静默回退为原价，不打断用户 */
+  pricing: () => request({ url: '/api/order/pricing', silent: true }),
   virtualConfirm: (id) => request({ url: `/api/order/${id}/virtual-confirm`, method: 'POST' }),
   orderStatus: (id) => request({ url: `/api/order/${id}` }),
   unlocks: () => request({ url: '/api/unlocks' }),

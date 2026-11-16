@@ -10,7 +10,13 @@ const verifying = reactive({ wx: false, alipay: false })
 const verifyResult = reactive({ wx: null, alipay: null })
 const ready = reactive({ wx: false, wxVirtual: false, douyin: false, xhs: false, alipay: false })
 const secretConfigured = ref(true)
-const suggested = reactive({ wxNotifyUrl: '', douyinNotifyUrl: '', xhsNotifyUrl: '', alipayNotifyUrl: '' })
+const suggested = reactive({
+  wxNotifyUrl: '',
+  douyinNotifyUrl: '',
+  xhsNotifyUrl: '',
+  alipayNotifyUrl: '',
+  alipayReturnUrl: ''
+})
 const uploading = ref(false)
 
 /** 掩码原值：聚焦清空、失焦为空时恢复，避免误覆盖 */
@@ -56,7 +62,8 @@ const form = reactive({
   alipayPrivateKeyEnc: '',
   alipayPublicKeyEnc: '',
   alipayGateway: 'https://openapi.alipay.com/gateway.do',
-  alipayNotifyUrl: ''
+  alipayNotifyUrl: '',
+  alipayReturnUrl: ''
 })
 
 function applyConfig(config) {
@@ -99,8 +106,10 @@ function load() {
       suggested.douyinNotifyUrl = data.douyinNotifyUrlSuggested || ''
       suggested.xhsNotifyUrl = data.xhsNotifyUrlSuggested || ''
       suggested.alipayNotifyUrl = data.alipayNotifyUrlSuggested || ''
+      suggested.alipayReturnUrl = data.alipayReturnUrlSuggested || ''
       if (!form.douyinNotifyUrl) form.douyinNotifyUrl = suggested.douyinNotifyUrl
       if (!form.xhsNotifyUrl) form.xhsNotifyUrl = suggested.xhsNotifyUrl
+      if (!form.alipayReturnUrl) form.alipayReturnUrl = suggested.alipayReturnUrl
     })
     .catch(() => {})
     .finally(() => {
@@ -269,6 +278,12 @@ onMounted(load)
           </el-form-item>
           <el-form-item label="全部道具 ID">
             <el-input v-model="form.wxVirtualProductAll" placeholder="单价 3 元的道具 productId（按数量购买）" />
+            <div class="field-tip">
+              首单 5 折用该道具 × 款数；优惠用完后改用上方 6 元道具 × 款数，两个都要配置。
+            </div>
+            <div class="field-tip">
+              虚拟支付查单依赖服务端环境变量 WECHAT_APPID / WECHAT_SECRET；用户 session_key 过期时需重新进入小程序。
+            </div>
           </el-form-item>
           <el-form-item>
             <el-button :icon="Connection" :loading="verifying.wx" @click="verify('wx')">测试微信连接</el-button>
@@ -338,6 +353,18 @@ onMounted(load)
             </div>
             <div class="field-tip">上线前替换为公网 HTTPS 域名。</div>
             <div class="field-tip">必填：付款结果只以该地址的异步通知为准，缺失时用户付款后不会自动解锁。</div>
+          </el-form-item>
+          <el-form-item label="同步回跳地址">
+            <div class="cert-field">
+              <el-input
+                v-model="form.alipayReturnUrl"
+                placeholder="${H5_DOMAIN}/#/pages/result/result"
+              />
+              <el-button :icon="CopyDocument" @click="copy(form.alipayReturnUrl)">复制</el-button>
+            </div>
+            <div class="field-tip">
+              必填：用户付款后跳回该地址确认结果；留空会停留在支付宝页面，App 内不会自动解锁。
+            </div>
           </el-form-item>
           <el-form-item>
             <el-button :icon="Connection" :loading="verifying.alipay" @click="verify('alipay')">

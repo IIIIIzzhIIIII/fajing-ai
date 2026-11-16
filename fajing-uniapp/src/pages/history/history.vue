@@ -85,12 +85,14 @@ function normalizeRecord(r, i) {
   const styles = items
     .map((it) => {
       const img = it.img || it.image || it.url || ''
+      const pending = it.pending === true
       return {
         styleId: it.styleId || it.id || '',
         name: it.name || it.styleName || '',
         img,
-        // 失败款没有图，不能按「付费解锁」展示，否则会误导用户重复付款
-        failed: it.failed === true || !img,
+        pending,
+        // 付费款待生成不算失败，否则会显示「生成失败」并隐藏结果页的解锁入口
+        failed: !pending && (it.failed === true || !img),
         unlocked: it.unlocked === true
       }
     })
