@@ -6,23 +6,6 @@
     <!-- 遮罩 -->
     <view class="mask" :class="{ show: !!ui.sheet }" @click="ui.close()" />
 
-    <!-- 每日额度 -->
-    <view class="sheet" :class="{ show: ui.sheet === 'quota' }">
-      <view class="sheet-grip" />
-      <view class="sheet-close" @click="ui.close()"><fj-icon name="x" :size="16" /></view>
-      <view class="quota-ico"><fj-icon name="clock" :size="24" /></view>
-      <view class="quota-title">今天的免费次数用完了</view>
-      <view class="quota-sub">{{ quotaSub }}</view>
-      <button class="btn btn-primary btn-block" :disabled="app.quota.shareClaimed" @click="claimShare">
-        <fj-icon name="share" :size="16" :color="app.quota.shareClaimed ? '#B7A8AF' : '#FFFFFF'" />
-        {{ app.quota.shareClaimed ? '分享奖励已领过（限 1 次）' : '分享给好友 · 再得 1 次' }}
-      </button>
-      <button class="btn btn-ghost btn-block" style="margin-top: 9px" @click="watchAd">
-        <fj-icon name="eye" :size="16" />看广告 · 再得 1 次
-      </button>
-      <view class="tiny" style="text-align:center;margin-top:12px">每账号分享奖励限 1 次，广告次数每日重置</view>
-    </view>
-
     <!-- 付费墙 -->
     <view class="sheet" :class="{ show: ui.sheet === 'pay' }">
       <view class="sheet-grip" />
@@ -331,11 +314,6 @@ const allPlanDesc = computed(() =>
     : `¥${pricing.value.allUnitPrice}/张 · 一次解锁全部`
 )
 const payTitle = computed(() => (payPlan.value === 'one' ? '解锁高清无水印版' : '解锁本次全部效果'))
-const quotaSub = computed(() =>
-  app.quota.shareClaimed
-    ? '每天 1 次免费生成。分享奖励已使用（每账号限 1 次），可通过看广告再得 1 次。'
-    : '每天 1 次免费生成。分享好友（限 1 次）或看广告，可再得 1 次。'
-)
 
 async function claimShare() {
   if (app.quota.shareClaimed) {
@@ -351,23 +329,6 @@ async function claimShare() {
     // 服务端已判重（例如清过本地缓存）时锁定按钮，避免反复点击
     if (String((e && e.message) || '').indexOf('已领取') > -1) {
       app.setQuota({ shareClaimed: true })
-    }
-  }
-}
-
-async function watchAd() {
-  if (app.quota.adUsed) {
-    ui.toast('今日广告奖励已领取，明天再来')
-    return
-  }
-  try {
-    // 广告奖励同样走服务端扣减接口，避免只改本地额度
-    app.setQuota(await API.consume('ad'))
-    ui.toast('已获得 1 次免费生成')
-    ui.close()
-  } catch (e) {
-    if (String((e && e.message) || '').indexOf('已领取') > -1) {
-      app.setQuota({ adUsed: true })
     }
   }
 }

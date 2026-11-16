@@ -322,17 +322,6 @@ async function startGenerate() {
   } catch (e) {
     // 本地缓存失败不影响生成
   }
-  // 额度只在服务端 /api/generate 扣减一次；这里只做进入前的余量提示，避免重复扣减
-  try {
-    const q = await API.quota()
-    if (q) app.setQuota(q)
-    if (Number(q && q.freeLeft) <= 0) {
-      ui.openSheet('quota')
-      return
-    }
-  } catch (e) {
-    // 额度查询失败不阻断生成，服务端仍会兜底校验
-  }
   // 进入新一轮生成前清理上一批任务，避免生成页复用旧 taskId 直接展示上一次的结果
   app.taskId = ''
   uni.navigateTo({ url: '/pages/generating/generating' })

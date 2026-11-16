@@ -68,11 +68,18 @@ public class GenerationProcessor {
         List<Hairstyle> allStyles = resolveStyles(task);
         if (allStyles.isEmpty()) {
             // 发型被删除/下架导致无可生成内容时，本次额度已扣减，需要退还
-            quotaService.refund(task.getUserId(), taskId, "无可生成的发型");
+            if (task.getFreeQuota() != null && task.getFreeQuota() == 1) {
+                quotaService.refund(task.getUserId(), taskId, "无可生成的发型");
+            }
             generationService.finish(taskId, Map.of(), Set.of());
             return;
         }
-        // 先只生成第一张（免费款），其余款在支付成功后按需生成，避免未付费也承担模型成本
+        // 付费批次：本批没有免费额度，不预生成任何图，全部等支付成功后再按需调用 AI
+        if (task.getFreeQuota() == null || task.getFreeQuota() != 1) {
+            generationService.finish(taskId, Map.of(), Set.of());
+            return;
+        }
+        // 免费批次先只生成第一张（免费款），其余款在支付成功后按需生成，避免未付费也承担模型成本
         List<Hairstyle> styles = List.of(allStyles.get(0));
         generationService.updateProgress(taskId, 10);
 

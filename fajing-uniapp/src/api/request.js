@@ -232,7 +232,6 @@ export const API = {
   quota: () => request({ url: '/api/quota' }),
   checkPhoto: (photoUrl) =>
     request({ url: '/api/photo/check', method: 'POST', data: { photoUrl } }),
-  consume: (type) => request({ url: '/api/quota/consume', method: 'POST', data: { type } }),
   mockOrder: (payload) => request({ url: '/api/order/mock', method: 'POST', data: payload }),
   createOrder: (payload) => request({ url: '/api/order/create', method: 'POST', data: payload }),
   payMethods: (platform) =>

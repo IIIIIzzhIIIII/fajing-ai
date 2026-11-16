@@ -46,6 +46,10 @@ public class GenerateController {
     @Value("${quota.daily-max:5}")
     private int dailyMax;
 
+    /** 本地联调用：false 时不限制每日生成次数；生产保持默认 true */
+    @Value("${quota.enforce:true}")
+    private boolean quotaEnforce;
+
     @Operation(summary = "创建换发任务")
     @PostMapping("/generate")
     public Result<Map<String, Object>> generate(@Valid @RequestBody GenerateRequest req) {
@@ -54,18 +58,20 @@ public class GenerateController {
         Long todayCount = taskMapper.selectCount(new QueryWrapper<GenerationTask>()
                 .eq("user_id", userId)
                 .ge("created_at", LocalDate.now().atStartOfDay()));
-        if (todayCount != null && todayCount >= dailyMax) {
+        if (quotaEnforce && todayCount != null && todayCount >= dailyMax) {
             throw new BizException("今日生成次数已达上限（" + dailyMax + " 次），明天再来试试吧");
         }
-        // 额度以服务端为准：免费/分享/广告额度统一从同一个池子扣减，避免绕过前端重复生成
-        quotaService.consume("free");
+        // 有免费额度按免费批次生成；额度用完则进入付费批次，图片全部支付后才生成
+        boolean freeQuota = quotaService.tryConsumeFree();
         GenerationTask task;
         try {
             task = generationService.create(
-                    req.getPhotoUrl(), req.getGender(), req.getMode(), req.getStyleIds(), req.getColorId());
+                    req.getPhotoUrl(), req.getGender(), req.getMode(), req.getStyleIds(), req.getColorId(), freeQuota);
         } catch (RuntimeException e) {
             // 参数校验失败等场景没有真正发起生成，立即退还本次额度
-            quotaService.refund(userId, null, "创建任务失败");
+            if (freeQuota) {
+                quotaService.refund(userId, null, "创建任务失败");
+            }
             throw e;
         }
         processor.process(task.getId());

@@ -75,8 +75,8 @@ import { PORTRAIT, STYLES } from '@/mock/constants'
 const app = useAppStore()
 
 const ctaSub = computed(() => {
-  if (app.quota.freeLeft > 0) return `今日还剩 ${app.quota.freeLeft} 次免费`
-  return app.quota.shareClaimed ? '今日免费已用完 · 分享奖励已领过' : '今日免费已用完 · 分享可再得 1 次'
+  if (app.quota.freeLeft > 0) return `还剩 ${app.quota.freeLeft} 次免费生成`
+  return app.quota.shareClaimed ? '免费次数已用完 · 解锁高清继续换' : '免费次数已用完 · 分享可再得 1 次'
 })
 
 const hotList = computed(() => {

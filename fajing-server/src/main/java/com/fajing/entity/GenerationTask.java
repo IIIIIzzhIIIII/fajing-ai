@@ -21,6 +21,8 @@ public class GenerationTask {
     private String status;
     private Integer progress;
     private String resultJson;
+    /** 本批是否使用免费额度：1 免费（第 1 款解锁），0 付费批次（全部需支付后生成） */
+    private Integer freeQuota;
     private LocalDateTime expireAt;
     private LocalDateTime createdAt;
 }

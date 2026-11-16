@@ -17,6 +17,8 @@ pay:
 # 测试库多次运行会累积当天任务，放宽上限避免用例被限流
 quota:
   daily-max: 100
+  # 用例多次运行会耗尽终身免费次数，关闭额度限制保证「首款免费」断言稳定
+  enforce: false
 
 fajing:
   upload-dir: ${java.io.tmpdir}/fajing-test-uploads

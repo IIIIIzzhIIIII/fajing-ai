@@ -137,16 +137,6 @@ function pickPhoto(source) {
 async function next() {
   if (busy.value) return
   if (!photoSrc.value || !privacyAgreed.value || !faceAgreed.value) return
-  // 先用服务端额度校准本地展示，避免只按本机缓存判断
-  try {
-    app.setQuota(await API.quota())
-  } catch (e) {
-    /* 拉取失败时按本地展示判断，最终以选款页服务端扣减结果为准 */
-  }
-  if (app.quota.freeLeft <= 0) {
-    ui.openSheet('quota')
-    return
-  }
 
   const localPath = app.photoPath
   busy.value = true

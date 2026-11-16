@@ -35,7 +35,8 @@ public class GenerationService {
     private final UserUnlockMapper unlockMapper;
     private final ObjectMapper objectMapper;
 
-    public GenerationTask create(String photoUrl, String gender, String mode, List<String> styleIds, String colorId) {
+    public GenerationTask create(String photoUrl, String gender, String mode, List<String> styleIds, String colorId,
+                                 boolean freeQuota) {
         if (photoUrl == null || photoUrl.isBlank()) {
             throw new BizException("请先上传照片");
         }
@@ -76,6 +77,7 @@ public class GenerationService {
         task.setColorId(colorId == null ? "" : colorId);
         task.setStatus("pending");
         task.setProgress(0);
+        task.setFreeQuota(freeQuota ? 1 : 0);
         task.setExpireAt(LocalDateTime.now().plusHours(24));
         task.setCreatedAt(LocalDateTime.now());
         taskMapper.insert(task);
@@ -105,8 +107,9 @@ public class GenerationService {
             result.put("faceShape", task.getGender().equals("male") ? "方脸" : "鹅蛋脸");
             result.put("score", ThreadLocalRandom.current().nextInt(88, 98));
             List<Map<String, Object>> items = new ArrayList<>();
-            // 免费款固定为用户选择的第一款，不再顺延到后续成功的款式
-            String freeStyleId = styles.isEmpty() ? null : styles.get(0).getId();
+            // 免费批次才把第 1 款作为免费款；付费批次所有款式都要支付后才能生成与解锁
+            boolean freeBatch = task.getFreeQuota() != null && task.getFreeQuota() == 1;
+            String freeStyleId = freeBatch && !styles.isEmpty() ? styles.get(0).getId() : null;
             boolean freeGenerated = false;
             for (Hairstyle s : styles) {
                 Map<String, Object> item = new LinkedHashMap<>();
@@ -195,7 +198,8 @@ public class GenerationService {
                         item.remove("pending");
                         if (ok) {
                             String[] ids = task.getStyleIds() == null ? new String[0] : task.getStyleIds().split(",");
-                            if (ids.length > 0 && styleId.equals(ids[0].trim())) {
+                            boolean freeBatch = task.getFreeQuota() != null && task.getFreeQuota() == 1;
+                            if (freeBatch && ids.length > 0 && styleId.equals(ids[0].trim())) {
                                 // 免费款重试成功后补解锁，避免首款失败后免费资格丢失
                                 unlock(task.getUserId(), styleId, taskId);
                             }

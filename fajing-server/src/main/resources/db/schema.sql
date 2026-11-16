@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS generation_task (
   status VARCHAR(16) NOT NULL DEFAULT 'pending',
   progress INT NOT NULL DEFAULT 0,
   result_json LONGTEXT NULL,
+  free_quota TINYINT NOT NULL DEFAULT 0,
   expire_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_user (user_id),
@@ -237,6 +238,9 @@ ALTER TABLE orders ADD COLUMN refund_status VARCHAR(16) NOT NULL DEFAULT 'none';
 ALTER TABLE orders ADD COLUMN refund_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00;
 ALTER TABLE orders ADD COLUMN platform VARCHAR(16) NOT NULL DEFAULT '';
 ALTER TABLE orders ADD UNIQUE KEY uk_out_trade_no (out_trade_no);
+
+-- 生成任务：本批是否使用免费额度（1 免费批次：第 1 款免费；0 付费批次：全部需支付后生成）
+ALTER TABLE generation_task ADD COLUMN free_quota TINYINT NOT NULL DEFAULT 0;
 
 -- 支付配置：多平台接入字段（旧库增量）
 ALTER TABLE pay_config MODIFY wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'virtual';

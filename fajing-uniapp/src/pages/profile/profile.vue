@@ -26,7 +26,7 @@
           <view style="font-size:20px;font-weight:800;color:var(--ink)">
             {{ app.quota.freeLeft }}<text style="font-size:11px;color:var(--muted)">次</text>
           </view>
-          <view style="font-size:10px;color:var(--muted);margin-top:2px">今日免费次数</view>
+          <view style="font-size:10px;color:var(--muted);margin-top:2px">免费生成次数</view>
         </view>
         <view style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)">
           <view style="font-size:20px;font-weight:800;color:var(--gold)">{{ app.unlockedCount }}</view>
