@@ -27,7 +27,7 @@ const maskOriginal = reactive({
 
 const form = reactive({
   wxEnabled: 0,
-  wxPayMode: 'miniprogram',
+  wxPayMode: 'virtual',
   wxAppid: '',
   wxMchId: '',
   wxApiV3KeyEnc: '',
@@ -66,9 +66,9 @@ function applyConfig(config) {
       form[key] = config[key]
     }
   })
-  // 旧数据的 normal 统一视为微信小程序支付
-  if (form.wxPayMode === 'normal') {
-    form.wxPayMode = 'miniprogram'
+  // 虚拟商品只用小程序虚拟支付，历史数据统一收敛
+  if (form.wxPayMode !== 'virtual') {
+    form.wxPayMode = 'virtual'
   }
   ;[
     'wxApiV3KeyEnc',
@@ -204,11 +204,8 @@ onMounted(load)
           </el-form-item>
           <el-form-item label="支付模式">
             <el-radio-group v-model="form.wxPayMode">
-              <el-radio value="miniprogram">小程序支付（MINIPROGRAM）</el-radio>
-              <el-radio value="jsapi" disabled>普通 JSAPI</el-radio>
               <el-radio value="virtual">小程序虚拟支付</el-radio>
             </el-radio-group>
-            <div class="field-tip">普通 JSAPI 仅用于公众号 H5，不适用于微信小程序。</div>
             <div class="field-tip">虚拟商品必须选「小程序虚拟支付」，否则审核驳回。</div>
           </el-form-item>
           <el-form-item label="微信小程序AppID">

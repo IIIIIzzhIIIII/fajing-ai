@@ -219,7 +219,7 @@ public class PayConfigService {
         PayConfig cfg = new PayConfig();
         cfg.setId(CONFIG_ID);
         cfg.setWxEnabled(0);
-        cfg.setWxPayMode("miniprogram");
+        cfg.setWxPayMode("virtual");
         cfg.setWxAppid("");
         cfg.setWxMchId("");
         cfg.setWxApiV3KeyEnc("");
