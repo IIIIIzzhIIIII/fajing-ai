@@ -21,7 +21,10 @@ public class GenerateRequest {
     @Schema(description = "发色 ID，可为空", example = "")
     private String colorId = "";
 
-    @Schema(description = "要生成的发型 ID 列表（最多 4 个）", example = "[\"f001\",\"f002\"]")
+    @Schema(description = "要生成的发型 ID 列表", example = "[\"f001\",\"f002\"]")
     @NotEmpty(message = "请先选择发型")
     private List<String> styleIds;
+
+    @Schema(description = "推荐记录 ID，用于透出适配分与推荐依据", example = "1")
+    private Long recommendId;
 }

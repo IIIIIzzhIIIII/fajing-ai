@@ -32,4 +32,12 @@ public class Order {
     private BigDecimal refundAmount;
     /** 下单来源端：h5 / mp-weixin / mp-toutiao / mp-xhs */
     private String platform;
+    /** unlock 解锁 / points 充值魅力值 / vip 包月 / vvip 永久 / coupon 团购券 */
+    private String bizType;
+    /** 本次充值到账魅力值 */
+    private Integer points;
+    /** VIP 有效天数 */
+    private Integer days;
+    /** 团购券档位 ID */
+    private Long tierId;
 }

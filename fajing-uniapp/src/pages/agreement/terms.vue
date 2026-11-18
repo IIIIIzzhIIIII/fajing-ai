@@ -10,6 +10,9 @@
         <view class="doc-h">发镜 AI 用户协议</view>
         <view class="doc-time">更新日期：2026 年 11 月</view>
 
+        <fj-doc-content v-if="site.termsContent" :text="site.termsContent" />
+        <template v-else>
+
         <view class="doc-sec">
           <view class="doc-t">1. 服务内容</view>
           <view class="doc-p">发镜 AI 提供基于人工智能的发型预览、付费高清导出、理发师沟通卡与发型讨论服务。生成结果为算法模拟效果，实际剪发效果受发质、发量、理发师操作等影响，仅供决策参考。</view>
@@ -39,6 +42,7 @@
           <view class="doc-t">6. 协议变更</view>
           <view class="doc-p">我们可能根据需要更新本协议，更新后会在应用内提示，继续使用即视为同意更新后的协议。</view>
         </view>
+        </template>
       </view>
     </scroll-view>
   </view>
@@ -46,6 +50,8 @@
 
 <script setup>
 import { goBack } from '@/utils/nav'
+import { site } from '@/utils/site'
+import FjDocContent from '@/components/FjDocContent.vue'
 
 function back() {
   goBack()

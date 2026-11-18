@@ -271,3 +271,115 @@ CREATE TABLE IF NOT EXISTS trade_rule (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_by BIGINT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ===== 魅力值 / 免费批次 / VIP（旧库增量，重复执行由 continue-on-error 跳过） =====
+ALTER TABLE user_quota ADD COLUMN points INT NOT NULL DEFAULT 50;
+ALTER TABLE user_quota ADD COLUMN free_batches INT NOT NULL DEFAULT 3;
+ALTER TABLE user_quota ADD COLUMN vip_expire_at DATETIME NULL;
+ALTER TABLE user_quota ADD COLUMN vvip TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE user_quota ADD COLUMN ad_date DATE NULL;
+ALTER TABLE user_quota ADD COLUMN ad_count INT NOT NULL DEFAULT 0;
+-- 广告获得的免费解锁次数（每看 1 次广告 +1 次，解锁时优先消耗）
+ALTER TABLE user_quota ADD COLUMN ad_credits INT NOT NULL DEFAULT 0;
+
+-- ===== 订单扩展：区分解锁 / 充值 / 券 / VIP =====
+ALTER TABLE orders ADD COLUMN biz_type VARCHAR(16) NOT NULL DEFAULT 'unlock';
+ALTER TABLE orders ADD COLUMN points INT NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN days INT NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN tier_id BIGINT NOT NULL DEFAULT 0;
+
+-- 虚拟支付充值道具（金额：10 / 20 / 29 / 99 元）
+ALTER TABLE pay_config ADD COLUMN wx_virtual_product_p10 VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN wx_virtual_product_p20 VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN wx_virtual_product_p29 VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE pay_config ADD COLUMN wx_virtual_product_p99 VARCHAR(64) NOT NULL DEFAULT '';
+
+-- ===== 生成任务扩展：推荐记录与发色变体自动生成 =====
+ALTER TABLE generation_task ADD COLUMN recommend_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE generation_task ADD COLUMN auto_gen TINYINT NOT NULL DEFAULT 0;
+
+-- 推荐结果：一次分析对应一张照片，缓存脸型/发色排名，避免重复消耗模型
+CREATE TABLE IF NOT EXISTS recommendation (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  photo_url VARCHAR(512) NOT NULL DEFAULT '',
+  gender VARCHAR(8) NOT NULL DEFAULT 'female',
+  face_shape VARCHAR(32) NOT NULL DEFAULT '',
+  skin_tone VARCHAR(32) NOT NULL DEFAULT '',
+  styles_json LONGTEXT NULL,
+  colors_json LONGTEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 团购券档位（固定档位，后台可维护）
+CREATE TABLE IF NOT EXISTS coupon_tier (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  title VARCHAR(64) NOT NULL DEFAULT '',
+  pay_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  value_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  description VARCHAR(255) NOT NULL DEFAULT '',
+  status TINYINT NOT NULL DEFAULT 1,
+  sort INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 用户券包：支付成功后生成核销码，线下门店核销
+CREATE TABLE IF NOT EXISTS user_coupon (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  tier_id BIGINT NOT NULL DEFAULT 0,
+  order_id BIGINT NOT NULL DEFAULT 0,
+  title VARCHAR(64) NOT NULL DEFAULT '',
+  pay_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  value_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  code VARCHAR(32) NOT NULL DEFAULT '',
+  qr_url VARCHAR(512) NOT NULL DEFAULT '',
+  status VARCHAR(16) NOT NULL DEFAULT 'unused',
+  expire_at DATETIME NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_code (code),
+  KEY idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 发色解锁：按「用户 + 发色」永久保留，解锁后无需重复解锁
+CREATE TABLE IF NOT EXISTS user_color_unlock (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  color_id VARCHAR(16) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_user_color (user_id, color_id),
+  KEY idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 默认券档位（仅当表为空时由后端初始化，见 CouponService）
+
+-- 站点基础设置：单行配置，前台文案与联系方式由后台维护
+CREATE TABLE IF NOT EXISTS site_setting (
+  id BIGINT PRIMARY KEY,
+  hero_title_main VARCHAR(64) NOT NULL DEFAULT '',
+  hero_title_accent VARCHAR(64) NOT NULL DEFAULT '',
+  contact_wechat VARCHAR(64) NOT NULL DEFAULT '',
+  contact_phone VARCHAR(32) NOT NULL DEFAULT '',
+  about_content TEXT,
+  terms_content TEXT,
+  privacy_content TEXT,
+  face_consent_text TEXT,
+  updated_at DATETIME NULL,
+  updated_by BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 充值套餐：后台可增删改，下单金额与到账权益以此为准
+CREATE TABLE IF NOT EXISTS points_package (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  title VARCHAR(64) NOT NULL DEFAULT '',
+  description VARCHAR(128) NOT NULL DEFAULT '',
+  badge VARCHAR(32) NOT NULL DEFAULT '',
+  biz_type VARCHAR(16) NOT NULL DEFAULT 'points',
+  price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  points INT NOT NULL DEFAULT 0,
+  days INT NOT NULL DEFAULT 0,
+  status TINYINT NOT NULL DEFAULT 1,
+  sort INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+

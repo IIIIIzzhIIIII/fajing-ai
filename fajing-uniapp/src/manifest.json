@@ -30,19 +30,14 @@
   },
   "quickapp": {},
   "mp-weixin": {
-    "appid": "",
+    "appid": "wx8fd17191bdf6d95e",
     "setting": {
       "urlCheck": false,
       "es6": true,
       "minified": true
     },
     "usingComponents": true,
-    "darkmode": false,
-    "permission": {
-      "scope.writePhotosAlbum": {
-        "desc": "保存 AI 发型效果图到相册"
-      }
-    }
+    "darkmode": false
   },
   "h5": {
     "router": {

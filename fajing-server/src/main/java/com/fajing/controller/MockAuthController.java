@@ -2,11 +2,13 @@ package com.fajing.controller;
 
 import com.fajing.common.Result;
 import com.fajing.service.AuthService;
+import com.fajing.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,5 +30,12 @@ public class MockAuthController {
     @PostMapping("/login/mock")
     public Result<Map<String, Object>> mockLogin() {
         return Result.ok(authService.mockLogin());
+    }
+
+    @Operation(summary = "H5 演示绑定手机号（不校验短信验证码）")
+    @PostMapping("/phone/mock")
+    public Result<Map<String, Object>> mockBindPhone(@RequestBody(required = false) Map<String, String> body) {
+        String phone = body == null ? null : body.get("phone");
+        return Result.ok(authService.bindPhoneMock(UserContext.require(), phone));
     }
 }

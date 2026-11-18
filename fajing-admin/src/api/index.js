@@ -151,12 +151,60 @@ export function updateUserStatus(id, status) {
   })
 }
 
+export function fetchCoupons(status) {
+  return service.get('/api/admin/coupons', { params: status ? { status } : {} })
+}
+
+export function redeemCoupon(code) {
+  return service.post('/api/admin/coupons/redeem', { code })
+}
+
 export function fetchAiConfig() {
   return service.get('/api/admin/ai-config')
 }
 
 export function saveAiConfig(data) {
   return service.put('/api/admin/ai-config', data)
+}
+
+export function fetchSiteSetting() {
+  return service.get('/api/admin/site-setting')
+}
+
+export function saveSiteSetting(data) {
+  return service.put('/api/admin/site-setting', data)
+}
+
+export function fetchPointsPackages() {
+  return service.get('/api/admin/points-packages')
+}
+
+export function createPointsPackage(data) {
+  return service.post('/api/admin/points-packages', data)
+}
+
+export function updatePointsPackage(data) {
+  return service.put('/api/admin/points-packages', data)
+}
+
+export function disablePointsPackage(id) {
+  return service.delete(`/api/admin/points-packages/${id}`)
+}
+
+export function fetchCouponTiers() {
+  return service.get('/api/admin/coupon-tiers')
+}
+
+export function createCouponTier(data) {
+  return service.post('/api/admin/coupon-tiers', data)
+}
+
+export function updateCouponTier(data) {
+  return service.put('/api/admin/coupon-tiers', data)
+}
+
+export function disableCouponTier(id) {
+  return service.delete(`/api/admin/coupon-tiers/${id}`)
 }
 
 export default service

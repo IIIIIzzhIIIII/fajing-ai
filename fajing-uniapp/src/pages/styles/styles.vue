@@ -41,7 +41,7 @@
         :class="{ on: cat === c }"
         @click="setCat(c)"
       >
-        {{ c === '推荐' ? '为你推荐' : c }}
+        {{ c }}
       </view>
     </scroll-view>
 
@@ -107,7 +107,7 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { goBack } from '@/utils/nav'
-import { STYLES, CATS, COLORS, PORTRAIT } from '@/mock/constants'
+import { STYLES, CATS, COLORS, PORTRAIT, STYLE_IMG } from '@/mock/constants'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -117,7 +117,7 @@ const mode = ref(app.mode === 'color' ? 'color' : 'hair')
 /** 浏览模式：从首页「全部发型」进入，只能看图鉴，不能选款生成 */
 const browse = ref(false)
 const faceShape = computed(() => (app.result && app.result.faceShape) || '')
-const cat = ref(faceShape.value ? '推荐' : '全部')
+const cat = ref('全部')
 const selected = ref(Array.isArray(app.selectedStyleIds) ? app.selectedStyleIds.slice(0, 4) : [])
 const colorId = ref(app.selectedColorId || '')
 
@@ -138,8 +138,8 @@ const modeHint = computed(() =>
 const cats = computed(() => {
   const base = (CATS[gender.value] || ['全部']).slice()
   const remote = allStyles.value.map((s) => s.cat).filter(Boolean)
-  const merged = Array.from(new Set(base.concat(remote)))
-  return faceShape.value ? ['推荐'].concat(merged) : merged
+  // 已去掉「为你推荐」筛选，分类里不再保留「推荐」
+  return Array.from(new Set(base.concat(remote))).filter((c) => c !== '推荐')
 })
 
 function matchesFace(s) {
@@ -163,7 +163,6 @@ const recDesc = computed(() => {
 })
 
 const list = computed(() => {
-  if (cat.value === '推荐') return recList.value
   if (cat.value === '全部') return allStyles.value
   return allStyles.value.filter((s) => s.cat === cat.value)
 })
@@ -186,6 +185,7 @@ const footHint = computed(() =>
 function styleImg(s) {
   if (!s) return ''
   if (s.img) return s.img
+  if (STYLE_IMG(s)) return STYLE_IMG(s)
   if (s.en) return PORTRAIT(s.en, gender.value)
   return ''
 }
@@ -213,7 +213,7 @@ function setMode(m) {
 function setGender(g) {
   if (gender.value === g) return
   gender.value = g
-  cat.value = faceShape.value ? '推荐' : '全部'
+  cat.value = '全部'
   selected.value = []
   loadStyles()
 }
@@ -255,7 +255,8 @@ function openStyle(s) {
 }
 
 function tryRecommended() {
-  cat.value = '推荐'
+  // 推荐分类已移除，直接在「全部」下勾选推荐款
+  cat.value = '全部'
   selected.value = recList.value.map((s) => s.id).slice(0, 4)
 }
 

@@ -1,5 +1,5 @@
 <template>
-  <view class="fj-icon" :style="styleObj" />
+  <image class="fj-icon" :src="src" :style="styleObj" mode="aspectFit" />
 </template>
 
 <script setup>
@@ -77,13 +77,16 @@ function base64(str) {
   return out
 }
 
-const styleObj = computed(() => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${props.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PATHS[props.name] || ''}</svg>`
-  return {
-    width: `${props.size}px`,
-    height: `${props.size}px`,
-    backgroundImage: `url("data:image/svg+xml;base64,${base64(svg)}")`
-  }
+const styleObj = computed(() => ({
+  width: `${props.size}px`,
+  height: `${props.size}px`
+}))
+
+/* 小程序 WXSS 不支持 background-image 的 SVG base64，必须走 image 组件的 src */
+const src = computed(() => {
+  const size = props.size
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${props.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PATHS[props.name] || ''}</svg>`
+  return `data:image/svg+xml;base64,${base64(svg)}`
 })
 </script>
 
@@ -91,9 +94,6 @@ const styleObj = computed(() => {
 .fj-icon {
   display: inline-block;
   flex: none;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
   vertical-align: middle;
 }
 </style>

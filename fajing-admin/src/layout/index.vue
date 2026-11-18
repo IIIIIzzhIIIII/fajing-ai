@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Document, MagicStick, Picture, Scissor, SetUp, SwitchButton, Tickets, TrendCharts, User, Wallet } from '@element-plus/icons-vue'
+import { DataLine, Document, MagicStick, Picture, Scissor, SetUp, Setting, SwitchButton, Ticket, Tickets, TrendCharts, User, Wallet } from '@element-plus/icons-vue'
 import { clearToken } from '@/utils/auth'
 
 const route = useRoute()
@@ -15,6 +15,7 @@ const menuSections = [
       { path: '/dashboard', title: '数据看板', icon: DataLine },
       { path: '/channels', title: '渠道与传播', icon: TrendCharts },
       { path: '/orders', title: '订单管理', icon: Tickets },
+      { path: '/coupons', title: '团购券核销', icon: Ticket },
       { path: '/users', title: '用户管理', icon: User }
     ]
   },
@@ -28,6 +29,7 @@ const menuSections = [
   {
     title: '系统管理',
     items: [
+      { path: '/settings', title: '基础设置', icon: Setting },
       { path: '/ai', title: 'AI 参数配置', icon: MagicStick },
       { path: '/pay', title: '支付参数配置', icon: Wallet },
       { path: '/rules', title: '交易与售后规则', icon: SetUp },

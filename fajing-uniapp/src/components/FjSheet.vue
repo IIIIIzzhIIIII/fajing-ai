@@ -61,7 +61,7 @@
         {{ paying ? '正在拉起支付…' : `确认支付 ¥${payAmount}` }}
       </button>
       <view class="pay-share" @click="claimShare">
-        <fj-icon name="share" :size="16" />分享给好友，再得 1 次生成
+        <fj-icon name="share" :size="16" />分享给好友，再得 10 魅力值
       </view>
       <view class="tiny" style="text-align:center;margin-top:9px">已有 23,481 人解锁高清 · 好评率 98.6%</view>
     </view>
@@ -127,11 +127,19 @@
       </view>
       <button class="btn btn-primary btn-block" style="margin-top:14px" :disabled="app.quota.shareClaimed" @click="claimShare">
         <fj-icon name="gift" :size="16" :color="app.quota.shareClaimed ? '#B7A8AF' : '#FFFFFF'" />
-        {{ app.quota.shareClaimed ? '分享奖励已领过（限 1 次）' : '领取分享奖励 · 得 1 次免费生成' }}
+        {{ app.quota.shareClaimed ? '分享奖励已领过（限 1 次）' : '领取分享奖励 · 得 10 魅力值' }}
       </button>
       <view class="share-bonus">
         <fj-icon name="gift" :size="13" />每账号限 1 次 · 好友点开也能免费试
       </view>
+    </view>
+
+    <!-- 关于我们 -->
+    <view class="sheet" :class="{ show: ui.sheet === 'about' }">
+      <view class="sheet-grip" />
+      <view class="sheet-close" @click="ui.close()"><fj-icon name="x" :size="16" /></view>
+      <view class="sheet-title">关于我们</view>
+      <fj-doc-content :text="site.aboutContent || '发镜 AI · 剪之前，先看见'" />
     </view>
 
     <!-- 隐私与数据 -->
@@ -176,6 +184,8 @@ import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { saveRemoteImage } from '@/utils/save'
 import { track } from '@/utils/track'
+import { site } from '@/utils/site'
+import FjDocContent from '@/components/FjDocContent.vue'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -323,7 +333,7 @@ async function claimShare() {
   try {
     // 额度由服务端发放，本地只展示服务端返回值
     app.setQuota(await API.shareReward())
-    ui.toast('已获得 1 次免费生成')
+    ui.toast('已获得 10 点魅力值')
     ui.close()
   } catch (e) {
     // 服务端已判重（例如清过本地缓存）时锁定按钮，避免反复点击
@@ -386,7 +396,7 @@ function requestDouyinPay(payload) {
 async function finishPaid(plan, styleIds, channel) {
   uni.removeStorageSync('fajing_pending_virtual_order')
   await refreshUnlocks()
-  track('pay_success', { plan, count: styleIds.length, channel })
+  track('pay_success', { plan, count: styleIds.length, payMethod: channel })
   ui.sheet = 'paid'
   pollPaidImages()
 }
@@ -468,7 +478,7 @@ async function payNow() {
     ui.toast('微信内无法直接调起支付宝，请用手机浏览器打开后再支付')
     return
   }
-  track('pay_click', { plan, count: styleIds.length, channel })
+  track('pay_click', { plan, count: styleIds.length, payMethod: channel })
   // 从「试发记录」进入结果页时 app.taskId 为空，任务 ID 只在 result 里，必须优先取 result.taskId
   const payTaskId = Number((app.result && app.result.taskId) || app.taskId || 0)
   paying.value = true
@@ -517,7 +527,7 @@ async function payNow() {
     }
     if (res && res.mock) {
       await refreshUnlocks()
-      track('pay_success', { plan, count: styleIds.length, channel })
+      track('pay_success', { plan, count: styleIds.length, payMethod: channel })
       ui.sheet = 'paid'
       return
     }
@@ -581,7 +591,7 @@ async function payNow() {
         return
       }
       await refreshUnlocks()
-      track('pay_success', { plan, count: styleIds.length, channel })
+      track('pay_success', { plan, count: styleIds.length, payMethod: channel })
       ui.sheet = 'paid'
       return
     }
@@ -636,7 +646,7 @@ function copyText() {
 
 async function shareTo(channel) {
   // 渠道与传播看板按 share_click 统计分享行为，先上报再领奖励
-  track('share_click', { channel })
+  track('share_click', { shareChannel: channel })
   if (!app.quota.shareClaimed) {
     try {
       app.setQuota(await API.shareReward())
@@ -689,7 +699,6 @@ async function clearData() {
   width: 34px;
   height: 34px;
   border-radius: 11px;
-  background: #fff6e8;
   display: flex;
   align-items: center;
   justify-content: center;

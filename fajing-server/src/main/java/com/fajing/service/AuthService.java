@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fajing.common.BizException;
 import com.fajing.entity.AppUser;
+import com.fajing.entity.EventLog;
 import com.fajing.mapper.AppUserMapper;
+import com.fajing.mapper.EventLogMapper;
 import com.fajing.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,7 @@ public class AuthService {
     private static final Pattern GUEST_KEY = Pattern.compile("^[A-Za-z0-9_-]{16,48}$");
 
     private final AppUserMapper userMapper;
+    private final EventLogMapper eventLogMapper;
     private final JwtUtil jwtUtil;
     private final RateLimitService rateLimitService;
 
@@ -71,7 +74,9 @@ public class AuthService {
 
         AppUser user = userMapper.selectOne(new QueryWrapper<AppUser>()
                 .eq("openid", openid).last("limit 1"));
+        boolean isNewUser = false;
         if (user == null) {
+            isNewUser = true;
             user = new AppUser();
             user.setOpenid(openid);
             user.setNickname("发型试镜用户");
@@ -88,6 +93,7 @@ public class AuthService {
                 if (user == null) {
                     throw e;
                 }
+                isNewUser = false;
             }
         }
         if (user.getStatus() != null && user.getStatus() == 0) {
@@ -100,7 +106,7 @@ public class AuthService {
             user.setSessionKey(sessionKey);
             userMapper.updateById(user);
         }
-        return tokenPayload(user);
+        return tokenPayload(user, isNewUser);
     }
 
     /** 本地/H5 演示登录：固定体验用户，不调用微信 */
@@ -132,8 +138,10 @@ public class AuthService {
         }
         String openid = "guest:" + key;
         AppUser user = findByOpenid(openid);
+        boolean isNewUser = false;
         if (user == null) {
             rateLimitService.checkGuestCreate(ip);
+            isNewUser = true;
             user = new AppUser();
             user.setOpenid(openid);
             user.setNickname("游客" + key.substring(key.length() - 4));
@@ -149,6 +157,7 @@ public class AuthService {
                 if (user == null) {
                     throw e;
                 }
+                isNewUser = false;
             }
         } else {
             if (user.getStatus() != null && user.getStatus() == 0) {
@@ -157,7 +166,7 @@ public class AuthService {
             user.setLastActiveAt(LocalDateTime.now());
             userMapper.updateById(user);
         }
-        return tokenPayload(user);
+        return tokenPayload(user, isNewUser);
     }
 
     private AppUser findByOpenid(String openid) {
@@ -175,16 +184,26 @@ public class AuthService {
         data.put("nickname", user.getNickname());
         data.put("avatar", user.getAvatar());
         data.put("gender", user.getGender());
+        String phone = user.getPhone() == null ? "" : user.getPhone();
+        data.put("phone", phone);
+        data.put("phoneBound", !phone.isBlank());
         return data;
     }
 
-    private Map<String, Object> tokenPayload(AppUser user) {
+    /** 登录返回载荷；isNewUser 仅微信真实登录有意义，mock / 游客登录固定传 false */
+    private Map<String, Object> tokenPayload(AppUser user, boolean isNewUser) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("token", jwtUtil.create(user.getId(), "USER"));
         data.put("userId", user.getId());
         data.put("nickname", user.getNickname());
         data.put("avatar", user.getAvatar());
+        data.put("isNewUser", isNewUser);
         return data;
+    }
+
+    /** mock / 游客登录共用：不携带 isNewUser（前端忽略） */
+    private Map<String, Object> tokenPayload(AppUser user) {
+        return tokenPayload(user, false);
     }
 
     private JsonNode jscode2session(String code) {
@@ -226,5 +245,214 @@ public class AuthService {
 
     private static boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
+    }
+
+    // ---- 微信手机号授权 ----
+
+    /** 小程序 access_token 缓存：有效期约 2 小时，提前刷新避免临界失效 */
+    private volatile String cachedAccessToken = "";
+    private volatile long cachedAccessTokenAt = 0;
+
+    /**
+     * 绑定微信手机号：前端 getPhoneNumber 返回的 code → 微信接口换取手机号 → 只更新 phone 字段。
+     *
+     * @return 更新后的资料（与 /api/auth/me 同结构）
+     */
+    public Map<String, Object> bindPhone(long userId, String code) {
+        if (code == null || code.isBlank()) {
+            throw new BizException("缺少手机号授权凭证");
+        }
+        if (isBlank(appid) || isBlank(secret)) {
+            throw new BizException("微信登录未配置，暂时无法授权手机号");
+        }
+        AppUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        String phone = fetchPhoneNumber(code);
+        if (phone.isBlank()) {
+            throw new BizException("未获取到手机号，请重试");
+        }
+        // 只更新 phone 字段，避免整对象覆盖写坏 openid / session_key
+        userMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<AppUser>()
+                .eq("id", userId)
+                .set("phone", phone));
+        log.info("用户 {} 绑定手机号 {}", userId, maskPhone(phone));
+        return me(userId);
+    }
+
+    /** H5 演示绑定手机号：不校验短信验证码，仅 auth.mock-enabled=true 时可用 */
+    public Map<String, Object> bindPhoneMock(long userId, String phone) {
+        String value = phone == null ? "" : phone.trim();
+        if (!value.matches("^1[3-9]\\d{9}$")) {
+            throw new BizException("请输入正确的手机号");
+        }
+        AppUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        userMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<AppUser>()
+                .eq("id", userId)
+                .set("phone", value));
+        log.info("用户 {} 模拟绑定手机号 {}", userId, maskPhone(value));
+        return me(userId);
+    }
+
+    /** 用 getPhoneNumber 的 code 换取手机号，access_token 失效时自动刷新重试一次 */    private String fetchPhoneNumber(String code) {
+        String body;
+        try {
+            body = objectMapper.writeValueAsString(Map.of("code", code));
+        } catch (Exception e) {
+            throw new BizException("手机号授权失败，请重试");
+        }
+        for (int attempt = 0; attempt < 2; attempt++) {
+            String token = wechatAccessToken(attempt > 0);
+            String url = "https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token="
+                    + URLEncoder.encode(token, StandardCharsets.UTF_8);
+            try {
+                HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                        .timeout(Duration.ofSeconds(10))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                        .build();
+                HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                JsonNode root = objectMapper.readTree(resp.body());
+                int errcode = root.path("errcode").asInt(0);
+                if (errcode == 40001 || errcode == 40014 || errcode == 42001) {
+                    // access_token 失效：清缓存后重试一次
+                    cachedAccessToken = "";
+                    cachedAccessTokenAt = 0;
+                    continue;
+                }
+                if (errcode != 0) {
+                    log.warn("获取手机号失败：{}", resp.body());
+                    throw new BizException(phoneErrorMessage(errcode));
+                }
+                JsonNode info = root.path("phone_info");
+                String pure = info.path("purePhoneNumber").asText("");
+                return pure.isBlank() ? info.path("phoneNumber").asText("") : pure;
+            } catch (BizException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("获取手机号调用异常：{}", e.getMessage());
+                throw new BizException("手机号授权失败，请检查网络后重试");
+            }
+        }
+        throw new BizException("微信授权已过期，请重试");
+    }
+
+    private String wechatAccessToken(boolean forceRefresh) {
+        long now = System.currentTimeMillis();
+        if (!forceRefresh && !cachedAccessToken.isBlank() && now - cachedAccessTokenAt < 110 * 60_000L) {
+            return cachedAccessToken;
+        }
+        String url = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential"
+                + "&appid=" + URLEncoder.encode(appid, StandardCharsets.UTF_8)
+                + "&secret=" + URLEncoder.encode(secret, StandardCharsets.UTF_8);
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .GET()
+                    .build();
+            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            JsonNode root = objectMapper.readTree(resp.body());
+            String token = root.path("access_token").asText("");
+            if (token.isBlank()) {
+                log.warn("获取微信 access_token 失败：{}", resp.body());
+                throw new BizException("微信授权服务不可用，请稍后重试");
+            }
+            cachedAccessToken = token;
+            cachedAccessTokenAt = System.currentTimeMillis();
+            return token;
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("获取微信 access_token 异常：{}", e.getMessage());
+            throw new BizException("微信授权服务不可用，请稍后重试");
+        }
+    }
+
+    private String phoneErrorMessage(int errcode) {
+        return switch (errcode) {
+            case 40029, 42003 -> "手机号授权凭证已失效，请重新授权";
+            case 45011 -> "授权过于频繁，请稍后再试";
+            case 48001, 61007 -> "当前小程序未开通手机号授权能力，请联系管理员";
+            default -> "手机号授权失败（" + errcode + "）";
+        };
+    }
+
+    /** 日志脱敏：138****1234 */
+    private static String maskPhone(String phone) {
+        if (phone == null || phone.length() < 7) {
+            return "***";
+        }
+        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
+    }
+
+    // ---- T2 资料更新 ----
+
+    /** 允许头像 http(s) 或本站 /uploads/ 路径 */
+    private static final Pattern ALLOWED_AVATAR = Pattern.compile("^(https?://|/uploads/).+", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * 更新用户昵称 / 头像。只更新非空字段，二选一或都传。
+     *
+     * @return 更新后的资料（与 /api/auth/me 同结构）
+     */
+    public Map<String, Object> updateProfile(long userId, String nickname, String avatar) {
+        AppUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+
+        boolean changed = false;
+        Map<String, String> changes = new LinkedHashMap<>();
+
+        if (nickname != null) {
+            String cleaned = nickname.trim()
+                    .replace("\n", " ").replace("\r", " ")
+                    .replace("<", "").replace(">", "");
+            if (cleaned.isEmpty()) {
+                throw new BizException("昵称不能为空");
+            }
+            if (cleaned.length() > 20) {
+                throw new BizException("昵称不能超过 20 个字符");
+            }
+            if (!cleaned.equals(user.getNickname())) {
+                changes.put("nickname", cleaned);
+                user.setNickname(cleaned);
+                changed = true;
+            }
+        }
+
+        if (avatar != null && !avatar.isBlank()) {
+            if (!ALLOWED_AVATAR.matcher(avatar).matches()) {
+                throw new BizException("头像地址格式不正确");
+            }
+            if (!avatar.equals(user.getAvatar())) {
+                changes.put("avatar", avatar);
+                user.setAvatar(avatar);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            // 只更新 nickname / avatar 两个字段，防止整对象覆盖写坏 openid / session_key 等敏感字段
+            userMapper.updateById(user);
+
+            // T5：写事件日志（不记昵称原值等敏感信息）
+            try {
+                EventLog logRow = new EventLog();
+                logRow.setUserId(userId);
+                logRow.setEvent("profile.update");
+                logRow.setPayloadJson(objectMapper.writeValueAsString(changes));
+                logRow.setCreatedAt(LocalDateTime.now());
+                eventLogMapper.insert(logRow);
+            } catch (Exception e) {
+                log.warn("写资料更新日志失败：{}", e.getMessage());
+            }
+        }
+
+        return me(userId);
     }
 }

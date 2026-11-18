@@ -14,9 +14,34 @@ export const PORTRAIT = (en, gender) =>
     'photorealistic, 85mm lens, high detail'
   )
 
-export const DEMO_BEFORE = IMG(
-  'young asian woman, front facing bare face portrait, hair tied back, no makeup, soft window light, plain light background, photorealistic, 85mm'
-)
+export const DEMO_BEFORE = '/static/demo/before.jpg'
+
+/** 本地示范图：打包进小程序，避免远程占位图加载慢或被域名规则拦截 */
+export const LOCAL_STYLE_IMG = {
+  f1: '/static/styles/f1.jpg',
+  f2: '/static/styles/f2.jpg',
+  f3: '/static/styles/f3.jpg',
+  f4: '/static/styles/f4.jpg',
+  f5: '/static/styles/f5.jpg',
+  f6: '/static/styles/f6.jpg',
+  f7: '/static/styles/f3.jpg',
+  f8: '/static/styles/f2.jpg',
+  f9: '/static/styles/f6.jpg',
+  f10: '/static/styles/f6.jpg',
+  f11: '/static/styles/f4.jpg',
+  f12: '/static/styles/f4.jpg',
+  m1: '/static/styles/m1.jpg',
+  m2: '/static/styles/m2.jpg',
+  m3: '/static/styles/m3.jpg',
+  m4: '/static/styles/m4.jpg',
+  m5: '/static/styles/m5.jpg',
+  m6: '/static/styles/m6.jpg',
+  m7: '/static/styles/m2.jpg',
+  m8: '/static/styles/m5.jpg'
+}
+
+/** 发型展示图：优先后台/本地图，都没有才回退远程生成 */
+export const STYLE_IMG = (s) => (s && LOCAL_STYLE_IMG[s.id]) || ''
 
 export const STYLES = {
   female: [

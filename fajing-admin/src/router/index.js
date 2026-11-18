@@ -45,6 +45,12 @@ const routes = [
         meta: { title: '订单管理' }
       },
       {
+        path: 'coupons',
+        name: 'Coupons',
+        component: () => import('@/views/coupons/index.vue'),
+        meta: { title: '团购券核销' }
+      },
+      {
         path: 'users',
         name: 'Users',
         component: () => import('@/views/users/index.vue'),
@@ -67,6 +73,12 @@ const routes = [
         name: 'TradeRule',
         component: () => import('@/views/rules/index.vue'),
         meta: { title: '交易与售后规则' }
+      },
+      {
+        path: 'settings',
+        name: 'SiteSettings',
+        component: () => import('@/views/settings/index.vue'),
+        meta: { title: '基础设置' }
       },
       {
         path: 'ai',

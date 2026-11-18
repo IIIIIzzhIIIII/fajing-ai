@@ -9,11 +9,14 @@
       <view class="splash-slogan">剪之前，先看见</view>
     </view>
     <view class="splash-skip">{{ countdown }} 秒后进入 · 点击跳过</view>
+
+    <FjPrivacyDialog />
   </view>
 </template>
 
 <script setup>
 import { onUnmounted, ref } from 'vue'
+import FjPrivacyDialog from '@/components/FjPrivacyDialog.vue'
 
 const countdown = ref(3)
 let timer = null

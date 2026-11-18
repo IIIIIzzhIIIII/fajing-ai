@@ -73,7 +73,7 @@
             <fj-icon name="check" :size="13" color="#FFFFFF" />
           </view>
           <view class="consent-t">
-            <text class="hl">人脸信息单独同意：</text>我同意收集并处理我上传的人脸照片（敏感个人信息），仅用于本次 AI 换发预览，不建人脸库、不用于训练，生成结束 24 小时内删除原图。
+            <text class="hl">人脸信息单独同意：</text>{{ site.faceConsentText }}
           </view>
         </view>
       </view>
@@ -100,6 +100,7 @@ import { useUiStore } from '@/store/ui'
 import { upload, API } from '@/api/request'
 import { track } from '@/utils/track'
 import { goBack } from '@/utils/nav'
+import { site } from '@/utils/site'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -122,6 +123,11 @@ function back() {
 }
 
 function pickPhoto(source) {
+  // 人脸照片属于敏感信息：必须先单独勾选同意，才允许选择照片
+  if (!privacyAgreed.value || !faceAgreed.value) {
+    ui.toast('请先阅读并同意隐私政策与人脸信息单独同意')
+    return
+  }
   uni.chooseImage({
     count: 1,
     sizeType: ['compressed'],
@@ -140,8 +146,10 @@ async function next() {
 
   const localPath = app.photoPath
   busy.value = true
-  if (/^https?:\/\//.test(localPath)) {
-    app.setPhoto(localPath, localPath)
+  // 只有已上传到服务端的图片才跳过上传：小程序 chooseImage 在开发者工具里会返回
+  // http://tmp/xxx 的本地临时路径，不能按 http 前缀判断，否则会把临时路径当远程地址提交
+  if (app.photoUrl && /^https?:\/\//.test(app.photoUrl)) {
+    app.setPhoto(localPath, app.photoUrl)
   } else {
     try {
       const data = await upload(localPath)
@@ -172,7 +180,7 @@ async function next() {
   }
 
   busy.value = false
-  uni.navigateTo({ url: '/pages/styles/styles' })
+  uni.navigateTo({ url: '/pages/recommend/recommend' })
 }
 </script>
 

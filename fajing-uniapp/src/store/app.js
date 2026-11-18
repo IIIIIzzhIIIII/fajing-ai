@@ -4,7 +4,7 @@ const KEY = 'fajing_state_v1'
 
 /**
  * 全局业务状态
- * 额度为账号终身：首次免费 1 次 + 分享奖励 1 次，不再每日重置
+ * 魅力值体系：新用户赠 50 点；前 3 个批次每批前 3 款免费；解锁单款 10 点
  */
 export const useAppStore = defineStore('app', {
   state: () => ({
@@ -16,7 +16,7 @@ export const useAppStore = defineStore('app', {
     selectedColorId: '',
     taskId: '',
     result: null,
-    quota: { freeLeft: 1, shareClaimed: false },
+    quota: { points: 50, freeBatches: 3, freeLeft: 3, shareClaimed: false, couponCount: 0, unlimited: false },
     unlocks: [],
     history: [],
     lastOrder: null
@@ -88,7 +88,7 @@ export const useAppStore = defineStore('app', {
       this.taskId = result && result.taskId ? result.taskId : ''
     },
     resetAll() {
-      this.quota = { freeLeft: 1, shareClaimed: false }
+      this.quota = { points: 50, freeBatches: 3, freeLeft: 3, shareClaimed: false, couponCount: 0, unlimited: false }
       this.unlocks = []
       this.history = []
       this.photoPath = ''

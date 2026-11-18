@@ -2,6 +2,13 @@ import { clearToken, getToken, setToken } from '@/utils/auth'
 
 const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || ''
 
+// 启动时打印接口地址，便于在开发者工具控制台定位连不通的问题
+try {
+  console.log('[fajing] api base =', BASE_URL || '(未配置)')
+} catch (e) {
+  // 控制台不可用时忽略
+}
+
 /** 统一 toast（避免各处重复 import 组件） */
 function fail(msg) {
   uni.showToast({ title: msg || '网络异常，请稍后重试', icon: 'none', duration: 2200 })
@@ -76,35 +83,96 @@ export function login() {
     // #endif
 
     // #ifndef H5
-    uni.login({
-      provider: 'weixin',
-      success: (loginRes) => {
-        const code = loginRes.code
-        if (!code) {
-          reject(new Error('微信登录失败'))
-          return
-        }
-        uni.request({
-          url: base + '/api/auth/login',
-          method: 'POST',
-          data: { code },
-          header: { 'Content-Type': 'application/json' },
-          timeout: 15000,
-          success: (res) => {
-            const body = res.data || {}
-            if (res.statusCode === 200 && body.code === 0 && body.data && body.data.token) {
-              setToken(body.data.token)
-              resolve(body.data)
-            } else {
-              fail((body && body.msg) || '登录失败')
-              reject(new Error((body && body.msg) || 'login failed'))
+    const doWxLogin = () => {
+      uni.login({
+        provider: 'weixin',
+        success: (loginRes) => {
+          const code = loginRes.code
+          if (!code) {
+            fail('微信登录失败：未获取到 code')
+            reject(new Error('微信登录失败'))
+            return
+          }
+          uni.request({
+            url: base + '/api/auth/login',
+            method: 'POST',
+            data: { code },
+            header: { 'Content-Type': 'application/json' },
+            timeout: 15000,
+            success: (res) => {
+              const body = res.data || {}
+              if (res.statusCode === 200 && body.code === 0 && body.data && body.data.token) {
+                setToken(body.data.token)
+                resolve(body.data)
+              } else {
+                console.error('[fajing] login rejected', res.statusCode, body)
+                fail((body && body.msg) || '登录失败')
+                reject(new Error((body && body.msg) || 'login failed'))
+              }
+            },
+            fail: (err) => {
+              const detail = (err && (err.errMsg || err.message)) || '请求失败'
+              console.error('[fajing] login request fail', base, err)
+              fail('登录失败：' + detail)
+              reject(err)
             }
-          },
-          fail: reject
-        })
-      },
-      fail: reject
-    })
+          })
+        },
+        fail: (err) => {
+          const detail = (err && (err.errMsg || err.message)) || '未知错误'
+          console.error('[fajing] wx.login fail', err)
+          // 本地开发：开发者工具处于游客模式/无网络模拟时 wx.login 不可用，回退游客登录便于联调
+          if (import.meta.env.DEV) {
+            console.warn('[fajing] wx.login 不可用，改用游客登录')
+            uni.request({
+              url: base + '/api/auth/login/guest',
+              method: 'POST',
+              data: { guestKey: guestKey() },
+              header: { 'Content-Type': 'application/json' },
+              timeout: 15000,
+              success: (res) => {
+                const body = res.data || {}
+                if (res.statusCode === 200 && body.code === 0 && body.data && body.data.token) {
+                  setToken(body.data.token)
+                  resolve(body.data)
+                } else {
+                  console.error('[fajing] guest login rejected', res.statusCode, body)
+                  fail((body && body.msg) || '登录失败')
+                  reject(new Error((body && body.msg) || 'login failed'))
+                }
+              },
+              fail: (e2) => {
+                const d2 = (e2 && (e2.errMsg || e2.message)) || '请求失败'
+                console.error('[fajing] guest login fail', base, e2)
+                fail('登录失败：' + d2)
+                reject(e2)
+              }
+            })
+            return
+          }
+          fail('微信登录失败：' + detail)
+          reject(err)
+        }
+      })
+    }
+
+    // #ifdef MP-WEIXIN
+    // T8：微信隐私授权，同意后才发 wx.login
+    if (typeof wx !== 'undefined' && typeof wx.requirePrivacyAuthorize === 'function') {
+      wx.requirePrivacyAuthorize({
+        success: () => doWxLogin(),
+        fail: () => {
+          fail('需同意隐私协议后使用')
+          reject(new Error('privacy denied'))
+        }
+      })
+    } else {
+      doWxLogin()
+    }
+    // #endif
+    // #ifndef MP-WEIXIN
+    doWxLogin()
+    // #endif
     // #endif
   })
 }
@@ -216,6 +284,9 @@ export function upload(filePath) {
 
 export const API = {
   me: () => request({ url: '/api/auth/me' }),
+  updateProfile: (payload) => request({ url: '/api/auth/profile', method: 'POST', data: payload }),
+  bindPhone: (code) => request({ url: '/api/auth/phone', method: 'POST', data: { code } }),
+  bindPhoneMock: (phone) => request({ url: '/api/auth/phone/mock', method: 'POST', data: { phone } }),
   logout: () => request({ url: '/api/auth/logout', method: 'POST' }),
   hairstyles: (gender, cat) =>
     request({
@@ -241,5 +312,20 @@ export const API = {
   virtualConfirm: (id) => request({ url: `/api/order/${id}/virtual-confirm`, method: 'POST' }),
   orderStatus: (id) => request({ url: `/api/order/${id}` }),
   unlocks: () => request({ url: '/api/unlocks' }),
-  shareReward: () => request({ url: '/api/share/reward', method: 'POST' })
+  unlock: (payload) => request({ url: '/api/unlock', method: 'POST', data: payload }),
+  recommend: (payload) => request({ url: '/api/recommend', method: 'POST', data: payload }),
+  recommendColors: (id) => request({ url: `/api/recommend/${id}/colors` }),
+  colorState: (id, taskId) =>
+    request({
+      url: `/api/recommend/${id}/color-state${taskId ? '?taskId=' + encodeURIComponent(taskId) : ''}`
+    }),
+  unlockColor: (payload) => request({ url: '/api/recommend/color/unlock', method: 'POST', data: payload }),
+  recommendColor: (payload) => request({ url: '/api/recommend/color', method: 'POST', data: payload }),
+  adReward: () => request({ url: '/api/ad/reward', method: 'POST' }),
+  couponTiers: () => request({ url: '/api/coupons/tiers' }),
+  myCoupons: () => request({ url: '/api/coupons/my' }),
+  refundCoupon: (id) => request({ url: `/api/coupons/${id}/refund`, method: 'POST' }),
+  shareReward: () => request({ url: '/api/share/reward', method: 'POST' }),
+  siteSettings: () => request({ url: '/api/site-settings', silent: true, retry: false }),
+  pointsPackages: () => request({ url: '/api/points/packages', silent: true, retry: false })
 }

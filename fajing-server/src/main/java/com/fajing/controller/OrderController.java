@@ -4,15 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.entity.AppUser;
+import com.fajing.entity.CouponTier;
 import com.fajing.entity.GenerationTask;
 import com.fajing.entity.Order;
 import com.fajing.entity.PayConfig;
+import com.fajing.entity.PointsPackage;
 import com.fajing.mapper.AppUserMapper;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.OrderMapper;
+import com.fajing.service.CouponService;
 import com.fajing.service.GenerationService;
 import com.fajing.service.GenerationProcessor;
 import com.fajing.service.PayConfigService;
+import com.fajing.service.PointsService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.DouyinPayService;
 import com.fajing.service.pay.WechatPayService;
@@ -72,6 +76,9 @@ public class OrderController {
     private final WechatVirtualPayService wechatVirtualPayService;
     private final DouyinPayService douyinPayService;
     private final AlipayService alipayService;
+    private final PointsService pointsService;
+    private final PointsPackageService pointsPackageService;
+    private final CouponService couponService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** mock 支付仅在非生产环境开启；生产必须接真实支付 */
@@ -98,10 +105,15 @@ public class OrderController {
     @Operation(summary = "创建解锁订单")
     @PostMapping("/create")
     public Result<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
+        Long userId = UserContext.require();
+        String bizType = str(body.get("bizType"));
+        // 充值 / VIP / 团购券走独立商品订单，与解锁订单互不影响
+        if (!bizType.isBlank() && !"unlock".equals(bizType)) {
+            return createBizOrder(bizType, body, userId);
+        }
         List<String> styleIds = styleIdsOf(body);
         Long taskId = taskIdOf(body);
         String plan = body.get("plan") == null ? "all" : String.valueOf(body.get("plan"));
-        Long userId = UserContext.require();
 
         if (styleIds.isEmpty()) {
             throw new BizException("请选择要解锁的款式");
@@ -312,6 +324,223 @@ public class OrderController {
             }
 
             throw new BizException("不支持的支付渠道：" + channel);
+        }
+    }
+
+    /** 充值 / VIP / VVIP / 团购券下单：金额与权益只以服务端档位为准 */
+    private Result<Map<String, Object>> createBizOrder(String bizType, Map<String, Object> body, Long userId) {
+        PayConfig cfg = payConfigService.get();
+        BigDecimal amount;
+        int points = 0;
+        int days = 0;
+        Long tierId = 0L;
+        switch (bizType) {
+            // 充值/VIP/VVIP 一律按后台套餐定价，前端传什么价格都不作数
+            case "points", "vip", "vvip" -> {
+                PointsPackage pkg = pointsPackageService.findEnabled(longOf(body.get("packageId")));
+                bizType = pkg.getBizType();
+                amount = pkg.getPrice();
+                points = "points".equals(bizType) && pkg.getPoints() != null ? pkg.getPoints() : 0;
+                days = "vip".equals(bizType) && pkg.getDays() != null ? pkg.getDays() : 0;
+            }
+            case "coupon" -> {
+                tierId = longOf(body.get("tierId"));
+                CouponTier tier = couponService.findTier(tierId);
+                if (tier == null || tier.getStatus() == null || tier.getStatus() != 1) {
+                    throw new BizException("团购券档位不存在或已下架");
+                }
+                amount = tier.getPayAmount();
+            }
+            default -> throw new BizException("不支持的订单类型");
+        }
+
+        boolean wxReady = payConfigService.wxReady(cfg);
+        boolean wxVirtualReady = payConfigService.wxVirtualReady(cfg);
+        boolean douyinReady = payConfigService.douyinReady(cfg);
+        boolean alipayReady = payConfigService.alipayReady(cfg);
+        boolean wxVirtualMode = "virtual".equalsIgnoreCase(cfg.getWxPayMode());
+        String platform = normalizePlatform(str(body.get("platform")));
+        String channel = str(body.get("channel"));
+        if (platform.isBlank()) {
+            platform = "wx".equals(channel) ? "mp-weixin" : ("alipay".equals(channel) ? "h5" : "");
+        }
+        if (channel.isBlank()) {
+            if ("h5".equals(platform)) {
+                channel = "alipay";
+            } else if ("mp-weixin".equals(platform)) {
+                channel = "wx";
+            } else if ("mp-toutiao".equals(platform)) {
+                channel = "douyin";
+            } else if (wxReady) {
+                channel = "wx";
+            } else if (alipayReady) {
+                channel = "alipay";
+            }
+        }
+        boolean channelReady = switch (channel) {
+            case "wx" -> wxReady || wxVirtualReady;
+            case "douyin" -> douyinReady;
+            case "alipay" -> alipayReady;
+            default -> false;
+        };
+        boolean mock = mockPayEnabled && ("mock".equals(channel) || !channelReady);
+
+        Order order = new Order();
+        order.setUserId(userId);
+        order.setTaskId(0L);
+        order.setBizType(bizType);
+        order.setPlan(bizType);
+        order.setPoints(points);
+        order.setDays(days);
+        order.setTierId(tierId);
+        order.setAmount(amount);
+        order.setStyleIds("");
+        order.setOutTradeNo(generateTradeNo());
+        order.setPayChannel(mock ? "mock" : channel);
+        order.setPlatform(platform);
+        order.setRefundStatus("none");
+        order.setRefundAmount(BigDecimal.ZERO);
+        order.setCreatedAt(LocalDateTime.now());
+        order.setStatus(mock ? "paid" : "created");
+        if (mock) {
+            order.setPaidAt(LocalDateTime.now());
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("amount", amount);
+        data.put("mock", mock);
+        data.put("paid", mock);
+        data.put("bizType", bizType);
+
+        if (mock) {
+            orderMapper.insert(order);
+            fulfill(order);
+            data.put("orderId", order.getId());
+            data.put("outTradeNo", order.getOutTradeNo());
+            data.put("quota", pointsService.toMap(pointsService.get(userId)));
+            if ("coupon".equals(bizType)) {
+                data.put("coupons", couponService.myCoupons().stream()
+                        .map(couponService::toMap).toList());
+            }
+            return Result.ok(data);
+        }
+
+        String subject = switch (bizType) {
+            case "points" -> "发镜 AI 充值 " + points + " 魅力值";
+            case "vip" -> "发镜 AI VIP 包月（30 天）";
+            case "vvip" -> "发镜 AI VVIP 永久会员";
+            default -> "发镜 AI 周边团购券";
+        };
+
+        if ("wx".equals(channel)) {
+            if (wxVirtualMode) {
+                if (!wxVirtualReady) {
+                    throw new BizException("微信虚拟支付参数未配置完整，请在管理端「支付配置」补全");
+                }
+                String productId = virtualProductOf(cfg, amount);
+                Map<String, Object> virtualPay = wechatVirtualPayService.payParamsForProduct(
+                        userId, order.getOutTradeNo(), amount, productId);
+                order.setPayChannel("wx-virtual");
+                orderMapper.insert(order);
+                data.put("orderId", order.getId());
+                data.put("outTradeNo", order.getOutTradeNo());
+                data.put("virtualPay", virtualPay);
+                return Result.ok(data);
+            }
+            if (!wxReady) {
+                throw new BizException("微信支付参数未配置完整，请在管理端「支付配置」补全");
+            }
+            AppUser user = userMapper.selectById(userId);
+            orderMapper.insert(order);
+            try {
+                String prepayId = wechatPayService.createJsapi(
+                        order.getOutTradeNo(), amount, subject, user == null ? "" : user.getOpenid());
+                order.setPrepayId(prepayId);
+                orderMapper.updateById(order);
+                data.put("orderId", order.getId());
+                data.put("outTradeNo", order.getOutTradeNo());
+                data.put("payParams", wechatPayService.payParams(prepayId));
+            } catch (BizException e) {
+                order.setStatus("closed");
+                orderMapper.updateById(order);
+                throw e;
+            }
+            return Result.ok(data);
+        }
+
+        if ("douyin".equals(channel)) {
+            if (!douyinReady) {
+                throw new BizException("抖音支付参数未配置完整，请在管理端「支付配置」补全");
+            }
+            Map<String, Object> douyinPay = douyinPayService.createOrder(order.getOutTradeNo(), amount,
+                    subject, subject, 900);
+            orderMapper.insert(order);
+            data.put("orderId", order.getId());
+            data.put("outTradeNo", order.getOutTradeNo());
+            data.put("douyinPay", douyinPay);
+            return Result.ok(data);
+        }
+
+        if ("alipay".equals(channel)) {
+            if (!alipayReady) {
+                throw new BizException("支付宝参数未配置完整，请在管理端「支付配置」补全");
+            }
+            orderMapper.insert(order);
+            String form;
+            try {
+                form = alipayService.buildWapForm(order.getOutTradeNo(), amount, subject);
+            } catch (RuntimeException e) {
+                order.setStatus("closed");
+                orderMapper.updateById(order);
+                throw e;
+            }
+            data.put("orderId", order.getId());
+            data.put("outTradeNo", order.getOutTradeNo());
+            data.put("payForm", form);
+            return Result.ok(data);
+        }
+
+        throw new BizException("不支持的支付渠道：" + channel);
+    }
+
+    /** 按金额选择充值虚拟道具 */
+    private static String virtualProductOf(PayConfig cfg, BigDecimal amount) {
+        String productId;
+        if (amount.compareTo(new BigDecimal("10.00")) == 0) {
+            productId = cfg.getWxVirtualProductP10();
+        } else if (amount.compareTo(new BigDecimal("20.00")) == 0) {
+            productId = cfg.getWxVirtualProductP20();
+        } else if (amount.compareTo(new BigDecimal("29.00")) == 0) {
+            productId = cfg.getWxVirtualProductP29();
+        } else if (amount.compareTo(new BigDecimal("99.00")) == 0) {
+            productId = cfg.getWxVirtualProductP99();
+        } else {
+            productId = "";
+        }
+        if (productId == null || productId.isBlank()) {
+            throw new BizException("未配置该充值档位的微信虚拟道具 ID");
+        }
+        return productId;
+    }
+
+    /** 支付成功发货：按订单业务类型发放权益，重复回调不重复发放 */
+    private void fulfill(Order order) {
+        String bizType = order.getBizType() == null || order.getBizType().isBlank()
+                ? "unlock" : order.getBizType();
+        switch (bizType) {
+            case "points" -> pointsService.grantPoints(order.getUserId(),
+                    order.getPoints() == null ? 0 : order.getPoints());
+            case "vip" -> pointsService.grantVip(order.getUserId(),
+                    order.getDays() == null || order.getDays() <= 0 ? 30 : order.getDays());
+            case "vvip" -> pointsService.grantVvip(order.getUserId());
+            case "coupon" -> couponService.issue(order);
+            default -> {
+                List<String> paidStyleIds = splitIds(order.getStyleIds());
+                unlockAll(order.getUserId(), paidStyleIds, order.getTaskId());
+                if (order.getTaskId() != null && order.getTaskId() > 0) {
+                    generationProcessor.generatePaidStyles(order.getTaskId(), paidStyleIds);
+                }
+            }
         }
     }
 
@@ -570,6 +799,10 @@ public class OrderController {
         data.put("paidAt", order.getPaidAt());
         data.put("refundStatus", order.getRefundStatus());
         data.put("refundAmount", order.getRefundAmount());
+        data.put("bizType", order.getBizType());
+        data.put("points", order.getPoints());
+        data.put("days", order.getDays());
+        data.put("tierId", order.getTierId());
         return Result.ok(data);
     }
 
@@ -605,6 +838,28 @@ public class OrderController {
 
     private static String str(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private static int intOf(Object value) {
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private static Long longOf(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return 0L;
+        }
     }
 
     private static String normalizePlatform(String raw) {
@@ -659,10 +914,12 @@ public class OrderController {
         return CREATE_LOCKS[Math.floorMod(userId, CREATE_LOCKS.length)];
     }
 
-    /** 幂等：已支付订单不重复置状态，但仍补齐解锁，修复上次回调「置 paid 成功、解锁失败」的断链 */
+    /** 幂等：已支付订单不重复置状态；解锁类仍补齐解锁，修复上次回调「置 paid 成功、解锁失败」的断链 */
     private void markPaid(Order order, String transactionId) {
         if ("paid".equals(order.getStatus())) {
-            unlockAll(order.getUserId(), splitIds(order.getStyleIds()), order.getTaskId());
+            if (order.getBizType() == null || order.getBizType().isBlank() || "unlock".equals(order.getBizType())) {
+                unlockAll(order.getUserId(), splitIds(order.getStyleIds()), order.getTaskId());
+            }
             return;
         }
         order.setStatus("paid");
@@ -670,12 +927,7 @@ public class OrderController {
         order.setPaidAt(LocalDateTime.now());
         order.setRefundStatus("none");
         orderMapper.updateById(order);
-        List<String> paidStyleIds = splitIds(order.getStyleIds());
-        unlockAll(order.getUserId(), paidStyleIds, order.getTaskId());
-        // 付费款在下单时未生成，支付成功后按需补图
-        if (order.getTaskId() != null && order.getTaskId() > 0) {
-            generationProcessor.generatePaidStyles(order.getTaskId(), paidStyleIds);
-        }
+        fulfill(order);
     }
 
     private void unlockAll(Long userId, List<String> styleIds, Long taskId) {

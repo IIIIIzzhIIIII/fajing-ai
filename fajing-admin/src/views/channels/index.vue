@@ -72,6 +72,10 @@ onMounted(load)
           {{ data.totals[card.key] || 0 }}<span class="stat-unit">{{ card.unit }}</span>
         </div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">生图成本</div>
+        <div class="stat-value">¥ {{ formatMoney(data.totals.aiCost || 0) }}</div>
+      </div>
       <div class="stat-card is-revenue">
         <div class="stat-label">净实收</div>
         <div class="stat-value">¥ {{ formatMoney(data.totals.netRevenue || 0) }}</div>
@@ -82,7 +86,7 @@ onMounted(load)
       <div class="section-head">
         <el-icon class="section-icon"><TrendCharts /></el-icon>
         <span class="section-title">渠道表现</span>
-        <span class="section-tip">付费订单按用户最近一次访问渠道归因；净实收已扣除退款</span>
+        <span class="section-tip">付费订单按下单来源端归因；净实收 = 实付金额 - 退款 - 大模型生图成本</span>
       </div>
       <el-table v-loading="loading" :data="data.channels" stripe>
         <el-table-column label="渠道" min-width="130">
@@ -98,6 +102,11 @@ onMounted(load)
         <el-table-column prop="paidOrders" label="付费订单" width="100" align="right" />
         <el-table-column label="付费转化" width="100" align="right">
           <template #default="{ row }">{{ row.payRate || 0 }}%</template>
+        </el-table-column>
+        <el-table-column label="生图成本" width="120" align="right">
+          <template #default="{ row }">
+            <span class="amount-text is-cost">¥ {{ formatMoney(row.aiCost || 0) }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="净实收" width="120" align="right">
           <template #default="{ row }">
@@ -122,9 +131,6 @@ onMounted(load)
       <el-table :data="data.payChannels" stripe>
         <el-table-column prop="label" label="支付渠道" min-width="140" />
         <el-table-column prop="orders" label="订单数" width="120" align="right" />
-        <el-table-column label="净实收" width="140" align="right">
-          <template #default="{ row }">¥ {{ formatMoney(row.amount || 0) }}</template>
-        </el-table-column>
         <template #empty>
           <el-empty description="暂无支付数据" :image-size="90" />
         </template>
@@ -231,5 +237,9 @@ onMounted(load)
 .amount-text {
   font-weight: 600;
   color: #c95676;
+
+  &.is-cost {
+    color: #a8712e;
+  }
 }
 </style>

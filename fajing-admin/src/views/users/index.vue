@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Search, User, Wallet } from '@element-plus/icons-vue'
+import { Refresh, Search, User } from '@element-plus/icons-vue'
 import { fetchUsers, updateUserStatus } from '@/api'
 import { formatDateTime, formatMoney } from '@/utils/format'
 
@@ -12,9 +12,6 @@ const keyword = ref('')
 const status = ref('')
 
 const totalCount = computed(() => list.value.length)
-const paidTotal = computed(() =>
-  list.value.reduce((sum, item) => sum + (Number(item.paidAmount) || 0), 0)
-)
 
 function loadList() {
   loading.value = true
@@ -74,13 +71,6 @@ onMounted(loadList)
         <div class="stat-body">
           <div class="stat-label">用户总数</div>
           <div class="stat-value">{{ totalCount }}<span class="stat-unit">人</span></div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon is-amount"><el-icon><Wallet /></el-icon></div>
-        <div class="stat-body">
-          <div class="stat-label">累计付费</div>
-          <div class="stat-value">¥ {{ formatMoney(paidTotal) }}</div>
         </div>
       </div>
     </div>

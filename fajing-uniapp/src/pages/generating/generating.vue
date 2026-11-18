@@ -76,7 +76,7 @@ import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { track } from '@/utils/track'
 import { goBack } from '@/utils/nav'
-import { STYLES, COLORS, PORTRAIT, DEMO_BEFORE } from '@/mock/constants'
+import { STYLES, COLORS, PORTRAIT, DEMO_BEFORE, STYLE_IMG } from '@/mock/constants'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -141,6 +141,7 @@ const dashOffset = computed(() => 402 - 402 * (Math.max(0, Math.min(100, progres
 function imgOf(s) {
   if (!s) return ''
   if (s.img) return s.img
+  if (STYLE_IMG(s)) return STYLE_IMG(s)
   const color = COLORS.find((c) => c.id === app.selectedColorId)
   const suffix = color ? `, ${color.en || color.name} hair color` : ''
   return s.en ? PORTRAIT(s.en + suffix, app.gender) : ''

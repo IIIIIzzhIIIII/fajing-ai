@@ -11,10 +11,11 @@
           <image v-if="me.avatar" :src="me.avatar" mode="aspectFill" style="width:100%;height:100%" />
           <fj-icon v-else name="user" :size="26" color="#C95676" />
         </view>
-        <view>
+        <view class="hero-info">
           <view style="font-size:17px;font-weight:800;letter-spacing:-.3px">{{ me.nickname || '发型试镜用户' }}</view>
           <view style="font-size:11px;color:var(--muted);margin-top:3px">{{ loginLabel }} · 试发记录已同步</view>
         </view>
+        <view v-if="!loggedIn" class="login-btn" @click="openLogin">登录</view>
       </view>
 
       <view style="margin:0 20px 18px;display:flex;gap:8px">
@@ -22,19 +23,28 @@
           <view style="font-size:20px;font-weight:800;color:var(--pink-600)">{{ styleCount }}</view>
           <view style="font-size:10px;color:var(--muted);margin-top:2px">试过的发型</view>
         </view>
-        <view style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)">
+        <view style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)" @click="openPoints">
           <view style="font-size:20px;font-weight:800;color:var(--ink)">
-            {{ app.quota.freeLeft }}<text style="font-size:11px;color:var(--muted)">次</text>
+            {{ app.quota.unlimited ? '∞' : (app.quota.points || 0) }}
           </view>
-          <view style="font-size:10px;color:var(--muted);margin-top:2px">免费生成次数</view>
+          <view style="font-size:10px;color:var(--muted);margin-top:2px">魅力值</view>
         </view>
-        <view style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)">
-          <view style="font-size:20px;font-weight:800;color:var(--gold)">{{ app.unlockedCount }}</view>
-          <view style="font-size:10px;color:var(--muted);margin-top:2px">已解锁高清</view>
+        <view style="flex:1;background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:var(--sh-sm)" @click="openCoupons">
+          <view style="font-size:20px;font-weight:800;color:var(--gold)">
+            {{ app.quota.couponCount || 0 }}<text style="font-size:11px;color:var(--muted)">张可用</text>
+          </view>
+          <view style="font-size:10px;color:var(--muted);margin-top:2px">我的券包</view>
         </view>
       </view>
 
       <view class="menu" style="margin-top:18px">
+        <view class="menu-item" @click="openPoints">
+          <view class="menu-ico"><fj-icon name="crown" :size="16" color="#C68A25" /></view>
+          <text>充值与权益</text>
+          <text class="menu-count">{{ app.quota.unlimited ? '不限量' : (app.quota.points || 0) + ' 点' }}</text>
+          <view class="chev"><fj-icon name="chevron-right" :size="16" color="#C9BFC3" /></view>
+        </view>
+
         <view class="menu-item" @click="openHistory">
           <view class="menu-ico"><fj-icon name="clock" :size="16" color="#C95676" /></view>
           <text>我的试发记录</text>
@@ -65,28 +75,31 @@
 
     <fj-tabbar active="profile" />
     <fj-sheet />
+    <FjLoginModal v-if="loginVisible" @done="onLoginDone" @cancel="onLoginCancel" />
   </view>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
-import { clearToken } from '@/utils/auth'
+import { clearToken, isProfileComplete, clearProfileComplete } from '@/utils/auth'
+import { useLoginGate } from '@/composables/useLoginGate'
+import FjLoginModal from '@/components/FjLoginModal.vue'
 import { goBack } from '@/utils/nav'
+import { site } from '@/utils/site'
 
 const app = useAppStore()
 const ui = useUiStore()
 
+const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
+const loggedIn = ref(isProfileComplete())
+const loginLabel = computed(() => (loggedIn.value ? '已登录' : '游客登录'))
+
 const me = ref({ nickname: '', avatar: '' })
-/** 登录方式文案：H5 为游客登录，小程序为微信登录 */
-let loginLabel = '微信登录'
-// #ifdef H5
-loginLabel = '游客登录'
-// #endif
-/** 试发记录条数 / 试过的发型款数：以服务端记录为准，生成后回到本页会刷新 */
+/** 登录方式文案：未完成授权显示游客，完成后显示已登录 */
 const recordCount = ref(0)
 const styleCount = ref(0)
 
@@ -128,10 +141,25 @@ async function loadStats() {
 }
 
 onShow(() => {
+  loggedIn.value = isProfileComplete()
   refreshQuota()
   loadStats()
   loadMe()
 })
+
+function openLogin() {
+  ensureLogin()
+}
+
+function onLoginDone() {
+  loggedIn.value = true
+  finishLogin()
+  loadMe()
+}
+
+function onLoginCancel() {
+  closeLogin()
+}
 
 function back() {
   goBack()
@@ -139,6 +167,7 @@ function back() {
 
 function logout() {
   clearToken()
+  clearProfileComplete()
   app.resetAll()
   ui.close()
   uni.reLaunch({ url: '/pages/login/login' })
@@ -148,20 +177,47 @@ function openHistory() {
   uni.navigateTo({ url: '/pages/history/history' })
 }
 
+function openPoints() {
+  ensureLogin(() => uni.navigateTo({ url: '/pages/points/points' }))
+}
+
+function openCoupons() {
+  uni.navigateTo({ url: '/pages/coupons/coupons' })
+}
+
 function openPrivacy() {
   ui.openSheet('privacy')
 }
 
 function contact() {
-  ui.toast('客服微信：fajing-ai')
+  const wechat = site.contactWechat || 'fajing-ai'
+  uni.setClipboardData({
+    data: wechat,
+    success: () => ui.toast(`客服微信：${wechat}（已复制）`)
+  })
 }
 
 function about() {
-  ui.toast('发镜 AI v0.1 · 剪之前，先看见')
+  ui.openSheet('about')
 }
 </script>
 
 <style lang="scss" scoped>
+.hero-info {
+  flex: 1;
+  min-width: 0;
+}
+.login-btn {
+  margin-left: auto;
+  flex: none;
+  padding: 7px 16px;
+  border-radius: 99px;
+  background: var(--pink-600);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
 .logout-btn {
   margin: 18px 20px 0;
   padding: 12px;

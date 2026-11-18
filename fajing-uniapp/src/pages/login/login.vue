@@ -1,7 +1,7 @@
 <template>
   <view class="page active login-page">
     <view class="login-brand">
-      <view class="logo-mark"><fj-icon name="scissors" :size="22" color="#FFFFFF" /></view>
+      <view class="logo-mark"><fj-icon name="scissors" :size="22" color="#C95676" /></view>
       <view class="brand-name">发镜 AI</view>
       <view class="brand-slogan">剪之前，先看见</view>
     </view>
@@ -17,15 +17,18 @@
     </view>
 
     <view class="login-foot">
-      <button class="btn btn-primary btn-block" :loading="loading" @click="start">
+      <view class="login-agree login-agree-check" @click="toggleAgree">
+        <view :class="['checkbox', agreed ? 'checked' : '']">
+          <fj-icon v-if="agreed" name="check" :size="10" color="#fff" />
+        </view>
+        <text>我已阅读并同意</text>
+        <text class="hl" @click.stop="openDoc('terms')">《用户协议》</text>
+        <text>与</text>
+        <text class="hl" @click.stop="openDoc('privacy')">《隐私政策》</text>
+      </view>
+      <button class="btn btn-primary btn-block" :disabled="!agreed" :loading="loading" @click="start">
         {{ loading ? '登录中…' : '开始试发型' }}
       </button>
-      <view class="login-agree">
-        登录即表示同意
-        <text class="hl" @click="openDoc('terms')">《用户协议》</text>
-        与
-        <text class="hl" @click="openDoc('privacy')">《隐私政策》</text>
-      </view>
     </view>
   </view>
 </template>
@@ -35,8 +38,17 @@ import { ref } from 'vue'
 import { login } from '@/api/request'
 
 const loading = ref(false)
+const agreed = ref(false)
+
+function toggleAgree() {
+  agreed.value = !agreed.value
+}
 
 async function start() {
+  if (!agreed.value) {
+    uni.showToast({ title: '请先同意用户协议与隐私政策', icon: 'none' })
+    return
+  }
   if (loading.value) return
   loading.value = true
   try {
@@ -72,9 +84,7 @@ function openDoc(name) {
   width: 56px;
   height: 56px;
   margin-bottom: 14px;
-  background: linear-gradient(135deg, #e08aa2, #c95676);
   border-radius: 18px;
-  box-shadow: 0 12px 26px rgba(201, 86, 118, 0.28);
 }
 .brand-name {
   font-size: 24px;
@@ -118,5 +128,31 @@ function openDoc(name) {
 .login-agree .hl {
   color: var(--pink-700);
   font-weight: 600;
+}
+.login-agree-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 14px;
+  line-height: 1;
+}
+.checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #d0d0d0;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  flex-shrink: 0;
+}
+.checkbox.checked {
+  background: var(--pink-600);
+  border-color: var(--pink-600);
+}
+.btn[disabled] {
+  opacity: 0.5;
 }
 </style>

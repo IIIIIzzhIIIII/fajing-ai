@@ -20,10 +20,11 @@ function platformChannel() {
  * 关键行为埋点：批量上报，失败静默，绝不阻断业务。
  * 事件：upload_success / generate_start / generate_success / result_view /
  *       save_image / pay_click / pay_success / post_create
+ * channel 固定为运行平台，业务字段请用其他 key（如 payMethod / shareChannel），避免覆盖渠道归因。
  */
 export function track(event, payload = {}) {
   if (!BASE_URL || !event) return
-  queue.push({ event, payload: { channel: platformChannel(), ...payload } })
+  queue.push({ event, payload: { ...payload, channel: platformChannel() } })
   if (queue.length >= 20) {
     flush()
     return

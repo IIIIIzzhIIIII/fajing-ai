@@ -21,8 +21,12 @@ public class GenerationTask {
     private String status;
     private Integer progress;
     private String resultJson;
-    /** 本批是否使用免费额度：1 免费（第 1 款解锁），0 付费批次（全部需支付后生成） */
+    /** 本批是否使用免费额度：1 免费（前 3 款预生成并解锁），0 非免费批次 */
     private Integer freeQuota;
+    /** 推荐记录 ID：用于把脸型排名、适配分与推荐依据带回结果页 */
+    private Long recommendId;
+    /** 1 = 创建后立即生成（发色变体），生成成功即解锁；0 = 免费批次/等待解锁 */
+    private Integer autoGen;
     private LocalDateTime expireAt;
     private LocalDateTime createdAt;
 }

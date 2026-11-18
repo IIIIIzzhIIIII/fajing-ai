@@ -2,9 +2,15 @@
 import { onLaunch } from '@dcloudio/uni-app'
 import { useAppStore } from './store/app'
 import { login, API } from './api/request'
+import { initPrivacyGuard } from './utils/privacy'
+import { loadSiteSettings } from './utils/site'
 
 onLaunch(async () => {
   const app = useAppStore()
+  // 隐私授权守卫要在静默登录之前注册，否则首次进入拿不到授权回调
+  initPrivacyGuard()
+  // 前台文案与价格属于公开配置，先拉一次；失败沿用缓存与默认值
+  loadSiteSettings()
   // 恢复本地缓存后立即以服务端额度覆盖，避免本地缓存与实际额度不一致
   app.restore()
   try {

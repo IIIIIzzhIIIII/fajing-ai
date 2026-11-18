@@ -16,6 +16,7 @@ import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.service.AdminLogService;
 import com.fajing.service.ChannelStatsService;
+import com.fajing.service.CouponService;
 import com.fajing.service.TradeRuleService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.WechatPayService;
@@ -63,6 +64,7 @@ public class AdminController {
     private final AlipayService alipayService;
     private final ChannelStatsService channelStatsService;
     private final TradeRuleService tradeRuleService;
+    private final CouponService couponService;
     private final WechatVirtualPayService wechatVirtualPayService;
     private final com.fajing.service.GenerationService generationService;
 
@@ -132,9 +134,12 @@ public class AdminController {
         order.setRefundStatus(refundStatus);
         order.setRefundAmount(amount);
         orderMapper.updateById(order);
-        // 全额退款收回对应解锁，避免退款后仍保留付费内容；部分退款与虚拟支付退款中不回收
+        // 全额退款收回对应解锁，避免退款后仍保留付费内容；团购券订单同步作废券
         if ("refunded".equals(refundStatus) && amount.compareTo(order.getAmount()) == 0) {
             generationService.revokeUnlocks(order.getUserId(), order.getTaskId(), order.getStyleIds());
+            if ("coupon".equals(order.getBizType())) {
+                couponService.markRefundedByOrder(order.getId());
+            }
         }
         adminLogService.log("ORDER_REFUND", "order:" + id + ",amount:" + amount);
         Map<String, Object> data = new LinkedHashMap<>();

@@ -32,6 +32,11 @@ public class PayConfig {
     private String wxVirtualProductOne;
     /** 全部解锁的虚拟道具 ID（单价 3 元，按数量购买） */
     private String wxVirtualProductAll;
+    /** 充值套餐虚拟道具 ID：10 / 20 / 29 / 99 元 */
+    private String wxVirtualProductP10;
+    private String wxVirtualProductP20;
+    private String wxVirtualProductP29;
+    private String wxVirtualProductP99;
 
     private Integer douyinEnabled;
     private String douyinAppId;

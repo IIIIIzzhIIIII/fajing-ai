@@ -43,6 +43,18 @@ public class AiImageService {
     /** 送给模型前把原图缩到这个长边，兼顾质量与请求体大小 */
     private static final int MAX_EDGE = 1280;
 
+    /** 染发模式负面词：必须排除 colored hair / blue hair / grey hair 等会抑制染色的词 */
+    private static final String COLOR_NEGATIVE_PROMPT =
+            "changed eyebrows, different eyebrows, altered facial features, different person, face swap, "
+                    + "beauty retouch, skin smoothing, slim face, bigger eyes, changed expression, "
+                    + "changed smile, mouth closed, hidden teeth, different eyes, "
+                    + "brightened skin, whiter skin, fairer skin, changed clothes, changed background, distorted face, "
+                    + "wig, hairpiece, sticker, artificial hair, plastic hair, flat hair, fake hairline, harsh edges, "
+                    + "wrong hair color, uneven hair color, color patches, gradient hair, black roots, two-tone hair, "
+                    + "改眉形, 换脸, 瘦脸, 放大眼睛, 美颜, 磨皮, 美白, 提亮肤色, 改变五官, 改变肤色, 改变服装, 改变背景, "
+                    + "笑容改变, 闭嘴, 不露齿, 表情改变, 换表情, 眼神改变, "
+                    + "假发, 贴图, 塑料感, 发丝生硬, 发色不均, 黑发根";
+
     private final AiConfigService configService;
     private final StorageService storageService;
 
@@ -66,6 +78,22 @@ public class AiImageService {
     }
 
     /**
+     * 染发模式：发色是本次必须执行的变更，因此不能沿用默认负面词里的
+     * colored hair / blue hair / grey hair（会抑制染发）。
+     */
+    public String editHairColor(String photoUrl, String referenceUrl, String prompt, Long taskId, String styleId,
+                                String colorEn) throws Exception {
+        String extraNegative = "wrong hair color, uneven hair color, color patches, gradient hair, "
+                + "black roots, two-tone hair, keep original black hair, wig, plastic hair, "
+                + "发色不均, 黑发根, 假发";
+        // 同一发型的多个发色变体并发生成时，文件名带上发色标识避免互相覆盖
+        String colorTag = colorEn == null || colorEn.isBlank()
+                ? "color" : Integer.toHexString(colorEn.hashCode());
+        return edit(photoUrl, referenceUrl, prompt, "ai_" + taskId + "_" + styleId + "_" + colorTag + "_",
+                true, extraNegative, false, COLOR_NEGATIVE_PROMPT);
+    }
+
+    /**
      * 管理端「标准模特照」：保留人物脸部/五官/发型/表情，只规范取景与姿态，
      * 输出固定 3:4 的正面肩颈像（头顶留少量空隙、下沿在锁骨附近），用于发型库素材。
      */
@@ -86,6 +114,13 @@ public class AiImageService {
 
     private String edit(String photoUrl, String referenceUrl, String prompt,
                         String prefix, boolean withWatermark, String extraNegative, boolean portrait) throws Exception {
+        return edit(photoUrl, referenceUrl, prompt, prefix, withWatermark, extraNegative, portrait,
+                AiConfigService.DEFAULT_NEGATIVE_PROMPT);
+    }
+
+    private String edit(String photoUrl, String referenceUrl, String prompt,
+                        String prefix, boolean withWatermark, String extraNegative, boolean portrait,
+                        String negativeBase) throws Exception {
         AiConfig cfg = configService.get();
         if (cfg.getEnabled() == null || cfg.getEnabled() != 1) {
             throw new BizException("AI 出图未启用");
@@ -108,7 +143,7 @@ public class AiImageService {
             body.put("image2", refDataUri);
         }
         // 抑制改五官/美颜倾向；部分编辑模型不支持该参数，下面会降级重试
-        String negative = AiConfigService.DEFAULT_NEGATIVE_PROMPT;
+        String negative = negativeBase;
         if (extraNegative != null && !extraNegative.isBlank()) {
             negative = negative + ", " + extraNegative;
         }

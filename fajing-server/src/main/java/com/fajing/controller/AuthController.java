@@ -45,6 +45,21 @@ public class AuthController {
         return Result.ok(authService.me(UserContext.require()));
     }
 
+    @Operation(summary = "更新昵称 / 头像")
+    @PostMapping("/profile")
+    public Result<Map<String, Object>> updateProfile(@RequestBody(required = false) Map<String, String> body) {
+        String nickname = body == null ? null : body.get("nickname");
+        String avatar = body == null ? null : body.get("avatar");
+        return Result.ok(authService.updateProfile(UserContext.require(), nickname, avatar));
+    }
+
+    @Operation(summary = "绑定微信手机号（getPhoneNumber 返回的 code）")
+    @PostMapping("/phone")
+    public Result<Map<String, Object>> bindPhone(@RequestBody(required = false) Map<String, String> body) {
+        String code = body == null ? null : body.get("code");
+        return Result.ok(authService.bindPhone(UserContext.require(), code));
+    }
+
     @Operation(summary = "退出登录（客户端清除 token）")
     @PostMapping("/logout")
     public Result<Void> logout() {

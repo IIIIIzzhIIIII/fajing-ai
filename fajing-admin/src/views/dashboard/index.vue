@@ -20,16 +20,17 @@ const platforms = [
   { code: 'mp-weixin', label: '微信小程序' },
   { code: 'h5', label: '公众号 H5' },
   { code: 'mp-toutiao', label: '抖音小程序' },
-  { code: 'mp-xhs', label: '小红书小程序' },
-  { code: 'unknown', label: '未标记' }
+  { code: 'mp-xhs', label: '小红书小程序' }
 ]
 
 const kpiCards = [
-  { key: 'netRevenue', label: '净实收', desc: '实付金额扣除退款后', money: true },
+  { key: 'netRevenue', label: '净实收', desc: '已支付金额 - 退款金额 - 生图成本', money: true },
+  { key: 'paidAmount', label: '已支付金额', desc: '已支付订单实付总额', money: true },
+  { key: 'refundAmount', label: '退款金额', desc: '已支付订单的退款总额', money: true },
+  { key: 'aiCost', label: '生图成本', desc: '大模型生图调用费用', money: true },
   { key: 'paidOrders', label: '已支付订单', desc: '按订单创建日统计' },
   { key: 'pendingOrders', label: '待支付订单', desc: '下单后未完成支付' },
-  { key: 'failedPayments', label: '支付失败', desc: '下单或支付异常关闭' },
-  { key: 'paidAmount', label: '已支付金额', desc: '已支付订单实付总额', money: true }
+  { key: 'failedPayments', label: '支付失败', desc: '下单或支付异常关闭' }
 ]
 
 const platformLabel = computed(
@@ -46,7 +47,7 @@ const prevRangeText = computed(() => {
 })
 
 const trend = computed(() => data.value?.trend || { current: [], previous: [] })
-const trendMetricMoney = computed(() => metric.value === 'netRevenue')
+const trendMetricMoney = computed(() => metric.value === 'netRevenue' || metric.value === 'aiCost')
 
 const chart = computed(() => {
   const current = trend.value.current || []
@@ -54,6 +55,8 @@ const chart = computed(() => {
   const key = metric.value
   const values = [...current, ...previous].map((row) => Number(row[key]) || 0)
   const max = Math.max(...values, 1)
+  const min = Math.min(...values, 0)
+  const span = max - min || 1
   const width = 640
   const height = 200
   const padX = 8
@@ -62,7 +65,7 @@ const chart = computed(() => {
   const count = Math.max(current.length, 1)
   const step = count > 1 ? (width - padX * 2) / (count - 1) : 0
   const x = (index) => padX + step * index
-  const y = (value) => height - padBottom - (value / max) * (height - padTop - padBottom)
+  const y = (value) => height - padBottom - ((value - min) / span) * (height - padTop - padBottom)
   const line = (rows) =>
     rows.map((row, index) => `${x(index).toFixed(1)},${y(Number(row[key]) || 0).toFixed(1)}`).join(' ')
   const labelIndexes = count <= 2 ? [0, count - 1] : [0, Math.floor((count - 1) / 2), count - 1]
@@ -86,7 +89,7 @@ const chart = computed(() => {
 
 const channels = computed(() => data.value?.channels || [])
 const channelTotal = computed(() =>
-  channels.value.reduce((sum, item) => sum + Number(item.netRevenue || 0), 0)
+  channels.value.reduce((sum, item) => sum + Math.max(0, Number(item.netRevenue || 0)), 0)
 )
 const donutColors = ['#c95676', '#7257b5', '#a8712e', '#3f8f7a', '#b9aeb3']
 const donutStyle = computed(() => {
@@ -94,7 +97,7 @@ const donutStyle = computed(() => {
   if (!total) return 'conic-gradient(#f1eaed 0% 100%)'
   let start = 0
   const parts = channels.value.map((item, index) => {
-    const percent = (Number(item.netRevenue || 0) / total) * 100
+    const percent = (Math.max(0, Number(item.netRevenue || 0)) / total) * 100
     const segment = `${donutColors[index % donutColors.length]} ${start}% ${start + percent}%`
     start += percent
     return segment
@@ -184,12 +187,20 @@ function exportCsv() {
     ])
   })
   rows.push([])
-  rows.push(['日期', '净实收', '已支付订单', '上一周期净实收', '上一周期已支付订单'])
+  rows.push(['日期', '净实收', '生图成本', '已支付订单', '上一周期净实收', '上一周期生图成本', '上一周期已支付订单'])
   const current = trend.value.current || []
   const previous = trend.value.previous || []
   current.forEach((row, index) => {
     const prev = previous[index] || {}
-    rows.push([row.date, row.netRevenue, row.paidOrders, prev.netRevenue ?? '', prev.paidOrders ?? ''])
+    rows.push([
+      row.date,
+      row.netRevenue,
+      row.aiCost ?? '',
+      row.paidOrders,
+      prev.netRevenue ?? '',
+      prev.aiCost ?? '',
+      prev.paidOrders ?? ''
+    ])
   })
   rows.push([])
   rows.push(['渠道', '净实收', '已支付订单'])
@@ -226,9 +237,9 @@ onMounted(load)
             <el-button text :icon="InfoFilled">口径说明</el-button>
           </template>
           <div class="policy">
-            <p>净实收 = 已支付订单实付金额 - 已退款金额。</p>
+            <p>净实收 = 已支付订单实付金额 - 已退款金额 - 大模型生图成本。</p>
             <p>订单 KPI 按订单创建日统计；趋势与前一等长周期对照。</p>
-            <p>渠道按订单下单来源端归因，历史订单无来源端时计入「未标记」。</p>
+            <p>渠道优先按下单来源端归因，缺失时按账号来源兜底。</p>
             <p>热门发型按所选周期内解锁数排序。</p>
           </div>
         </el-popover>
@@ -284,6 +295,7 @@ onMounted(load)
           </div>
           <el-radio-group v-model="metric" size="small">
             <el-radio-button value="netRevenue">净实收</el-radio-button>
+            <el-radio-button value="aiCost">生图成本</el-radio-button>
             <el-radio-button value="paidOrders">已支付订单</el-radio-button>
           </el-radio-group>
         </div>
@@ -327,7 +339,7 @@ onMounted(load)
         <div class="panel-head">
           <div>
             <div class="panel-title">渠道收入构成</div>
-            <div class="panel-sub">各渠道扣除退款后的实收占比</div>
+            <div class="panel-sub">各渠道扣除退款与生图成本后的实收占比</div>
           </div>
           <el-tag size="small" type="info">{{ channels.length }} 渠道</el-tag>
         </div>

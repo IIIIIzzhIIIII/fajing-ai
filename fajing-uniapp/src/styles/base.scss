@@ -31,6 +31,12 @@ image {
   background: linear-gradient(145deg, #f5e7ea, #eee9f2);
 }
 
+/* 图标组件是透明 SVG，仅展示图形本身，不套用图片兜底底色 */
+.fj-icon,
+.fj-icon img {
+  background: transparent;
+}
+
 /* #ifdef H5 */
 html,
 body {
@@ -75,6 +81,38 @@ uni-page-body {
 }
 .result-strip .uni-scroll-view-content {
   gap: 9px;
+}
+/* #endif */
+
+/* 小程序端 scroll-view 没有 H5 的内容容器层级：
+ * display:flex 会让子项竖排，改用 white-space + inline-block 实现横滑 */
+/* #ifndef H5 */
+.hot-strip,
+.chip-row,
+.color-row,
+.result-strip {
+  display: block;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.hot-card,
+.chip,
+.color-dot,
+.r-thumb {
+  display: inline-block;
+  vertical-align: top;
+}
+.hot-card {
+  margin-right: 10px;
+}
+.chip {
+  margin-right: 8px;
+}
+.color-dot {
+  margin-right: 9px;
+}
+.r-thumb {
+  margin-right: 9px;
 }
 /* #endif */
 

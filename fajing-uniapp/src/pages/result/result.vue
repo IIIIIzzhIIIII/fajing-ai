@@ -5,45 +5,46 @@
         <fj-icon name="arrow-left" :size="16" />
       </view>
       <view class="topbar-title">你的新发型</view>
+      <view class="pts-pill" @click="goPoints">
+        <fj-icon name="crown" :size="13" color="#C68A25" />
+        <text>{{ app.quota.unlimited ? '不限量' : (app.quota.points || 0) }}</text>
+      </view>
     </view>
 
     <scroll-view scroll-y class="scroll" style="padding-bottom:10px">
-      <view class="result-meta" style="padding-bottom:10px">
+      <view class="result-meta">
         <view class="meta-main">
-          <view class="meta-name">{{ current.name }}</view>
-          <view class="meta-desc">长度：{{ current.len }} · 适合{{ current.face }}</view>
+          <view class="meta-name">{{ current.name || '新发型' }}</view>
+          <view class="meta-desc">
+            长度：{{ current.len || '适中' }} · 适合{{ current.face || '多数脸型' }}
+            <text v-if="current.colorName" class="meta-color"> · {{ current.colorName }}</text>
+          </view>
         </view>
-        <view class="pill" @click="shuffleBatch">
+        <view class="pill" @click="again">
           <fj-icon name="refresh" :size="13" color="#4E575A" />
-          <text>换一批</text>
+          <text>继续换</text>
         </view>
       </view>
 
       <view class="pad">
-        <view class="seg res-view-seg">
-          <view class="seg-item" :class="{ on: view === 'compare' }" @click="setView('compare')">滑动对比</view>
-          <view class="seg-item" :class="{ on: view === 'grid' }" @click="setView('grid')">四宫格</view>
+        <view v-if="isPending(current)" class="res-state">
+          <fj-icon name="lock" :size="26" color="#C68A25" />
+          <text class="res-state-t">{{ lockedTitle }}</text>
+          <text class="res-state-d">解锁后立即生成这张效果图，可保存高清无水印版</text>
+          <view class="btn btn-primary state-btn" @click="unlockCurrent">10 魅力值解锁</view>
         </view>
-
-        <view v-if="view === 'compare'">
-          <view v-if="isPending(current)" class="res-fail">
-            <fj-icon name="crown" :size="24" color="#C68A25" />
-            <text class="res-fail-t">支付后自动生成</text>
-            <text class="res-fail-d">解锁后会立即生成这张效果图</text>
-          </view>
-          <view v-else-if="isFailed(current)" class="res-fail" @click="retryCurrent">
-            <fj-icon name="refresh" :size="24" color="#8B9295" />
-            <text class="res-fail-t">{{ retrying ? '正在重新生成…' : '生成失败，点击重试' }}</text>
-            <text class="res-fail-d">{{ current.failReason || '生成超时/服务异常' }}</text>
-          </view>
+        <view v-else-if="isFailed(current)" class="res-state" @click="retryCurrent">
+          <fj-icon name="refresh" :size="24" color="#8B9295" />
+          <text class="res-state-t">{{ retrying ? '正在重新生成…' : '生成失败，点击重试' }}</text>
+          <text class="res-state-d">{{ current.failReason || '生成超时/服务异常' }}</text>
+        </view>
+        <template v-else>
           <fj-compare-slider
-            v-else
             ref="sliderRef"
             v-model:pct="baPct"
             :before="beforeImg"
             :after="current.img"
-            :unlocked="unlocked"
-            @lock="openPay()"
+            :unlocked="true"
             @dragstart="onSliderDrag"
           />
 
@@ -81,12 +82,12 @@
               </view>
               <!-- #endif -->
               <view class="fit-score-num">
-                {{ fit.score }}<text style="font-size:9px;font-weight:700">%</text>
+                {{ fit.score }}<text style="font-size:9px;font-weight:700">分</text>
               </view>
             </view>
             <view class="fit-main">
               <view class="fit-t">
-                <text>脸型适配度</text>
+                <text>适配度评分</text>
                 <text class="fit-lv">{{ fit.lv }}</text>
               </view>
               <view class="fit-d">{{ fit.desc }}</view>
@@ -95,55 +96,9 @@
               </view>
             </view>
           </view>
-        </view>
+        </template>
 
-        <view v-if="remaining > 0" class="unlock-bar" @click="openPay()">
-          <view class="ub-thumbs">
-            <view v-for="item in lockedList.slice(0, 3)" :key="item.styleId" class="ub-thumb">
-              <image v-if="item.img" class="thumb-img" :src="item.img" mode="aspectFill" style="width:100%;height:100%" />
-              <view v-else class="ub-thumb-empty">待生成</view>
-            </view>
-          </view>
-          <view class="ub-main">
-            <view class="ub-t">还有 {{ remaining }} 款效果待解锁</view>
-            <view class="ub-d">{{ unlockSub }}</view>
-          </view>
-          <text class="ub-btn">解锁</text>
-        </view>
-
-        <view v-if="view === 'grid'">
-          <view class="res-grid" :class="{ single: styles.length === 1 }">
-            <view
-              v-for="(item, i) in styles"
-              :key="item.styleId"
-              class="res-cell"
-              :class="{ on: i === activeIndex, locked: !isUnlocked(item) }"
-              @click="openFromGrid(i)"
-            >
-              <image
-                v-if="!isFailed(item) && !isPending(item)"
-                class="thumb-img"
-                :src="item.img"
-                mode="aspectFill"
-                style="width:100%;height:100%"
-              />
-              <view v-else-if="isPending(item)" class="fail-thumb"><text>支付后生成</text></view>
-              <view v-else class="fail-thumb"><text>生成失败</text></view>
-              <text class="res-cell-idx">{{ i + 1 }}</text>
-              <view v-if="!isUnlocked(item)" class="res-cell-lock">
-                <view class="lk">
-                  <fj-icon name="lock" :size="16" color="#C95676" />
-                </view>
-                <text class="rc-lt">付费解锁</text>
-                <text class="rc-ls">¥6/张 · 高清无水印</text>
-              </view>
-              <view class="res-cell-name">{{ item.name }}</view>
-            </view>
-          </view>
-          <view class="res-grid-tip">点任意一张，进入滑动对比</view>
-        </view>
-
-        <view v-if="view === 'compare'" class="barber-entry" @click="openCard">
+        <view class="barber-entry" @click="openCard">
           <view class="be-ico">
             <fj-icon name="scissors" :size="16" color="#F0B7C7" />
           </view>
@@ -153,29 +108,41 @@
           </view>
           <fj-icon name="chevron-right" :size="16" color="rgba(255,255,255,.55)" />
         </view>
-      </view>
 
-      <view v-if="view === 'compare'" class="result-strip">
-        <view
-          v-for="(item, i) in styles"
-          :key="item.styleId"
-          class="r-thumb"
-          :class="{ on: i === activeIndex, locked: !isUnlocked(item) }"
-          @click="selectStyle(i)"
-        >
-          <image
-            v-if="!isFailed(item) && !isPending(item)"
-            class="thumb-img"
-            :src="item.img"
-            mode="aspectFill"
-            style="width:100%;height:100%"
-          />
-          <view v-else-if="isPending(item)" class="fail-thumb"><text>待生成</text></view>
-          <view v-else class="fail-thumb"><text>失败</text></view>
-          <text class="r-thumb-idx">{{ i + 1 }}</text>
-          <view v-if="!isUnlocked(item)" class="r-thumb-lock">
-            <fj-icon name="lock" :size="14" color="#FFFFFF" />
-            <text class="rtl-t">付费</text>
+        <!-- 周边团购券 -->
+        <view class="coupon-sec">
+          <view class="coupon-head">
+            <view>
+              <view class="coupon-title">周边门店团购券</view>
+              <view class="coupon-sub">下单即出核销二维码，到店出示即可使用</view>
+            </view>
+            <view class="coupon-mine" @click="goCoupons">
+              券包 {{ app.quota.couponCount || 0 }} 张
+            </view>
+          </view>
+          <view v-for="t in tiers" :key="t.id" class="coupon-row" @click="buyTier(t)">
+            <view class="coupon-amount">
+              <text class="ca-pay">¥{{ money(t.payAmount) }}</text>
+              <text class="ca-value">抵 ¥{{ money(t.valueAmount) }}</text>
+            </view>
+            <view style="flex:1;min-width:0">
+              <view class="coupon-name">{{ t.title }}</view>
+              <view class="coupon-desc">{{ t.description }}</view>
+            </view>
+            <view class="coupon-buy">购买</view>
+          </view>
+          <view v-if="!tiers.length" class="coupon-empty">团购券即将上线，敬请期待</view>
+        </view>
+
+        <view v-if="myCoupons.length" class="my-coupon">
+          <view class="my-coupon-t">我的券包 · {{ myCoupons.length }} 张</view>
+          <view v-for="c in myCoupons.slice(0, 2)" :key="c.id" class="my-coupon-row">
+            <image v-if="c.qrUrl" :src="c.qrUrl" class="coupon-qr" mode="aspectFit" />
+            <view style="flex:1;min-width:0">
+              <view class="my-coupon-name">{{ c.title }}</view>
+              <view class="my-coupon-code">核销码 {{ c.code }}</view>
+              <view class="my-coupon-tip">到店出示二维码，由门店核销</view>
+            </view>
           </view>
         </view>
       </view>
@@ -190,7 +157,7 @@
         <fj-icon name="share" :size="20" color="#4E575A" />
         <text>分享</text>
       </view>
-      <view class="rb-primary" :class="{ done: remaining === 0 }" @click="onPrimary">
+      <view class="rb-primary" @click="onPrimary">
         <text class="rb-t">{{ primaryTitle }}</text>
         <text class="rb-s">{{ primarySub }}</text>
       </view>
@@ -216,55 +183,39 @@ import { track } from '@/utils/track'
 const app = useAppStore()
 const ui = useUiStore()
 
-const view = ref('compare')
-const activeIndex = ref(0)
+const sliderRef = ref(null)
 const baPct = ref(50)
-/** 失败款重试中，避免重复提交 */
 const retrying = ref(false)
-/** 是否从试发记录进入（决定返回目标） */
-const fromHistory = ref(false)
-/** 解锁单价与首单优惠状态由服务端下发，前端不写死价格 */
-const pricing = ref({ oneUnitPrice: 6, allUnitPrice: 6, firstAllDiscount: false })
+const activeIndex = ref(0)
+const tiers = ref([])
+const myCoupons = ref([])
+const buying = ref(false)
 
 const styles = computed(() => (app.result && app.result.styles) || [])
-/** 当前这批生成的任务 ID：解锁按「任务 + 款式」计算，第 2 张起需要重新付费 */
 const taskId = computed(() => String((app.result && app.result.taskId) || app.taskId || ''))
-const unlockedKeys = computed(() => app.unlocks)
 const current = computed(
-  () => styles.value[activeIndex.value] || { styleId: '', name: '', len: '', face: '', cat: '', img: '' }
+  () => styles.value[activeIndex.value] || { styleId: '', name: '', len: '', face: '', img: '' }
 )
 const beforeImg = computed(() => (app.result && app.result.before) || app.photoPath || '')
-const unlocked = computed(() => {
-  return isOpen(current.value)
-})
-const lockedList = computed(() => styles.value.filter((item) => !isFailed(item) && !isOpen(item)))
-const failedList = computed(() => styles.value.filter(isFailed))
-const remaining = computed(() => lockedList.value.length)
+const faceShape = computed(() => (app.result && app.result.faceShape) || '鹅蛋脸')
+const skinTone = computed(() => (app.result && app.result.skinTone) || '中性皮')
 
 const score = computed(() => {
-  const value = Number(app.result && app.result.score)
-  return Number.isFinite(value) && value > 0 ? Math.min(100, Math.round(value)) : 90
+  const value = Number(current.value.score || (app.result && app.result.score))
+  return Number.isFinite(value) && value > 0 ? Math.min(100, Math.round(value)) : 92
 })
-const faceShape = computed(() => (app.result && app.result.faceShape) || '鹅蛋脸')
-
-const FACE_BASIS = {
-  圆脸: ['下颌线柔和', '发长修饰脸宽'],
-  方脸: ['下颌角明显', '侧分柔化轮廓'],
-  长脸: ['脸部偏长', '刘海平衡比例'],
-  鹅蛋脸: ['脸型均衡', '发际线高度适中'],
-  心形脸: ['额头偏宽', '两侧留长收窄'],
-  小脸: ['脸型紧凑', '发量提升存在感'],
-  所有脸型: ['脸型百搭', '不挑五官']
-}
 
 const fit = computed(() => {
-  const basis = FACE_BASIS[faceShape.value] || ['轮廓协调', '发流自然']
-  const lv = score.value >= 90 ? '极高' : score.value >= 80 ? '高' : '中'
+  const lv = score.value >= 95 ? '极高' : score.value >= 90 ? '很高' : score.value >= 85 ? '高' : '中'
+  const reasons = [current.value.reason, current.value.colorReason].filter(Boolean)
+  const desc = reasons.length
+    ? reasons.join(' · ')
+    : `${faceShape.value} · ${skinTone.value} · 轮廓协调、发流自然`
   return {
     score: score.value,
     lv,
-    desc: `${faceShape.value} · ${basis.join(' · ')}`,
-    tags: [current.value.cat || '热门款', '与脸型很搭', '好打理']
+    desc,
+    tags: [current.value.cat || '热门款', current.value.colorName || '原生黑发', '好打理']
   }
 })
 
@@ -276,142 +227,30 @@ const ringStyle = computed(() => {
 // 原型 SVG 适配环：r=23，周长 2πr ≈ 144.5
 const fitDash = computed(() => 144.5 - 144.5 * (Math.max(0, Math.min(100, fit.value.score)) / 100))
 
+const lockedTitle = computed(() =>
+  current.value.colorName ? `解锁「${current.value.colorName}」发色效果` : '解锁这张高清效果图'
+)
 const primaryTitle = computed(() => {
-  if (remaining.value > 0) return `解锁剩余 ${remaining.value} 款`
-  if (failedList.value.length > 0) return '部分生成失败 · 点击重试'
-  return '已解锁全部 · 保存高清图'
+  if (isPending(current.value)) return '解锁这款发型'
+  if (isFailed(current.value)) return '重新生成'
+  return '保存高清图'
 })
-/** 只剩 1 款时按单张原价，多款走「全部」套餐（首单 5 折，仅限一次） */
-const unlockPrice = computed(() =>
-  remaining.value > 1
-    ? pricing.value.allUnitPrice * remaining.value
-    : pricing.value.oneUnitPrice
-)
-const primarySub = computed(() =>
-  remaining.value > 0 ? `高清无水印 · ¥${unlockPrice.value}` : '高清无水印 · 可直接保存'
-)
-const unlockSub = computed(() => {
-  if (remaining.value <= 1) {
-    return `¥${unlockPrice.value} 解锁高清无水印版`
-  }
-  return pricing.value.firstAllDiscount
-    ? `首单 5 折 · ¥${unlockPrice.value} 全部解锁`
-    : `¥${unlockPrice.value} 全部解锁 · 高清无水印`
+const primarySub = computed(() => {
+  if (isPending(current.value)) return '单款 10 魅力值 · 解锁即生成'
+  if (isFailed(current.value)) return '生成失败可免费重试'
+  return '高清无水印 · 可直接保存'
 })
 
-const sliderRef = ref(null)
-
-function measure() {
-  if (sliderRef.value) sliderRef.value.measure()
-}
-
-function isUnlocked(item) {
-  return !!item && !!item.styleId && unlockedKeys.value.includes(`${taskId.value}:${item.styleId}`)
-}
-
-/** 服务端 result.unlocked 优先，本地缓存兜底，避免已付费款式再次弹付费墙 */
-function isOpen(item) {
-  if (!item) return false
-  return item.unlocked === true || isUnlocked(item)
-}
-
-/** 服务端标记失败的款式：无图且不是待支付生成 */
 function isFailed(item) {
   return !!item && !isPending(item) && (item.failed === true || !item.img)
 }
 
-/** 付费款在支付前不生成，由服务端标记 pending */
 function isPending(item) {
   return !!item && item.pending === true
 }
 
-/** 重试当前这款（对比位或失败缩略图点击） */
-function retryCurrent() {
-  retryOne(current.value)
-}
-
-async function retryOne(item) {
-  if (!item || !item.styleId || retrying.value) return
-  retrying.value = true
-  try {
-    await API.retryStyle(taskId.value, item.styleId)
-    ui.toast('已重新提交生成')
-    await pollRetry(item.styleId)
-  } catch (e) {
-    // request 已统一提示
-  } finally {
-    retrying.value = false
-  }
-}
-
-/** 轮询直到这款出图（最多约 60 秒） */
-async function pollRetry(styleId) {
-  for (let i = 0; i < 40; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    try {
-      const res = await API.task(taskId.value)
-      const data = (res && res.result) || res
-      const list = (data && data.styles) || []
-      const target = list.find((s) => s.styleId === styleId)
-      if (target && target.img && !target.failed) {
-        app.setResult({ ...data, taskId: taskId.value })
-        ui.toast('重试成功')
-        return
-      }
-    } catch (e) {
-      // 继续轮询
-    }
-  }
-  ui.toast('仍在生成中，稍后可回到试发记录查看')
-}
-
-/** 解锁当前任务下的款式（第 1 款免费 / 付费解锁） */
-function unlockStyles(styleIds) {
-  app.addUnlocks(styleIds.map((id) => `${taskId.value}:${id}`))
-}
-
-/** 打开付费墙：带上具体款式时默认按「单张解锁」计价 */
-function openPay(styleId) {
-  ui.payStyleId = styleId || ''
-  // 指定款式按单张计价；整批解锁入口默认回到「本次全部 N 款」，避免沿用上次的单张选择
-  ui.payPlan = styleId ? 'one' : 'all'
-  ui.openSheet('pay')
-}
-
-function setView(next) {
-  view.value = next === 'grid' ? 'grid' : 'compare'
-  if (view.value === 'compare') {
-    nextTick(measure)
-  }
-}
-
-function selectStyle(i) {
-  if (i < 0 || i >= styles.value.length) return
-  if (isFailed(styles.value[i])) {
-    retryOne(styles.value[i])
-    return
-  }
-  // 未解锁内容只给付费提示，不切换、不展示
-  if (!isOpen(styles.value[i])) {
-    openPay(styles.value[i].styleId)
-    return
-  }
-  activeIndex.value = i
-  stopReplay()
-}
-
-function openFromGrid(i) {
-  if (i < 0 || i >= styles.value.length) return
-  if (isFailed(styles.value[i])) {
-    retryOne(styles.value[i])
-    return
-  }
-  if (!isOpen(styles.value[i])) {
-    openPay(styles.value[i].styleId)
-    return
-  }
-  selectStyle(i)
-  setView('compare')
+function measure() {
+  if (sliderRef.value) sliderRef.value.measure()
 }
 
 function stopReplay() {
@@ -419,7 +258,6 @@ function stopReplay() {
   if (sliderRef.value) sliderRef.value.reset()
 }
 
-/** 开始拖动：只停掉自动播放动画，不能重置位置，否则会一直被拉回中间 */
 function onSliderDrag() {
   if (sliderRef.value) sliderRef.value.stop()
 }
@@ -435,43 +273,108 @@ async function saveImage() {
     return
   }
   try {
-    await saveRemoteImage(item.img, !unlocked.value)
-    ui.toast(unlocked.value ? '已保存高清无水印图' : '已保存带水印效果图')
-    track('save_image', { taskId: taskId.value, styleId: item.styleId, unlocked: unlocked.value })
+    await saveRemoteImage(item.img, false)
+    ui.toast('已保存高清无水印图')
+    track('save_image', { taskId: taskId.value, styleId: item.styleId })
   } catch (e) {
     ui.toast('保存失败，请检查相册权限')
   }
 }
 
 function onPrimary() {
-  if (remaining.value > 0) {
-    openPay()
+  if (isPending(current.value)) {
+    unlockCurrent()
     return
   }
-  if (failedList.value.length > 0) {
-    retryOne(failedList.value[0])
+  if (isFailed(current.value)) {
+    retryCurrent()
     return
   }
   saveImage()
 }
 
-function shuffleBatch() {
-  ui.toast('去挑一批新的发型')
-  uni.redirectTo({
-    url: '/pages/styles/styles',
-    fail: () => ui.toast('选款页暂未开放')
+function needRecharge() {
+  uni.showModal({
+    title: '魅力值不足',
+    content: '解锁单款需要 10 点魅力值，去充值或看广告获取？',
+    confirmText: '去充值',
+    success: (res) => {
+      if (res.confirm) goPoints()
+    }
   })
+}
+
+async function unlockCurrent() {
+  const item = current.value
+  if (!item || !item.styleId || !taskId.value) {
+    ui.toast('任务已过期，请重新生成')
+    return
+  }
+  if (isPending(current.value)) {
+    const hasAd = Number(app.quota.adCredits || 0) > 0
+    if (!app.quota.unlimited && !hasAd && Number(app.quota.points || 0) < 10) {
+      needRecharge()
+      return
+    }
+  }
+  uni.showModal({
+    title: '解锁这款发型',
+    content: `将消耗 10 点魅力值，当前剩余 ${app.quota.points || 0} 点`,
+    confirmText: '立即解锁',
+    success: async (res) => {
+      if (!res.confirm) return
+      uni.showLoading({ title: '解锁中…', mask: true })
+      try {
+        const data = await API.unlock({ taskId: taskId.value, styleId: item.styleId })
+        app.setQuota(data)
+        const ok = await pollUntilImage(item.styleId)
+        uni.hideLoading()
+        if (ok) ui.toast('解锁成功')
+      } catch (e) {
+        uni.hideLoading()
+        if (String((e && e.message) || '').indexOf('魅力值不足') > -1) needRecharge()
+      }
+    }
+  })
+}
+
+async function pollUntilImage(styleId) {
+  for (let i = 0; i < 50; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      const res = await API.task(taskId.value)
+      const data = res && (res.result || res)
+      if (data && data.styles) {
+        app.setResult({ ...data, taskId: taskId.value })
+        const target = data.styles.find((s) => s.styleId === styleId)
+        if (target && target.img) return true
+      }
+    } catch (e) {
+      /* 继续轮询 */
+    }
+  }
+  return false
+}
+
+async function retryCurrent() {
+  const item = current.value
+  if (!item || !item.styleId || retrying.value) return
+  retrying.value = true
+  try {
+    await API.retryStyle(taskId.value, item.styleId)
+    ui.toast('已重新提交生成')
+    await pollUntilImage(item.styleId)
+  } catch (e) {
+    /* request 已统一提示 */
+  } finally {
+    retrying.value = false
+  }
 }
 
 function openCard() {
   const item = current.value
-  if (isFailed(item)) {
-    ui.toast('当前款式生成失败，请重试后再生成沟通卡')
-    return
-  }
-  // 沟通卡展示的是无水印原图，未解锁时不开放，避免绕过付费墙
-  if (!isOpen(item)) {
-    openPay(item && item.styleId)
+  if (isFailed(item) || isPending(item)) {
+    ui.toast('当前款式还没有生成成功')
     return
   }
   const styleId = item && item.styleId
@@ -480,171 +383,202 @@ function openCard() {
   })
 }
 
+function again() {
+  uni.redirectTo({ url: '/pages/recommend/recommend' })
+}
+
+function goPoints() {
+  uni.navigateTo({ url: '/pages/points/points' })
+}
+
+function goCoupons() {
+  uni.navigateTo({ url: '/pages/coupons/coupons' })
+}
+
 function goBack() {
-  if (fromHistory.value) {
-    uni.navigateBack({
-      fail: () => uni.reLaunch({ url: '/pages/home/home' })
-    })
-    return
-  }
-  // 生成流程终点：不回到选发型/发色页，直接回首页
-  uni.reLaunch({ url: '/pages/home/home' })
+  // 选完发型后返回应回到「选发型/发色」页，而不是直接回首页
+  uni.navigateBack({
+    delta: 1,
+    fail: () => uni.redirectTo({ url: '/pages/recommend/recommend' })
+  })
 }
 
-async function syncUnlocks() {
+function money(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? (Number.isInteger(n) ? String(n) : n.toFixed(2)) : '0'
+}
+
+function currentPlatform() {
+  let platform = 'h5'
+  // #ifdef MP-WEIXIN
+  platform = 'mp-weixin'
+  // #endif
+  // #ifdef MP-TOUTIAO
+  platform = 'mp-toutiao'
+  // #endif
+  return platform
+}
+
+async function loadTiers() {
   try {
-    const res = await API.unlocks()
-    const list = Array.isArray(res) ? res : (res && (res.styleIds || res.ids)) || []
-    // 服务端按「任务 + 款式」返回，转成 taskId:styleId 的键
-    const keys = list
-      .map((item) => (item && item.styleId ? `${item.taskId || 0}:${item.styleId}` : ''))
-      .filter(Boolean)
-    app.setUnlocks(keys)
+    const list = await API.couponTiers()
+    tiers.value = Array.isArray(list) ? list : []
   } catch (e) {
-    // 接口已统一 toast，失败时沿用本地解锁状态
+    tiers.value = []
   }
 }
 
-onLoad(async (options) => {
-  // 从「试发记录」进来的，返回时回到记录页；生成流程进来的，返回直接回首页
-  fromHistory.value = !!(options && options.from === 'history')
-  let hasStyles = !!(app.result && app.result.styles && app.result.styles.length)
-  // H5 支付宝支付会整页跳走，返回时内存状态已丢失，先尝试恢复支付前落下的快照
-  if (!hasStyles) {
-    try {
-      const snapRaw = uni.getStorageSync('fajing_pending_result')
-      if (snapRaw) {
-        uni.removeStorageSync('fajing_pending_result')
-        const snap = typeof snapRaw === 'string' ? JSON.parse(snapRaw) : snapRaw
-        const snapResult = snap && snap.result ? snap.result : snap
-        if (snapResult && snapResult.styles && snapResult.styles.length) {
-          app.setResult({ ...snapResult, taskId: snapResult.taskId || (snap && snap.taskId) || '' })
-          hasStyles = true
+async function loadMyCoupons() {
+  try {
+    const data = await API.myCoupons()
+    if (data) {
+      myCoupons.value = (data.list || []).filter((c) => c.status === 'unused')
+      app.setQuota({ couponCount: typeof data.count === 'number' ? data.count : myCoupons.value.length })
+    }
+  } catch (e) {
+    /* 券包加载失败不影响主流程 */
+  }
+}
+
+/** 购买团购券：服务端按档位计价，支付成功后自动生成核销二维码 */
+async function buyTier(tier) {
+  if (buying.value) return
+  uni.showModal({
+    title: tier.title,
+    content: `支付 ¥${money(tier.payAmount)}，到店可抵 ¥${money(tier.valueAmount)} 使用`,
+    confirmText: '立即购买',
+    success: async (res) => {
+      if (!res.confirm) return
+      buying.value = true
+      uni.showLoading({ title: '下单中…', mask: true })
+      try {
+        const data = await API.createOrder({
+          bizType: 'coupon',
+          tierId: tier.id,
+          platform: currentPlatform()
+        })
+        uni.hideLoading()
+        if (data && (data.mock || data.paid)) {
+          await loadMyCoupons()
+          ui.toast('购买成功，核销二维码已生成')
+          track('coupon_buy', { tierId: tier.id, amount: data.amount })
+          return
         }
+        // #ifdef H5
+        if (data && data.payForm) {
+          document.write(data.payForm)
+          document.close()
+          return
+        }
+        // #endif
+        // #ifdef MP-WEIXIN
+        if (data && data.virtualPay) {
+          await requestVirtualPay(data.virtualPay)
+          await API.virtualConfirm(data.orderId)
+          await loadMyCoupons()
+          ui.toast('购买成功，核销二维码已生成')
+          return
+        }
+        if (data && data.payParams) {
+          await requestWxPay(data.payParams)
+          for (let i = 0; i < 8; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 1500))
+            const st = await API.orderStatus(data.orderId)
+            if (st && st.paid) break
+          }
+          await loadMyCoupons()
+          ui.toast('购买成功，核销二维码已生成')
+          return
+        }
+        // #endif
+        ui.toast('支付未完成，请稍后重试')
+      } catch (e) {
+        uni.hideLoading()
+        ui.toast('支付失败，请稍后重试')
+      } finally {
+        buying.value = false
       }
-    } catch (e) {
-      // 快照损坏时继续走正常兜底
     }
+  })
+}
+
+// #ifdef MP-WEIXIN
+function requestVirtualPay(payload) {
+  return new Promise((resolve, reject) => {
+    // eslint-disable-next-line no-undef
+    wx.requestVirtualPayment({
+      signData: payload.signData,
+      paySig: payload.paySig,
+      signature: payload.signature,
+      mode: payload.mode,
+      success: resolve,
+      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
+    })
+  })
+}
+// #endif
+
+// #ifndef H5
+function requestWxPay(payParams) {
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      provider: 'wxpay',
+      ...payParams,
+      success: resolve,
+      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
+    })
+  })
+}
+// #endif
+
+onLoad((options) => {
+  const styleId = options && options.styleId ? decodeURIComponent(options.styleId) : ''
+  if (styleId) {
+    const index = styles.value.findIndex((s) => s.styleId === styleId)
+    if (index > -1) activeIndex.value = index
   }
-  if (!hasStyles && app.taskId) {
-    try {
-      const res = await API.task(app.taskId)
-      const data = res && (res.result || res)
-      if (data && data.styles) {
-        app.setResult({ ...data, taskId: data.taskId || app.taskId })
-      }
-    } catch (e) {
-      // 接口已统一 toast
-    }
-  }
-  if (!app.result || !app.result.styles || !app.result.styles.length) {
-    ui.toast('效果已过期，请重新上传生成')
+  if (!app.result || !styles.value.length) {
+    ui.toast('效果已过期，请重新生成')
     uni.reLaunch({ url: '/pages/home/home' })
     return
   }
-
-  // 免费款固定为本批第 1 款（与后端一致）：仅它生成成功时本地补解锁，避免把待付费款误判为已解锁
-  if (!styles.value.some(isUnlocked)) {
-    const first = styles.value[0]
-    if (first && first.styleId && !isFailed(first) && !isPending(first)) {
-      unlockStyles([first.styleId])
-    }
-  }
-  track('result_view', { taskId: taskId.value, styleCount: styles.value.length })
+  track('result_view', { taskId: taskId.value, styleId })
 })
 
 onReady(() => {
   measure()
 })
 
-/** 支付宝支付跳转回来后轮询订单状态，成功再刷新解锁；未确认前保留标记，下次进入继续查 */
-let checkingOrder = false
-async function checkPendingOrder() {
-  if (checkingOrder) return
-  const pending = uni.getStorageSync('fajing_pending_order')
-  if (!pending || !pending.orderId) return
-  checkingOrder = true
-  try {
-    // 支付宝异步通知可能延迟，最多等约 30 秒
-    for (let i = 0; i < 15; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      try {
-        const data = await API.orderStatus(pending.orderId)
-        if (data && data.paid) {
-          uni.removeStorageSync('fajing_pending_order')
-          await syncUnlocks()
-          ui.toast('支付成功，已解锁高清图')
-          pollPendingImages()
-          return
-        }
-      } catch (e) {
-        // 继续轮询
-      }
-    }
-    ui.toast('支付结果确认中，稍后回到本页会自动刷新')
-  } finally {
-    checkingOrder = false
-  }
-}
-
-async function checkPendingVirtualOrder() {
-  const pending = uni.getStorageSync('fajing_pending_virtual_order')
-  if (!pending || !pending.orderId) return
-  try {
-    const data = await API.virtualConfirm(pending.orderId)
-    if (data && data.paid) {
-      uni.removeStorageSync('fajing_pending_virtual_order')
-      await syncUnlocks()
-      ui.toast('支付成功，已解锁高清图')
-      pollPendingImages()
-    }
-  } catch (e) {
-    // 查单失败时保留待确认单，下次进入结果页继续确认
-  }
-}
-
-async function pollPendingImages() {
-  if (!styles.value.some(isPending)) return
-  for (let i = 0; i < 40; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    try {
-      const res = await API.task(taskId.value)
-      const data = (res && res.result) || res
-      if (data && data.styles) {
-        app.setResult({ ...data, taskId: taskId.value })
-        if (!data.styles.some((s) => s.pending === true)) return
-      }
-    } catch (e) {
-      // 继续轮询
-    }
-  }
-}
-
-async function loadPricing() {
-  try {
-    const data = await API.pricing()
-    pricing.value = {
-      oneUnitPrice: Number(data && data.oneUnitPrice) || 6,
-      allUnitPrice: Number(data && data.allUnitPrice) || 6,
-      firstAllDiscount: !!(data && data.firstAllDiscount)
-    }
-  } catch (e) {
-    // 取不到价格时按原价展示，实际金额仍以服务端下单结果为准
-    pricing.value = { oneUnitPrice: 6, allUnitPrice: 6, firstAllDiscount: false }
-  }
-}
-
 onShow(() => {
-  loadPricing()
-  syncUnlocks()
-  checkPendingOrder()
-  checkPendingVirtualOrder()
-  pollPendingImages()
+  measure()
+  loadTiers()
+  loadMyCoupons()
+  API.quota()
+    .then((quota) => app.setQuota(quota))
+    .catch(() => {})
 })
 </script>
 
 <style lang="scss" scoped>
-/* 小程序水印合成画布：移出可视区，尺寸与 utils/save.js 中 750×1000 一致 */
+.pts-pill {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 99px;
+  background: #fff6e8;
+  color: #a9701b;
+  font-size: 12px;
+  font-weight: 700;
+}
+.meta-main {
+  flex: 1;
+  min-width: 0;
+}
+.meta-color {
+  color: var(--pink-700);
+}
 .wm-canvas {
   position: fixed;
   left: -2000px;
@@ -652,10 +586,6 @@ onShow(() => {
   width: 750px;
   height: 1000px;
   pointer-events: none;
-}
-.meta-main {
-  flex: 1;
-  min-width: 0;
 }
 .fit-ring {
   position: absolute;
@@ -667,7 +597,7 @@ onShow(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #F1DDE2;
+  background: #f1dde2;
 }
 .fit-ring-in {
   width: 44px;
@@ -678,64 +608,7 @@ onShow(() => {
   align-items: center;
   justify-content: center;
 }
-/* 未解锁内容：整张卡片最大强度模糊，内容完全不可辨识 */
-.r-thumb.locked .thumb-img {
-  filter: blur(50px);
-  transform: scale(2.4);
-}
-.res-cell.locked .thumb-img {
-  filter: blur(70px);
-  transform: scale(2.4);
-}
-.ub-thumb .thumb-img {
-  filter: blur(30px);
-  transform: scale(2.4);
-}
-.ub-thumb-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  font-size: 9px;
-  color: #b7a8af;
-  background: #f6edf0;
-}
-.r-thumb-lock {
-  flex-direction: column;
-  gap: 2px;
-}
-.rtl-t {
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.1;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
-}
-.rc-lt {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
-}
-.rc-ls {
-  font-size: 9px;
-  line-height: 1.3;
-  opacity: 0.92;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-/* 生成失败：灰块占位，点击重试 */
-.fail-thumb {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #ececee;
-  color: #8b9295;
-  font-size: 11px;
-  font-weight: 600;
-}
-.res-fail {
+.res-state {
   height: 380px;
   border-radius: 18px;
   background: #ececee;
@@ -744,14 +617,146 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  padding: 0 24px;
+  text-align: center;
 }
-.res-fail-t {
+.res-state-t {
   font-size: 13px;
   font-weight: 700;
   color: #6f7679;
 }
-.res-fail-d {
+.res-state-d {
   font-size: 11px;
   color: #a3a9ac;
+  line-height: 1.6;
+}
+.state-btn {
+  margin-top: 8px;
+  padding: 9px 22px;
+  font-size: 12px;
+}
+.coupon-sec {
+  margin-top: 18px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: var(--sh-sm);
+}
+.coupon-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.coupon-title {
+  font-size: 14px;
+  font-weight: 800;
+}
+.coupon-sub {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.coupon-mine {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #b54263;
+  background: var(--pink-50);
+  padding: 4px 9px;
+  border-radius: 99px;
+  flex: none;
+}
+.coupon-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid #f7f0f2;
+}
+.coupon-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  padding: 7px 4px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fdeef1, #fff6e8);
+  flex: none;
+}
+.ca-pay {
+  font-size: 14px;
+  font-weight: 800;
+  color: #b54263;
+}
+.ca-value {
+  font-size: 9.5px;
+  color: #a9701b;
+  margin-top: 2px;
+}
+.coupon-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+.coupon-desc {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.coupon-buy {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #d98a63, #c95676);
+  padding: 6px 13px;
+  border-radius: 99px;
+}
+.coupon-empty {
+  font-size: 10.5px;
+  color: var(--muted);
+  padding: 7px 0;
+}
+.my-coupon {
+  margin-top: 14px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: var(--sh-sm);
+}
+.my-coupon-t {
+  font-size: 12.5px;
+  font-weight: 800;
+  margin-bottom: 9px;
+}
+.my-coupon-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid #f7f0f2;
+}
+.coupon-qr {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  background: #fff;
+  flex: none;
+}
+.my-coupon-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+.my-coupon-code {
+  font-size: 10px;
+  color: #b54263;
+  margin-top: 3px;
+  letter-spacing: 0.4px;
+}
+.my-coupon-tip {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 2px;
 }
 </style>

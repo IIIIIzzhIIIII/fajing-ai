@@ -1,5 +1,6 @@
 /* ============ Design Tokens ============ */
-:root{
+/* H5 用 :root，小程序没有 :root，用 page 作为根节点承载同一套变量 */
+:root, page{
   --pink:#C95676; --pink-400:#DB7B94; --pink-500:#C95676; --pink-600:#B54263; --pink-700:#9E3654;
   --pink-50:#FAF1F3; --pink-100:#F5E3E8; --pink-200:#E9C9D2;
   --ink:#2D3436; --ink-2:#4E575A; --muted:#8B9295;
@@ -11,7 +12,14 @@
   --sh-lg:0 24px 60px rgba(45,52,54,.20);
   --font:"PingFang SC","HarmonyOS Sans SC","MiSans","Microsoft YaHei",system-ui,-apple-system,sans-serif;
 }
+/* WXSS 不支持通配选择器 *，小程序端用常见组件选择器补齐盒模型 */
+/* #ifdef H5 */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* #endif */
+/* #ifndef H5 */
+page,view,text,image,button,input,textarea,scroll-view,swiper,swiper-item{box-sizing:border-box}
+/* #endif */
+/* #ifdef H5 */
 html,body{margin:0;padding:0;overflow-x:hidden;height:100%}
 body{
   font-family:var(--font);color:var(--ink);min-height:100%;
@@ -21,7 +29,6 @@ body{
                    radial-gradient(900px 520px at 92% 18%,#E9E9F0 0%,transparent 58%);
   -webkit-font-smoothing:antialiased;
 }
-button{font-family:inherit}
 /* 高度链 html→body→#app 跟踪真实可视高度（比 100vh 可靠），dvh 作为增强 */
 #app{position:relative;width:100%;max-width:420px;min-height:100%;height:100%;height:100dvh;background:var(--bg);overflow:hidden;isolation:isolate}
 @media(min-width:520px){
@@ -30,6 +37,8 @@ button{font-family:inherit}
        min-height:min(880px,calc(100dvh - 44px));
        border-radius:34px;box-shadow:0 34px 80px rgba(45,52,54,.22),0 0 0 1px rgba(255,255,255,.7) inset}
 }
+/* #endif */
+button{font-family:inherit}
 /* ============ Pages ============ */
 .page{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg);overflow:hidden}
 .page.active{display:flex;animation:pageIn .26s cubic-bezier(.22,.61,.36,1)}
@@ -70,8 +79,8 @@ button{font-family:inherit}
 .splash-skip{position:absolute;bottom:calc(36px + env(safe-area-inset-bottom));left:0;right:0;text-align:center;color:rgba(255,255,255,.72);font-size:12px;letter-spacing:.2em;z-index:2}
 /* ============ Home ============ */
 .home-head{display:flex;align-items:center;justify-content:space-between;padding:calc(22px + env(safe-area-inset-top)) 20px 6px}
-.logo-mark{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--pink-400),var(--pink-600));
-  color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(181,66,99,.32)}
+.logo-mark{width:30px;height:30px;border-radius:10px;
+  color:var(--pink-600);display:flex;align-items:center;justify-content:center}
 .hero{position:relative;padding:14px 20px 0;text-align:center}
 .hero::before{content:"";position:absolute;width:220px;height:220px;border-radius:50%;right:-70px;top:-40px;
   background:radial-gradient(circle,rgba(240,214,220,.8),transparent 68%);z-index:-1}
@@ -94,7 +103,7 @@ button{font-family:inherit}
 .sell{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 4px;border-radius:14px;
   background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9)}
 .sell-ico{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-  background:var(--pink-50);color:var(--pink-600)}
+  color:var(--pink-600)}
 .sell-t{font-size:11.5px;font-weight:700;color:var(--ink)}
 .sell-d{font-size:10px;color:var(--muted)}
 .sec-head{display:flex;align-items:flex-end;justify-content:space-between;padding:22px 20px 10px}
@@ -336,14 +345,14 @@ button{font-family:inherit}
 /* 隐私与数据 */
 .priv-row{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid #F6EDF0}
 .priv-row:last-of-type{border-bottom:0}
-.priv-ico{width:28px;height:28px;border-radius:9px;background:var(--pink-50);color:var(--pink-600);
+.priv-ico{width:28px;height:28px;border-radius:9px;color:var(--pink-600);
   display:flex;align-items:center;justify-content:center;flex:none}
 .priv-t{font-size:12px;font-weight:700}
 .priv-d{font-size:10.5px;color:var(--muted);line-height:1.55;margin-top:2px}
 .btn-danger{background:#fff;border:1px solid #F0CBD4;color:#C23B5C;box-shadow:none}
 .btn-danger:active{background:#FDF2F4}
 /* 免费额度用完弹层 */
-.quota-ico{width:54px;height:54px;border-radius:50%;background:#FFF3E4;color:#C68A25;
+.quota-ico{width:54px;height:54px;border-radius:50%;color:#C68A25;
   display:flex;align-items:center;justify-content:center;margin:4px auto 12px}
 .quota-title{font-size:18px;font-weight:800;text-align:center;margin:0 0 6px;letter-spacing:-.2px}
 .quota-sub{font-size:12px;color:var(--muted);text-align:center;line-height:1.65;margin:0 auto 18px;max-width:290px}
@@ -355,7 +364,7 @@ button{font-family:inherit}
 .menu-item{display:flex;align-items:center;gap:12px;padding:15px 16px;width:100%;background:none;border:0;
   border-bottom:1px solid #F8F0F3;font-size:13.5px;color:var(--ink);cursor:pointer;text-align:left}
 .menu-item:last-child{border-bottom:0}
-.menu-ico{width:32px;height:32px;border-radius:10px;background:var(--pink-50);color:var(--pink-600);
+.menu-ico{width:32px;height:32px;border-radius:10px;color:var(--pink-600);
   display:flex;align-items:center;justify-content:center;flex:none}
 .menu-item .chev{margin-left:auto;color:#C9BFC3}
 .hist-item{display:flex;gap:12px;padding:12px;background:#fff;border-radius:16px;box-shadow:var(--sh-sm);margin-bottom:10px}
@@ -518,7 +527,7 @@ button{font-family:inherit}
 .ub-btn{flex:none;font-size:11px;font-weight:800;color:#fff;padding:7px 11px;border-radius:99px;
   background:linear-gradient(135deg,#E3A33C,#D08A22);box-shadow:0 6px 14px rgba(208,138,34,.30)}
 /* 付费成功 */
-.paid-ico{width:58px;height:58px;border-radius:50%;background:#FFF6E8;color:#C68A25;display:flex;align-items:center;justify-content:center;margin:2px auto 12px}
+.paid-ico{width:58px;height:58px;border-radius:50%;color:#C68A25;display:flex;align-items:center;justify-content:center;margin:2px auto 12px}
 .paid-thumbs{display:flex;gap:7px;justify-content:center;margin:0 0 16px;flex-wrap:wrap}
 .paid-thumb{width:58px;height:72px;border-radius:10px;overflow:hidden;background:#EEE6EA;box-shadow:var(--sh-sm);position:relative}
 .paid-thumb img{width:100%;height:100%;object-fit:cover;display:block}

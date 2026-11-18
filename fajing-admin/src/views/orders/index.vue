@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Tickets, Wallet } from '@element-plus/icons-vue'
+import { Refresh, Tickets } from '@element-plus/icons-vue'
 import { fetchOrders, refundOrder } from '@/api'
 import { formatDateTime, formatMoney } from '@/utils/format'
 
@@ -15,9 +15,6 @@ const refundRow = ref(null)
 const refundForm = reactive({ amount: 0, reason: '' })
 
 const totalCount = computed(() => list.value.length)
-const totalAmount = computed(() =>
-  list.value.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
-)
 
 function loadList() {
   loading.value = true
@@ -61,6 +58,8 @@ function channelLabel(channel) {
   if (channel === 'wx') return '微信支付'
   if (channel === 'wx-virtual') return '微信虚拟支付'
   if (channel === 'alipay') return '支付宝'
+  if (channel === 'douyin') return '抖音支付'
+  if (channel === 'xhs') return '小红书支付'
   if (channel === 'mock') return '测试支付'
   return channel || '-'
 }
@@ -115,13 +114,6 @@ onMounted(loadList)
         <div class="stat-body">
           <div class="stat-label">总订单数</div>
           <div class="stat-value">{{ totalCount }}<span class="stat-unit">单</span></div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon is-amount"><el-icon><Wallet /></el-icon></div>
-        <div class="stat-body">
-          <div class="stat-label">总金额</div>
-          <div class="stat-value">¥ {{ formatMoney(totalAmount) }}</div>
         </div>
       </div>
     </div>

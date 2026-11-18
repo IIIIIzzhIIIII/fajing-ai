@@ -10,6 +10,9 @@
         <view class="doc-h">发镜 AI 隐私政策</view>
         <view class="doc-time">更新日期：2026 年 11 月</view>
 
+        <fj-doc-content v-if="site.privacyContent" :text="site.privacyContent" />
+        <template v-else>
+
         <view class="doc-sec">
           <view class="doc-t">1. 我们收集哪些信息</view>
           <view class="doc-p">你上传的人脸照片（含面部特征）、你选择的发型与发色、生成结果图。上述信息仅用于提供换发型预览。</view>
@@ -44,6 +47,7 @@
           <view class="doc-t">7. 联系我们</view>
           <view class="doc-p">如对个人信息处理有疑问，可通过「我的 → 联系客服」与我们联系。</view>
         </view>
+        </template>
       </view>
     </scroll-view>
   </view>
@@ -51,6 +55,8 @@
 
 <script setup>
 import { goBack } from '@/utils/nav'
+import { site } from '@/utils/site'
+import FjDocContent from '@/components/FjDocContent.vue'
 
 function back() {
   goBack()

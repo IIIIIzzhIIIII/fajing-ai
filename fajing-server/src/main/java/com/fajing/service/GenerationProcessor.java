@@ -5,9 +5,12 @@ import com.fajing.entity.AiConfig;
 import com.fajing.entity.GenerationTask;
 import com.fajing.entity.HairColor;
 import com.fajing.entity.Hairstyle;
+import com.fajing.entity.Recommendation;
 import com.fajing.mapper.AiCallLogMapper;
 import com.fajing.mapper.HairColorMapper;
 import com.fajing.mapper.HairstyleMapper;
+import com.fajing.mapper.RecommendationMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,8 +52,17 @@ public class GenerationProcessor {
     private final AiImageService imageService;
     private final HairstyleMapper hairstyleMapper;
     private final HairColorMapper hairColorMapper;
-    private final QuotaService quotaService;
+    private final RecommendationMapper recommendationMapper;
+    private final PointsService pointsService;
     private final AiCallLogMapper aiCallLogMapper;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /** 发色预览图单独的低并发线程池，避免和主流程抢并发额度 */
+    private static final ExecutorService PREVIEW_POOL = Executors.newFixedThreadPool(2);
+    /** 正在生成中的「发色 + 发型」组合，防止重复提交 */
+    private static final Set<String> PREVIEW_JOBS = ConcurrentHashMap.newKeySet();
+    private static final Object PREVIEW_LOCK = new Object();
 
     /** 单次图像调用的估算成本（分），用于管理端成本统计 */
     @Value("${ai.cost-cents-per-call:20}")
@@ -67,20 +80,24 @@ public class GenerationProcessor {
 
         List<Hairstyle> allStyles = resolveStyles(task);
         if (allStyles.isEmpty()) {
-            // 发型被删除/下架导致无可生成内容时，本次额度已扣减，需要退还
+            // 发型被删除/下架导致无可生成内容时，本次免费批次需要退还
             if (task.getFreeQuota() != null && task.getFreeQuota() == 1) {
-                quotaService.refund(task.getUserId(), taskId, "无可生成的发型");
+                pointsService.refundFreeBatch(task.getUserId());
             }
             generationService.finish(taskId, Map.of(), Set.of());
             return;
         }
-        // 付费批次：本批没有免费额度，不预生成任何图，全部等支付成功后再按需调用 AI
-        if (task.getFreeQuota() == null || task.getFreeQuota() != 1) {
+        boolean freeBatch = task.getFreeQuota() != null && task.getFreeQuota() == 1;
+        boolean autoGen = task.getAutoGen() != null && task.getAutoGen() == 1;
+        // 普通付费批次：不预生成任何图，等用户用魅力值解锁后再按需调用 AI
+        if (!freeBatch && !autoGen) {
             generationService.finish(taskId, Map.of(), Set.of());
             return;
         }
-        // 免费批次先只生成第一张（免费款），其余款在支付成功后按需生成，避免未付费也承担模型成本
-        List<Hairstyle> styles = List.of(allStyles.get(0));
+        // 临时节省 Token：免费批次只预生成排名第 1 款发型，其余款式解锁后再生成
+        List<Hairstyle> styles = freeBatch && !autoGen
+                ? allStyles.subList(0, 1)
+                : allStyles;
         generationService.updateProgress(taskId, 10);
 
         Map<String, String> images = new ConcurrentHashMap<>();
@@ -94,7 +111,10 @@ public class GenerationProcessor {
             for (Hairstyle s : styles) {
                 futures.add(pool.submit(() -> {
                     try {
-                        images.put(s.getId(), generateOne(task, s, colorName, colorEn));
+                        String url = generateOne(task, s, colorName, colorEn);
+                        images.put(s.getId(), url);
+                        // 单款出图立刻写回结果，前端可以边生成边看到预览
+                        generationService.patchStylePreview(taskId, s.getId(), url);
                         logCall(task, true);
                     } catch (Exception e) {
                         failed.add(s.getId());
@@ -124,11 +144,26 @@ public class GenerationProcessor {
             }
         }
 
-        // 整批全部失败：先退还 1 次额度再落结果，保证前端看到 success 时额度已回退
-        if (failed.size() == styles.size()) {
-            quotaService.refund(task.getUserId(), taskId, "生成全部失败");
+        // 免费批次整批全部失败：先退还免费批次再落结果，保证前端看到 success 时额度已回退
+        if (failed.size() == styles.size() && freeBatch && !autoGen) {
+            pointsService.refundFreeBatch(task.getUserId());
+        }
+        // 发色变体整批失败：非会员退还本次消耗的 10 点魅力值
+        if (failed.size() == styles.size() && autoGen) {
+            com.fajing.entity.UserQuota quota = pointsService.get(task.getUserId());
+            if (!pointsService.unlimited(quota)) {
+                pointsService.addPoints(task.getUserId(), PointsService.UNLOCK_COST);
+            }
         }
         generationService.finish(taskId, images, failed);
+        // 前 3 款发型出图后，后台补「前 3 种发色」预览，供发色页直接展示小图
+        if (freeBatch && !autoGen) {
+            List<String> okIds = styles.stream()
+                    .filter(s -> images.containsKey(s.getId()) && !failed.contains(s.getId()))
+                    .map(Hairstyle::getId)
+                    .toList();
+            generateColorPreviews(taskId, okIds);
+        }
     }
 
     /** 支付成功后生成剩余款式：只补未生成过的款，成功后回写结果 */
@@ -173,6 +208,158 @@ public class GenerationProcessor {
         } finally {
             pool.shutdownNow();
         }
+        // 新解锁的款式暂不预生成发色预览，避免额外 Token 消耗
+    }
+
+    /**
+     * 为指定发型生成第 1 种发色的预览图，写入推荐记录的 colors_json.variants。
+     * 已生成过的「发型 + 发色」组合直接跳过。
+     */
+    public void generateColorPreviews(Long taskId, List<String> styleIds) {
+        if (styleIds == null || styleIds.isEmpty()) {
+            return;
+        }
+        GenerationTask task = generationService.getTask(taskId);
+        if (task == null || task.getRecommendId() == null || task.getRecommendId() <= 0) {
+            return;
+        }
+        Recommendation row = recommendationMapper.selectById(task.getRecommendId());
+        if (row == null) {
+            return;
+        }
+        List<Map<String, Object>> colors = parseList(row.getColorsJson());
+        List<Map<String, Object>> topColors = colors.stream()
+                .filter(c -> intOf(c.get("rank"), 99) <= RecommendService.FREE_TOP)
+                // 临时节省 Token：只生成排名第 1 种发色
+                .limit(1)
+                .toList();
+        if (topColors.isEmpty()) {
+            return;
+        }
+        for (String styleId : styleIds) {
+            if (styleId == null || styleId.isBlank()) {
+                continue;
+            }
+            Hairstyle style = hairstyleMapper.selectById(styleId);
+            if (style == null) {
+                continue;
+            }
+            for (Map<String, Object> color : topColors) {
+                String colorId = str(color.get("colorId"));
+                if (colorId.isBlank() || hasVariant(row, colorId, styleId)) {
+                    continue;
+                }
+                final String key = task.getRecommendId() + ":" + styleId + ":" + colorId;
+                if (!PREVIEW_JOBS.add(key)) {
+                    continue;
+                }
+                PREVIEW_POOL.submit(() -> {
+                    try {
+                        HairColor hc = hairColorMapper.selectById(colorId);
+                        String colorName = hc == null ? str(color.get("name")) : hc.getName();
+                        String colorEn = hc == null || hc.getEn() == null ? "" : hc.getEn();
+                        String prompt = promptService.build(style, colorName, colorEn);
+                        String ref = referenceUrl(style, colorEn);
+                        if (ref != null) {
+                            prompt = "图1是人物原图，图2是目标发型参考。请把图1人物的头发换成图2中的发型，"
+                                    + "图1人物的脸部、眉毛、五官、表情（笑容、嘴部开合、是否露齿、眼神）必须保持完全不变。\n\n" + prompt;
+                        }
+                        prompt = genderHint(task.getGender()) + "\n" + prompt;
+                        String url = imageService.editHairColor(task.getPhotoUrl(), ref, prompt,
+                                task.getId(), style.getId(), colorEn);
+                        synchronized (PREVIEW_LOCK) {
+                            attachColorVariant(task.getRecommendId(), colorId, styleId, url);
+                        }
+                        logCall(task, true);
+                        log.info("发色预览完成 taskId={} style={} color={}", taskId, style.getName(), colorName);
+                    } catch (Exception e) {
+                        log.warn("发色预览失败 taskId={} style={} color={}: {}",
+                                taskId, style.getName(), color.get("name"), e.getMessage());
+                        logCall(task, false);
+                    } finally {
+                        PREVIEW_JOBS.remove(key);
+                    }
+                });
+            }
+        }
+    }
+
+    private boolean hasVariant(Recommendation row, String colorId, String styleId) {
+        for (Map<String, Object> item : parseList(row.getColorsJson())) {
+            if (!colorId.equals(str(item.get("colorId")))) {
+                continue;
+            }
+            Object variants = item.get("variants");
+            if (variants instanceof Map<?, ?> map) {
+                Object img = map.get(styleId);
+                return img != null && !String.valueOf(img).isBlank();
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void attachColorVariant(Long recommendId, String colorId, String styleId, String img) {
+        Recommendation row = recommendationMapper.selectById(recommendId);
+        if (row == null || row.getColorsJson() == null || row.getColorsJson().isBlank()) {
+            return;
+        }
+        List<Map<String, Object>> list = parseList(row.getColorsJson());
+        boolean changed = false;
+        for (Map<String, Object> item : list) {
+            if (!colorId.equals(str(item.get("colorId")))) {
+                continue;
+            }
+            Map<String, Object> variants;
+            Object exists = item.get("variants");
+            if (exists instanceof Map<?, ?> map) {
+                variants = (Map<String, Object>) map;
+            } else {
+                variants = new LinkedHashMap<>();
+                item.put("variants", variants);
+            }
+            variants.put(styleId, img);
+            if (item.get("img") == null || String.valueOf(item.get("img")).isBlank()) {
+                item.put("img", img);
+            }
+            changed = true;
+            break;
+        }
+        if (changed) {
+            try {
+                row.setColorsJson(objectMapper.writeValueAsString(list));
+                recommendationMapper.updateById(row);
+            } catch (Exception e) {
+                log.debug("写回发色预览失败: {}", e.getMessage());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseList(String json) {
+        if (json == null || json.isBlank()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, List.class);
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static String str(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private static int intOf(Object value, int def) {
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (Exception e) {
+            return def;
+        }
     }
 
     /** 单款重试：只重跑失败的那一款，成功后回写结果 */
@@ -190,6 +377,12 @@ public class GenerationProcessor {
             String url = generateOne(task, s, colorName(task.getColorId()), colorEn(task.getColorId()));
             generationService.patchStyle(taskId, styleId, url);
             logCall(task, true);
+            // 只有第 1 款失败重试成功后才补发色预览，其余款式暂不预生成
+            String firstStyleId = generationService.resolveStyleIds(task).stream().findFirst().orElse("");
+            if (styleId.equals(firstStyleId)
+                    && (task.getAutoGen() == null || task.getAutoGen() != 1)) {
+                generateColorPreviews(taskId, List.of(styleId));
+            }
         } catch (Exception e) {
             log.warn("重试失败 taskId={} styleId={}: {}", taskId, styleId, e.getMessage());
             generationService.patchStyle(taskId, styleId, null);
@@ -215,15 +408,31 @@ public class GenerationProcessor {
         }
     }
 
+    /** 性别锁定：用户选的男/女款优先级高于原图人物性别，避免生成相反性别的发型 */
+    private static String genderHint(String gender) {
+        if ("male".equals(gender)) {
+            return "【性别锁定 · 男款】本次选用男款发型库，必须严格按图2的男款发型轮廓、长度、层次和刘海执行；"
+                    + "即使图1人物是女性，也只把头发换成这款男款发型，不要保留长发、不要改成女性化卷发；"
+                    + "图2只参考发型，不要参考图2人物的脸、五官和性别。";
+        }
+        return "【性别锁定 · 女款】本次选用女款发型库，必须严格按图2的女款发型轮廓、长度、层次和刘海执行；"
+                + "不要出现男性推剪寸头、板寸等男款样式；图2只参考发型，不要参考图2人物的脸、五官和性别。";
+    }
+
     private String generateOne(GenerationTask task, Hairstyle s, String colorName, String colorEn) throws Exception {
-        String prompt = promptService.build(s, colorName);
+        boolean colorMode = task.getColorId() != null && !task.getColorId().isBlank();
+        String prompt = promptService.build(s, colorName, colorEn);
         String ref = referenceUrl(s, colorEn);
         if (ref != null) {
             prompt = "图1是人物原图，图2是目标发型参考。请把图1人物的头发换成图2中的发型，"
                     + "图1人物的脸部、眉毛、五官、表情（笑容、嘴部开合、是否露齿、眼神）必须保持完全不变。\n\n" + prompt;
         }
-        log.info("开始 AI 换发 taskId={} style={} ref={} prompt={}", task.getId(), s.getName(), ref != null, prompt);
-        String url = imageService.editHair(task.getPhotoUrl(), ref, prompt, task.getId(), s.getId());
+        // 用户明确选择的男女款优先级最高：只换发型，不因原图人物性别而改成另一性别款式
+        prompt = genderHint(task.getGender()) + "\n" + prompt;
+        log.info("开始 AI 换发 taskId={} style={} colors={} ref={} prompt={}", task.getId(), s.getName(), colorMode, ref != null, prompt);
+        String url = colorMode
+                ? imageService.editHairColor(task.getPhotoUrl(), ref, prompt, task.getId(), s.getId(), colorEn)
+                : imageService.editHair(task.getPhotoUrl(), ref, prompt, task.getId(), s.getId());
         log.info("AI 换发完成 taskId={} style={} url={}", task.getId(), s.getName(), url);
         return url;
     }
@@ -243,7 +452,7 @@ public class GenerationProcessor {
                 list.add(s);
             }
         }
-        return list.size() > 4 ? new ArrayList<>(list.subList(0, 4)) : list;
+        return list;
     }
 
     private String colorName(String colorId) {

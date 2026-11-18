@@ -128,6 +128,50 @@ public class WechatVirtualPayService {
         return result;
     }
 
+    /** 充值套餐 / VIP 等固定价格道具：按档位商品 ID 生成支付参数 */
+    public Map<String, Object> payParamsForProduct(Long userId, String outTradeNo, BigDecimal amount, String productId) {
+        PayConfig cfg = payConfigService.get();
+        if (!payConfigService.wxVirtualReady(cfg)) {
+            throw new BizException("微信虚拟支付参数未配置完整，请在管理端「支付配置」补全 offerId 与 AppKey");
+        }
+        AppUser user = userMapper.selectById(userId);
+        if (user == null || user.getOpenid() == null || user.getOpenid().isBlank()) {
+            throw new BizException("缺少用户 openid，无法发起微信虚拟支付");
+        }
+        if (user.getSessionKey() == null || user.getSessionKey().isBlank()) {
+            throw new BizException("登录态已过期，请退出重新进入小程序后支付");
+        }
+        if (productId == null || productId.isBlank()) {
+            throw new BizException("未配置该档位的微信虚拟道具 ID");
+        }
+        int env = cfg.getWxVirtualEnv() == null ? 0 : cfg.getWxVirtualEnv();
+
+        Map<String, Object> signMap = new LinkedHashMap<>();
+        signMap.put("offerId", cfg.getWxVirtualOfferId());
+        signMap.put("buyQuantity", 1);
+        signMap.put("env", env);
+        signMap.put("currencyType", "CNY");
+        signMap.put("productId", productId);
+        signMap.put("goodsPrice", toCents(amount));
+        signMap.put("outTradeNo", outTradeNo);
+        signMap.put("attach", "order:" + outTradeNo);
+        signMap.put("mode", "short_series_goods");
+
+        String signData;
+        try {
+            signData = objectMapper.writeValueAsString(signMap);
+        } catch (Exception e) {
+            throw new BizException("虚拟支付参数序列化失败");
+        }
+        String appKey = payConfigService.wxVirtualAppkey(cfg);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("signData", signData);
+        result.put("paySig", hmacHex(appKey, URI_VIRTUAL_PAY + "&" + signData));
+        result.put("signature", hmacHex(user.getSessionKey(), signData));
+        result.put("mode", "short_series_goods");
+        return result;
+    }
+
     /** 虚拟支付连通性：参数齐全时用 access_token 验证 AppID/AppSecret 是否可用 */
     public Map<String, Object> verifyConnection() {
         Map<String, Object> result = new LinkedHashMap<>();

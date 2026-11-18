@@ -8,7 +8,7 @@ import com.fajing.entity.GenerationTask;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.service.GenerationProcessor;
 import com.fajing.service.GenerationService;
-import com.fajing.service.QuotaService;
+import com.fajing.service.PointsService;
 import com.fajing.service.RateLimitService;
 import com.fajing.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,7 +40,7 @@ public class GenerateController {
     private final GenerationProcessor processor;
     private final GenerationTaskMapper taskMapper;
     private final RateLimitService rateLimitService;
-    private final QuotaService quotaService;
+    private final PointsService pointsService;
 
     /** 单用户每日生成次数上限 */
     @Value("${quota.daily-max:5}")
@@ -58,19 +58,37 @@ public class GenerateController {
         Long todayCount = taskMapper.selectCount(new QueryWrapper<GenerationTask>()
                 .eq("user_id", userId)
                 .ge("created_at", LocalDate.now().atStartOfDay()));
-        if (quotaEnforce && todayCount != null && todayCount >= dailyMax) {
+        // VIP / VVIP 解锁不限量，不再受每日生成次数限制
+        boolean unlimited = pointsService.unlimited(pointsService.get(userId));
+        if (quotaEnforce && !unlimited && todayCount != null && todayCount >= dailyMax) {
             throw new BizException("今日生成次数已达上限（" + dailyMax + " 次），明天再来试试吧");
         }
-        // 有免费额度按免费批次生成；额度用完则进入付费批次，图片全部支付后才生成
-        boolean freeQuota = quotaService.tryConsumeFree();
+        // 同一推荐记录只创建一次生成任务：推荐页刷新/返回时复用，避免重复扣免费批次与 AI 成本
+        if (req.getRecommendId() != null && req.getRecommendId() > 0) {
+            GenerationTask existed = taskMapper.selectOne(new QueryWrapper<GenerationTask>()
+                    .eq("user_id", userId)
+                    .eq("recommend_id", req.getRecommendId())
+                    .eq("auto_gen", 0)
+                    .orderByAsc("id")
+                    .last("limit 1"));
+            if (existed != null) {
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("taskId", existed.getId());
+                data.put("status", existed.getStatus());
+                return Result.ok(data);
+            }
+        }
+        // 免费批次：本批前 3 款免费预生成并解锁；批次用尽后全部款按 10 魅力值解锁
+        boolean freeQuota = pointsService.tryConsumeFreeBatch(userId);
         GenerationTask task;
         try {
             task = generationService.create(
-                    req.getPhotoUrl(), req.getGender(), req.getMode(), req.getStyleIds(), req.getColorId(), freeQuota);
+                    req.getPhotoUrl(), req.getGender(), req.getMode(), req.getStyleIds(), req.getColorId(), freeQuota,
+                    req.getRecommendId());
         } catch (RuntimeException e) {
-            // 参数校验失败等场景没有真正发起生成，立即退还本次额度
+            // 参数校验失败等场景没有真正发起生成，立即退还本次免费批次
             if (freeQuota) {
-                quotaService.refund(userId, null, "创建任务失败");
+                pointsService.refundFreeBatch(userId);
             }
             throw e;
         }
