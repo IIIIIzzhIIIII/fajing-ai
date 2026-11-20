@@ -10,6 +10,7 @@ import com.fajing.mapper.AiCallLogMapper;
 import com.fajing.mapper.HairColorMapper;
 import com.fajing.mapper.HairstyleMapper;
 import com.fajing.mapper.RecommendationMapper;
+import com.fajing.mapper.StoreMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +56,7 @@ public class GenerationProcessor {
     private final RecommendationMapper recommendationMapper;
     private final PointsService pointsService;
     private final AiCallLogMapper aiCallLogMapper;
+    private final StoreMapper storeMapper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -148,8 +150,8 @@ public class GenerationProcessor {
         if (failed.size() == styles.size() && freeBatch && !autoGen) {
             pointsService.refundFreeBatch(task.getUserId());
         }
-        // 发色变体整批失败：非会员退还本次消耗的 10 点魅力值
-        if (failed.size() == styles.size() && autoGen) {
+        // 发色变体整批失败：非会员退还本次消耗的 10 点魅力值；员工演示不涉及魅力值
+        if (failed.size() == styles.size() && autoGen && !"employee".equals(task.getSource())) {
             com.fajing.entity.UserQuota quota = pointsService.get(task.getUserId());
             if (!pointsService.unlimited(quota)) {
                 pointsService.addPoints(task.getUserId(), PointsService.UNLOCK_COST);
@@ -397,6 +399,9 @@ public class GenerationProcessor {
             AiCallLog logRow = new AiCallLog();
             logRow.setTaskId(task.getId());
             logRow.setUserId(task.getUserId());
+            logRow.setTenantId(tenantIdOf(task));
+            logRow.setStoreId(task.getStoreId() == null ? 0L : task.getStoreId());
+            logRow.setStaffId(task.getStaffId() == null ? 0L : task.getStaffId());
             logRow.setProvider(config == null || config.getImageProvider() == null ? "" : config.getImageProvider());
             logRow.setModel(config == null || config.getImageModel() == null ? "" : config.getImageModel());
             logRow.setCostCents(ok ? costCentsPerCall : 0);
@@ -405,6 +410,19 @@ public class GenerationProcessor {
             aiCallLogMapper.insert(logRow);
         } catch (Exception e) {
             log.debug("AI 调用流水写入失败: {}", e.getMessage());
+        }
+    }
+
+    /** 员工任务需要把租户维度带到成本流水；普通用户任务为 0 */
+    private Long tenantIdOf(GenerationTask task) {
+        if (task.getStoreId() == null || task.getStoreId() <= 0) {
+            return 0L;
+        }
+        try {
+            com.fajing.entity.Store store = storeMapper.selectById(task.getStoreId());
+            return store == null || store.getTenantId() == null ? 0L : store.getTenantId();
+        } catch (Exception e) {
+            return 0L;
         }
     }
 

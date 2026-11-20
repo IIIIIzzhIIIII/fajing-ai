@@ -63,6 +63,8 @@ const emit = defineEmits(['saved', 'skip'])
 
 const nickname = ref(props.initialNickname || '')
 const avatarUrl = ref(props.initialAvatar || '')
+const initialNickname = ref(props.initialNickname || '')
+const initialAvatar = ref(props.initialAvatar || '')
 const avatarChanged = ref(false)
 const saving = ref(false)
 
@@ -110,7 +112,7 @@ async function doSave() {
   if (!canSave.value || saving.value) return
   const clean = nickname.value.trim()
   const payload = {}
-  if (clean.length >= 1 && clean !== props.initialNickname) {
+  if (clean.length >= 1 && clean !== initialNickname.value) {
     payload.nickname = clean
   }
   if (avatarChanged.value && avatarUrl.value) {
@@ -124,8 +126,8 @@ async function doSave() {
   try {
     const profile = await API.updateProfile(payload)
     // 同步更新本地 initial 标记，避免重复保存
-    if (payload.nickname) props.initialNickname = payload.nickname
-    if (payload.avatar) props.initialAvatar = payload.avatar
+    if (payload.nickname) initialNickname.value = payload.nickname
+    if (payload.avatar) initialAvatar.value = payload.avatar
     avatarChanged.value = false
     uni.showToast({ title: '已保存', icon: 'success' })
     emit('saved', profile)

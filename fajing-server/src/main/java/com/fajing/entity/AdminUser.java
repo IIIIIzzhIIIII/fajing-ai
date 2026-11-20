@@ -15,6 +15,9 @@ public class AdminUser {
     private String username;
     private String passwordHash;
     private String role;
+    private Long tenantId;
+    private Long storeId;
+    private String displayName;
     private Integer status;
     private LocalDateTime createdAt;
 }

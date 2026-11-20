@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS hairstyle (
   len VARCHAR(32) NOT NULL DEFAULT '',
   face VARCHAR(64) NOT NULL DEFAULT '',
   en VARCHAR(255) NOT NULL DEFAULT '',
-  img_url VARCHAR(512) NOT NULL DEFAULT '',
+  img_url VARCHAR(1024) NOT NULL DEFAULT '',
   status TINYINT NOT NULL DEFAULT 1,
   sort INT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -382,4 +382,119 @@ CREATE TABLE IF NOT EXISTS points_package (
   status TINYINT NOT NULL DEFAULT 1,
   sort INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- 多租户 / 门店 / 员工 / 佣金（第一版平台化改造）
+-- ============================================================
+
+-- 商户（租户）：店长购买系统后对应一个租户
+CREATE TABLE IF NOT EXISTS tenant (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(64) NOT NULL,
+  contact_name VARCHAR(32) NOT NULL DEFAULT '',
+  contact_phone VARCHAR(20) NOT NULL DEFAULT '',
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 门店：租户下可有多家门店，第一版至少一家
+CREATE TABLE IF NOT EXISTS store (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  tenant_id BIGINT NOT NULL,
+  name VARCHAR(64) NOT NULL,
+  brand_name VARCHAR(64) NOT NULL DEFAULT '',
+  address VARCHAR(255) NOT NULL DEFAULT '',
+  phone VARCHAR(20) NOT NULL DEFAULT '',
+  business_hours VARCHAR(64) NOT NULL DEFAULT '',
+  daily_capacity INT NOT NULL DEFAULT 20,
+  commission_rate DECIMAL(5,2) NOT NULL DEFAULT 10.00,
+  kyc_status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_tenant (tenant_id),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 员工：店长通过手机号/邀请码拉入；user_id 绑定后即可进入员工工作台
+CREATE TABLE IF NOT EXISTS staff (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  tenant_id BIGINT NOT NULL,
+  store_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL DEFAULT 0,
+  name VARCHAR(32) NOT NULL DEFAULT '',
+  phone VARCHAR(20) NOT NULL DEFAULT '',
+  role VARCHAR(16) NOT NULL DEFAULT 'EMPLOYEE',
+  invite_code VARCHAR(16) NOT NULL,
+  staff_code VARCHAR(16) NOT NULL,
+  daily_limit INT NOT NULL DEFAULT 20,
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_invite (invite_code),
+  UNIQUE KEY uk_staff_code (staff_code),
+  KEY idx_store (store_id),
+  KEY idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 员工每日免费 AI 额度
+CREATE TABLE IF NOT EXISTS staff_quota (
+  staff_id BIGINT PRIMARY KEY,
+  quota_date DATE NOT NULL,
+  used INT NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 顾客-员工归属：顾客扫员工码后绑定 30 天，订单按 staff_id 归因
+CREATE TABLE IF NOT EXISTS staff_customer_binding (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  tenant_id BIGINT NOT NULL,
+  store_id BIGINT NOT NULL,
+  staff_id BIGINT NOT NULL,
+  customer_id BIGINT NOT NULL,
+  bound_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expire_at DATETIME NOT NULL,
+  UNIQUE KEY uk_customer (customer_id),
+  KEY idx_staff (staff_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 平台佣金台账：支付成功记 available，核销后 settled，退款 reversed
+CREATE TABLE IF NOT EXISTS commission_ledger (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  tenant_id BIGINT NOT NULL,
+  store_id BIGINT NOT NULL,
+  staff_id BIGINT NOT NULL DEFAULT 0,
+  order_id BIGINT NOT NULL,
+  order_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  commission_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+  commission_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  status VARCHAR(16) NOT NULL DEFAULT 'available',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  settled_at DATETIME NULL,
+  reversed_at DATETIME NULL,
+  UNIQUE KEY uk_order (order_id),
+  KEY idx_store (store_id),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 已有库的增量字段
+ALTER TABLE admin_user ADD COLUMN tenant_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE admin_user ADD COLUMN store_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE admin_user ADD COLUMN display_name VARCHAR(32) NOT NULL DEFAULT '';
+ALTER TABLE coupon_tier ADD COLUMN store_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN store_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN staff_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN commission_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE user_coupon ADD COLUMN store_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE user_coupon ADD COLUMN staff_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE user_coupon ADD COLUMN commission_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00;
+ALTER TABLE user_coupon ADD COLUMN settle_status VARCHAR(16) NOT NULL DEFAULT '';
+ALTER TABLE user_coupon ADD COLUMN verified_by BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE generation_task ADD COLUMN store_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE generation_task ADD COLUMN staff_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE generation_task ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'user';
+ALTER TABLE generation_task ADD COLUMN claim_token VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE generation_task ADD COLUMN claimed_user_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE generation_task ADD COLUMN claimed_at DATETIME NULL;
+ALTER TABLE ai_call_log ADD COLUMN tenant_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE ai_call_log ADD COLUMN store_id BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE ai_call_log ADD COLUMN staff_id BIGINT NOT NULL DEFAULT 0;
 

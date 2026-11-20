@@ -5,6 +5,12 @@ auth:
 admin:
   legacy-token-enabled: ${ADMIN_LEGACY_TOKEN_ENABLED:false}
 
+# 开发/测试环境保留演示店长账号
+demo:
+  store-enabled: ${DEMO_STORE_ENABLED:true}
+  store-username: ${DEMO_STORE_USERNAME:store1}
+  store-password: ${DEMO_STORE_PASSWORD:store123}
+
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}

@@ -31,11 +31,17 @@ export function closeLogin() {
   pendingAction = null
 }
 
+/** 主动打开授权弹窗，用于已登录用户补充昵称/手机号 */
+export function openLogin() {
+  visible.value = true
+}
+
 export function useLoginGate() {
   return {
     visible,
     ensureLogin,
     finishLogin,
-    closeLogin
+    closeLogin,
+    openLogin
   }
 }

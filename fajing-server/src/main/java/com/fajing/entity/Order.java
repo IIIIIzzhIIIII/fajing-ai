@@ -15,6 +15,9 @@ public class Order {
     private Long id;
     private Long userId;
     private Long taskId;
+    private Long storeId;
+    private Long staffId;
+    private BigDecimal commissionAmount;
     private String plan;
     private BigDecimal amount;
     private String status;

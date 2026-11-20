@@ -1,10 +1,10 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
 import { loginAdmin } from '@/api'
-import { setToken } from '@/utils/auth'
+import { homePath, setAdminInfo, setToken } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -15,6 +15,26 @@ const form = reactive({
   username: 'admin',
   password: ''
 })
+
+const isStoreLogin = computed(() => {
+  if (route.query.role === 'store') return true
+  return typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/store')
+})
+
+watch(
+  isStoreLogin,
+  (store) => {
+    form.username = store ? 'store1' : 'admin'
+  },
+  { immediate: true }
+)
+
+function switchRole(store) {
+  router.replace({
+    path: '/login',
+    query: store ? { role: 'store' } : {}
+  })
+}
 
 const rules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
@@ -34,10 +54,16 @@ async function handleLogin() {
   loading.value = true
   try {
     const data = await loginAdmin({ username: form.username.trim(), password: form.password })
-    setToken(data.token)
-    ElMessage.success('登录成功')
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    router.replace(redirect)
+    setToken(data.token, data.role)
+    setAdminInfo(data)
+    ElMessage.success(data.role === 'STORE_MANAGER' ? '店长登录成功' : '平台管理员登录成功')
+    const fallback = homePath(data.role)
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : fallback
+    const redirectIsStore = redirect.startsWith('/store')
+    const target = data.role === 'STORE_MANAGER'
+      ? (redirectIsStore ? redirect : fallback)
+      : (redirectIsStore ? fallback : redirect)
+    router.replace(target)
   } catch {
     // 错误提示由拦截器统一处理
   } finally {
@@ -64,9 +90,14 @@ async function handleLogin() {
       </section>
 
       <section class="form-panel">
+        <div class="role-switch">
+          <div :class="['role-tab', { on: !isStoreLogin }]" @click="switchRole(false)">平台总后台</div>
+          <div :class="['role-tab', { on: isStoreLogin }]" @click="switchRole(true)">店长后台</div>
+        </div>
+
         <div class="form-head">
-          <h2>登录管理后台</h2>
-          <p>请使用管理员账号继续</p>
+          <h2>{{ isStoreLogin ? '登录店长后台' : '登录平台总后台' }}</h2>
+          <p>{{ isStoreLogin ? '管理门店券、员工与核销，查看门店经营数据' : '管理租户、门店、佣金与平台运营数据' }}</p>
         </div>
 
         <el-form ref="formRef" :model="form" :rules="rules" label-position="top" size="large">
@@ -94,7 +125,9 @@ async function handleLogin() {
           </el-button>
         </el-form>
 
-        <div class="account-hint">初始账号由服务端 ADMIN_INIT_PASSWORD 配置，未配置时不会创建管理员</div>
+        <div class="account-hint">
+          {{ isStoreLogin ? '店长演示账号 store1 / store123' : '平台总管理员演示账号 admin / admin123' }}
+        </div>
       </section>
     </div>
   </div>
@@ -222,6 +255,33 @@ async function handleLogin() {
   flex-direction: column;
   justify-content: center;
   padding: 54px 52px;
+}
+
+.role-switch {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  margin-bottom: 22px;
+  background: #faf5f7;
+  border-radius: 10px;
+}
+
+.role-tab {
+  flex: 1;
+  padding: 9px 0;
+  font-size: 13px;
+  color: #8d8187;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+
+  &.on {
+    font-weight: 600;
+    color: #a83f5e;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(201, 86, 118, 0.14);
+  }
 }
 
 .form-head {

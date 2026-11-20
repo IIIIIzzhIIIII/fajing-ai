@@ -19,7 +19,29 @@ INSERT IGNORE INTO hairstyle (id, name, gender, cat, len, face, en, img_url, sta
 ('m5','法式短寸','male','寸头','极短','硬朗 / 方脸','french crop buzz cut men hair','',1,17),
 ('m6','狼尾鲻鱼头','male','狼尾','颈后','心形脸 / 潮男','modern mullet men hair, soft layers, shaved sides, trendy korean style','',1,18),
 ('m7','三七分毛流','male','短发','耳上','长脸 / 鹅蛋脸','modern korean side part men hair, soft natural flow, light airy volume, exposed forehead, tapered sides','',1,19),
-('m8','圆寸','male','寸头','极短','所有脸型','round buzz cut men hair, very short','',1,20);
+('m8','圆寸','male','寸头','极短','所有脸型','round buzz cut men hair, very short','',1,20),
+-- 女款补齐至 20 款
+('f13','法式羊毛卷','female','卷发','肩部','圆脸 / 方脸','french curly perm medium hair, soft voluminous curls, natural shine','http://localhost:8081/uploads/style-f13.jpg',1,21),
+('f14','锁骨微卷','female','中长发','锁骨','鹅蛋脸 / 长脸','collarbone length soft wavy hair with natural inward ends','http://localhost:8081/uploads/style-f14.jpg',1,22),
+('f15','一刀切齐肩发','female','波波头','肩部','所有脸型','blunt shoulder length straight hair, one length cut, sleek finish','http://localhost:8081/uploads/style-f15.jpg',1,23),
+('f16','碎发鲻鱼头','female','狼尾','颈后','心形脸 / 潮女','shaggy mullet for women, layered soft fringe, textured ends','http://localhost:8081/uploads/style-f16.jpg',1,24),
+('f17','利落高马尾','female','扎发','长发','所有脸型','sleek high ponytail, smooth crown, clean hairline','http://localhost:8081/uploads/style-f17.jpg',1,25),
+('f18','优雅低盘发','female','盘发','中长','鹅蛋脸 / 方圆脸','elegant low bun updo with soft face framing strands','http://localhost:8081/uploads/style-f18.jpg',1,26),
+('f19','韩式气垫烫','female','卷发','胸上','鹅蛋脸 / 长脸','korean cushion perm long hair, soft c-curl volume, glossy finish','http://localhost:8081/uploads/style-f19.jpg',1,27),
+('f20','冷棕中长层次','female','中长发','肩下','方脸 / 鹅蛋脸','layered medium hair with cool brown tone, soft face framing layers','http://localhost:8081/uploads/style-f20.jpg',1,28),
+-- 男款补齐至 20 款
+('m9','前刺飞机头','male','短发','眉上','长脸 / 方脸','spiky textured quiff men hair, short tapered sides','http://localhost:8081/uploads/style-m9.jpg',1,29),
+('m10','美式渐变寸头','male','寸头','极短','所有脸型','american fade buzz cut men hair, clean gradient sides','http://localhost:8081/uploads/style-m10.jpg',1,30),
+('m11','油头背梳','male','背头','短','方脸 / 成熟','classic pompadour slick back men hair with natural shine','http://localhost:8081/uploads/style-m11.jpg',1,31),
+('m12','韩式三七分中长发','male','中长发','耳下','鹅蛋脸 / 长脸','korean medium length side part men hair, soft wavy flow','http://localhost:8081/uploads/style-m12.jpg',1,32),
+('m13','日系空气烫','male','纹理烫','耳下','所有脸型','japanese airy perm men hair, textured light waves','http://localhost:8081/uploads/style-m13.jpg',1,33),
+('m14','碎盖头','male','短发','眉上','圆脸 / 学生感','textured crop men hair with choppy fringe','http://localhost:8081/uploads/style-m14.jpg',1,34),
+('m15','两侧铲青短卷','male','卷发','耳上','心形脸 / 潮男','short curly men hair with shaved sides, korean style','http://localhost:8081/uploads/style-m15.jpg',1,35),
+('m16','中分窗帘刘海','male','中长发','眉下','鹅蛋脸 / 心形脸','middle part curtain bangs men hair, soft layered flow','http://localhost:8081/uploads/style-m16.jpg',1,36),
+('m17','复古港风背头','male','背头','短','方脸 / 成熟','retro hong kong style slick back men hair','http://localhost:8081/uploads/style-m17.jpg',1,37),
+('m18','自然短碎发','male','短发','耳上','所有脸型','natural short textured men hair, low maintenance','http://localhost:8081/uploads/style-m18.jpg',1,38),
+('m19','灰白奶奶头','male','短发','耳下','圆脸 / 潮男','silver gray korean grandpa style men hair, soft volume','http://localhost:8081/uploads/style-m19.jpg',1,39),
+('m20','韩式锅盖头','male','短发','眉上','学生感 / 圆脸','bowl cut men hair, blunt fringe, korean student style','http://localhost:8081/uploads/style-m20.jpg',1,40);
 
 INSERT IGNORE INTO hair_color (id, name, en, bg, sort) VALUES
 ('c1','黑茶色','black tea brown','#2B2622',1),
@@ -106,3 +128,25 @@ INSERT IGNORE INTO points_package (id, title, description, badge, biz_type, pric
 (2, '200 魅力值', '约 20 款发型解锁', '多买多省', 'points', 20.00, 200, 0, 1, 2),
 (3, 'VIP 包月', '30 天内解锁不限量', '推荐', 'vip', 29.00, 0, 30, 1, 3),
 (4, 'VVIP 永久', '永久不限量解锁', '', 'vvip', 99.00, 0, 0, 1, 4);
+
+-- ============================================================
+-- 演示租户 / 门店 / 券档位 / 员工（第一版本地联调数据）
+-- ============================================================
+INSERT IGNORE INTO tenant (id, name, contact_name, contact_phone, status) VALUES
+(1, '发镜示范商户', '张店长', '13800000001', 1);
+
+INSERT IGNORE INTO store (id, tenant_id, name, brand_name, address, phone, business_hours,
+                          daily_capacity, commission_rate, kyc_status, status) VALUES
+(1, 1, '发镜示范店', '发镜 AI 示范店', '上海市静安区示例路 88 号', '021-88886666',
+ '10:00-21:00', 20, 10.00, 'approved', 1);
+
+-- 门店专属券档位（store_id=1）
+INSERT IGNORE INTO coupon_tier (id, store_id, title, pay_amount, value_amount, description, status, sort) VALUES
+(101, 1, '50 元抵 69 元', 50.00, 69.00, '剪发通用，到店出示核销码', 1, 1),
+(102, 1, '100 元抵 129 元', 100.00, 129.00, '剪发 + 造型组合更划算', 1, 2),
+(103, 1, '200 元抵 239 元', 200.00, 239.00, '烫染套餐专享', 1, 3);
+
+-- 演示员工：店长后台可看到邀请码 EMP001，员工用它绑定
+INSERT IGNORE INTO staff (id, tenant_id, store_id, user_id, name, phone, role,
+                          invite_code, staff_code, daily_limit, status) VALUES
+(1, 1, 1, 0, '小林', '13800000002', 'EMPLOYEE', 'EMP001', 'ST001', 20, 1);

@@ -57,6 +57,20 @@
         </view>
       </scroll-view>
 
+      <view v-if="stores.length" class="sec-head">
+        <view class="sec-title">合作门店</view>
+        <view class="sec-more" @click="goStores">全部门店<fj-icon name="chevron-right" :size="13" /></view>
+      </view>
+      <scroll-view v-if="stores.length" scroll-x :show-scrollbar="false" class="store-strip">
+        <view v-for="item in stores" :key="item.id" class="store-card" @click="goStore(item.id)">
+          <view class="store-name">{{ item.name }}</view>
+          <view class="store-addr">{{ item.address || '到店咨询' }}</view>
+          <view class="store-price">
+            {{ item.minPayAmount ? '¥' + item.minPayAmount + ' 起' : '到店咨询' }}
+          </view>
+        </view>
+      </scroll-view>
+
       <view class="privacy-note">
         <fj-icon name="shield" :size="20" color="#E8A9BF" />
         <view style="flex:1">
@@ -76,7 +90,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { API } from '@/api/request'
@@ -88,6 +102,7 @@ import { site } from '@/utils/site'
 import { PORTRAIT, STYLES, STYLE_IMG } from '@/mock/constants'
 
 const app = useAppStore()
+const stores = ref([])
 
 const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
 
@@ -101,12 +116,19 @@ function onLoginCancel() {
 
 // 从充值/看广告页返回时刷新魅力值，免费次数用完后的文案才能实时更新
 onShow(async () => {
+  loadStores()
   if (!getToken()) return
   try {
     const quota = await API.quota()
     app.setQuota(quota)
   } catch (e) { /* quota 拉不到不阻断 */ }
 })
+
+async function loadStores() {
+  try {
+    stores.value = (await API.nearbyStores()) || []
+  } catch (e) { /* 门店列表拉不到不阻断首页 */ }
+}
 
 const ctaSub = computed(() => {
   if (app.quota.unlimited) return 'VIP 不限量 · 想换就换'
@@ -141,6 +163,12 @@ function goStyles() {
 }
 function goProfile() {
   uni.reLaunch({ url: '/pages/profile/profile' })
+}
+function goStores() {
+  uni.navigateTo({ url: '/pages/store/store' })
+}
+function goStore(id) {
+  uni.navigateTo({ url: `/pages/store/store?id=${id}` })
 }
 </script>
 
@@ -183,5 +211,35 @@ function goProfile() {
 }
 .hot-strip {
   white-space: nowrap;
+}
+.store-strip {
+  white-space: nowrap;
+}
+.store-card {
+  display: inline-block;
+  width: 190px;
+  padding: 14px;
+  margin-right: 10px;
+  vertical-align: top;
+  white-space: normal;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--sh-sm);
+}
+.store-name {
+  font-size: 14px;
+  font-weight: 800;
+}
+.store-addr {
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.store-price {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #c95676;
 }
 </style>

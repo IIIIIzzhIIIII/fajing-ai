@@ -11,9 +11,9 @@
           <image v-if="me.avatar" :src="me.avatar" mode="aspectFill" style="width:100%;height:100%" />
           <fj-icon v-else name="user" :size="26" color="#C95676" />
         </view>
-        <view class="hero-info">
+        <view class="hero-info" @click="openProfile">
           <view style="font-size:17px;font-weight:800;letter-spacing:-.3px">{{ me.nickname || '发型试镜用户' }}</view>
-          <view style="font-size:11px;color:var(--muted);margin-top:3px">{{ loginLabel }} · 试发记录已同步</view>
+          <view style="font-size:11px;color:var(--muted);margin-top:3px">{{ loginLabel }} · 点击完善昵称与手机号</view>
         </view>
         <view v-if="!loggedIn" class="login-btn" @click="openLogin">登录</view>
       </view>
@@ -49,6 +49,16 @@
           <view class="menu-ico"><fj-icon name="clock" :size="16" color="#C95676" /></view>
           <text>我的试发记录</text>
           <text class="menu-count">{{ recordCount }}</text>
+          <view class="chev"><fj-icon name="chevron-right" :size="16" color="#C9BFC3" /></view>
+        </view>
+        <view class="menu-item" @click="openEmployee">
+          <view class="menu-ico"><fj-icon name="users" :size="16" color="#C95676" /></view>
+          <text>员工工作台</text>
+          <view class="chev"><fj-icon name="chevron-right" :size="16" color="#C9BFC3" /></view>
+        </view>
+        <view class="menu-item" @click="openStores">
+          <view class="menu-ico"><fj-icon name="scissors" :size="16" color="#C95676" /></view>
+          <text>合作门店</text>
           <view class="chev"><fj-icon name="chevron-right" :size="16" color="#C9BFC3" /></view>
         </view>
         <view class="menu-item" @click="openPrivacy">
@@ -94,7 +104,13 @@ import { site } from '@/utils/site'
 const app = useAppStore()
 const ui = useUiStore()
 
-const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
+const {
+  visible: loginVisible,
+  ensureLogin,
+  finishLogin,
+  closeLogin,
+  openLogin: openAuthModal
+} = useLoginGate()
 const loggedIn = ref(isProfileComplete())
 const loginLabel = computed(() => (loggedIn.value ? '已登录' : '游客登录'))
 
@@ -151,6 +167,10 @@ function openLogin() {
   ensureLogin()
 }
 
+function openProfile() {
+  openAuthModal()
+}
+
 function onLoginDone() {
   loggedIn.value = true
   finishLogin()
@@ -183,6 +203,19 @@ function openPoints() {
 
 function openCoupons() {
   uni.navigateTo({ url: '/pages/coupons/coupons' })
+}
+
+function openEmployee() {
+  if (!isProfileComplete() || !me.value.nickname || !me.value.phone) {
+    uni.showToast({ title: '请先完成昵称与手机号授权', icon: 'none' })
+    ensureLogin()
+    return
+  }
+  uni.navigateTo({ url: '/pages/employee/index' })
+}
+
+function openStores() {
+  uni.navigateTo({ url: '/pages/store/store' })
 }
 
 function openPrivacy() {

@@ -172,7 +172,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad, onReady, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
@@ -251,11 +251,6 @@ function isPending(item) {
 
 function measure() {
   if (sliderRef.value) sliderRef.value.measure()
-}
-
-function stopReplay() {
-  baPct.value = 50
-  if (sliderRef.value) sliderRef.value.reset()
 }
 
 function onSliderDrag() {

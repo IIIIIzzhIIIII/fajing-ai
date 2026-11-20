@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 public class CouponTier {
     @TableId(type = IdType.AUTO)
     private Long id;
+    /** 0 = 平台默认档位；>0 = 门店专属档位 */
+    private Long storeId;
     private String title;
     private BigDecimal payAmount;
     private BigDecimal valueAmount;

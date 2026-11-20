@@ -14,6 +14,9 @@ public class AiCallLog {
     private Long id;
     private Long taskId;
     private Long userId;
+    private Long tenantId;
+    private Long storeId;
+    private Long staffId;
     private String provider;
     private String model;
     private Integer costCents;

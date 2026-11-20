@@ -9,13 +9,16 @@ import com.fajing.entity.GenerationTask;
 import com.fajing.entity.Order;
 import com.fajing.entity.PayConfig;
 import com.fajing.entity.PointsPackage;
+import com.fajing.entity.Store;
 import com.fajing.mapper.AppUserMapper;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.OrderMapper;
+import com.fajing.mapper.StoreMapper;
 import com.fajing.service.CouponService;
 import com.fajing.service.GenerationService;
 import com.fajing.service.GenerationProcessor;
 import com.fajing.service.PayConfigService;
+import com.fajing.service.PointsPackageService;
 import com.fajing.service.PointsService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.DouyinPayService;
@@ -79,6 +82,7 @@ public class OrderController {
     private final PointsService pointsService;
     private final PointsPackageService pointsPackageService;
     private final CouponService couponService;
+    private final StoreMapper storeMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** mock 支付仅在非生产环境开启；生产必须接真实支付 */
@@ -334,6 +338,8 @@ public class OrderController {
         int points = 0;
         int days = 0;
         Long tierId = 0L;
+        Long storeId = 0L;
+        Long staffId = 0L;
         switch (bizType) {
             // 充值/VIP/VVIP 一律按后台套餐定价，前端传什么价格都不作数
             case "points", "vip", "vvip" -> {
@@ -348,6 +354,17 @@ public class OrderController {
                 CouponTier tier = couponService.findTier(tierId);
                 if (tier == null || tier.getStatus() == null || tier.getStatus() != 1) {
                     throw new BizException("团购券档位不存在或已下架");
+                }
+                storeId = tier.getStoreId() == null ? 0L : tier.getStoreId();
+                if (storeId > 0) {
+                    Store store = storeMapper.selectById(storeId);
+                    if (store == null || store.getStatus() == null || store.getStatus() != 1) {
+                        throw new BizException("门店已停用，暂时无法购券");
+                    }
+                    if (!"approved".equals(store.getKycStatus())) {
+                        throw new BizException("门店资质审核中，暂时无法购券");
+                    }
+                    // 员工归因统一在店长后台核销台选择，下单阶段不再依据扫码绑定
                 }
                 amount = tier.getPayAmount();
             }
@@ -388,6 +405,9 @@ public class OrderController {
         Order order = new Order();
         order.setUserId(userId);
         order.setTaskId(0L);
+        order.setStoreId(storeId);
+        order.setStaffId(staffId);
+        order.setCommissionAmount(BigDecimal.ZERO);
         order.setBizType(bizType);
         order.setPlan(bizType);
         order.setPoints(points);

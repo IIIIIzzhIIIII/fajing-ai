@@ -30,14 +30,21 @@ public class JwtUtil {
     }
 
     public String create(Long userId, String role) {
+        return create(userId, role, java.util.Map.of());
+    }
+
+    /** 额外 claims 用于管理端携带 adminRole / tenantId / storeId，避免前端伪造身份 */
+    public String create(Long userId, String role, java.util.Map<String, Object> extraClaims) {
         Date now = new Date();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("role", role)
                 .issuedAt(now)
-                .expiration(new Date(now.getTime() + expireMillis))
-                .signWith(key)
-                .compact();
+                .expiration(new Date(now.getTime() + expireMillis));
+        if (extraClaims != null) {
+            extraClaims.forEach(builder::claim);
+        }
+        return builder.signWith(key).compact();
     }
 
     /** 校验失败（过期、篡改、格式错误）返回 null，由调用方决定拒绝方式 */

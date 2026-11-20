@@ -207,4 +207,98 @@ export function disableCouponTier(id) {
   return service.delete(`/api/admin/coupon-tiers/${id}`)
 }
 
+// ---------- 店长后台 ----------
+export function fetchStoreProfile() {
+  return service.get('/api/admin/store/profile')
+}
+
+export function saveStoreProfile(data) {
+  return service.put('/api/admin/store/profile', data)
+}
+
+export function fetchStoreDashboard(days) {
+  return service.get('/api/admin/store/dashboard', { params: days ? { days } : {} })
+}
+
+export function fetchStoreCouponTiers() {
+  return service.get('/api/admin/store/coupons')
+}
+
+export function createStoreCouponTier(data) {
+  return service.post('/api/admin/store/coupons', data)
+}
+
+export function updateStoreCouponTier(data) {
+  return service.put('/api/admin/store/coupons', data)
+}
+
+export function disableStoreCouponTier(id) {
+  return service.delete(`/api/admin/store/coupons/${id}`)
+}
+
+export function fetchStoreStaff() {
+  return service.get('/api/admin/store/staff')
+}
+
+export function createStoreStaff(data) {
+  return service.post('/api/admin/store/staff', data)
+}
+
+export function updateStoreStaff(id, data) {
+  return service.put(`/api/admin/store/staff/${id}`, data)
+}
+
+export function deleteStoreStaff(id) {
+  return service.delete(`/api/admin/store/staff/${id}`)
+}
+
+export function fetchStoreOrders(status) {
+  return service.get('/api/admin/store/orders', { params: status ? { status } : {} })
+}
+
+export function fetchStoreCouponInstances(status) {
+  return service.get('/api/admin/store/coupon-instances', { params: status ? { status } : {} })
+}
+
+export function verifyStoreCoupon(code, staffId) {
+  return service.post('/api/admin/store/verify', { code, staffId })
+}
+
+// ---------- 平台总后台 ----------
+export function fetchPlatformDashboard() {
+  return service.get('/api/admin/platform/dashboard')
+}
+
+export function fetchTenants() {
+  return service.get('/api/admin/platform/tenants')
+}
+
+export function createTenant(data) {
+  return service.post('/api/admin/platform/tenants', data)
+}
+
+export function updateTenantStatus(id, status) {
+  return service.put(`/api/admin/platform/tenants/${id}/status`, null, { params: { status } })
+}
+
+export function fetchPlatformStores() {
+  return service.get('/api/admin/platform/stores')
+}
+
+export function updateStoreKyc(id, status) {
+  return service.put(`/api/admin/platform/stores/${id}/kyc`, null, { params: { status } })
+}
+
+export function updateStoreCommission(id, rate) {
+  return service.put(`/api/admin/platform/stores/${id}/commission`, null, { params: { rate } })
+}
+
+export function fetchCommissions(status) {
+  return service.get('/api/admin/platform/commissions', { params: status ? { status } : {} })
+}
+
+export function fetchPlatformOrders() {
+  return service.get('/api/admin/platform/orders')
+}
+
 export default service

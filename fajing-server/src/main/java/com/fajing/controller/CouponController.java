@@ -1,6 +1,5 @@
 package com.fajing.controller;
 
-import com.fajing.common.BizException;
 import com.fajing.common.Result;
 import com.fajing.entity.CouponTier;
 import com.fajing.entity.UserCoupon;
@@ -12,8 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
@@ -29,10 +28,10 @@ public class CouponController {
 
     private final CouponService couponService;
 
-    @Operation(summary = "团购券档位（50 抵 69 等）")
+    @Operation(summary = "团购券档位（可按门店过滤）")
     @GetMapping("/tiers")
-    public Result<List<Map<String, Object>>> tiers() {
-        List<CouponTier> tiers = couponService.listTiers();
+    public Result<List<Map<String, Object>>> tiers(@RequestParam(required = false) Long storeId) {
+        List<CouponTier> tiers = couponService.listTiers(storeId);
         return Result.ok(tiers.stream().map(t -> {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", t.getId());
@@ -58,16 +57,5 @@ public class CouponController {
     @PostMapping("/{id}/refund")
     public Result<Map<String, Object>> refund(@PathVariable Long id) {
         return Result.ok(couponService.refund(UserContext.require(), id));
-    }
-
-    @Operation(summary = "核销团购券（门店/管理端）")
-    @PostMapping("/redeem")
-    public Result<Map<String, Object>> redeem(@RequestBody Map<String, Object> body) {
-        String code = body.get("code") == null ? "" : String.valueOf(body.get("code"));
-        UserCoupon coupon = couponService.redeem(code);
-        if (coupon == null) {
-            throw new BizException("核销码无效、已使用或已过期");
-        }
-        return Result.ok(couponService.toMap(coupon));
     }
 }

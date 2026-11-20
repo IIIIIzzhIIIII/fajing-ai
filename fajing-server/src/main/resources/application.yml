@@ -88,6 +88,12 @@ admin:
   init-password: ${ADMIN_INIT_PASSWORD:}
   legacy-token-enabled: ${ADMIN_LEGACY_TOKEN_ENABLED:false}
 
+# 第一版演示数据：仅本地/开发环境初始化演示店长账号，生产默认关闭
+demo:
+  store-enabled: ${DEMO_STORE_ENABLED:false}
+  store-username: ${DEMO_STORE_USERNAME:store1}
+  store-password: ${DEMO_STORE_PASSWORD:store123}
+
 # 登录方式：mock 为演示账号（生产关闭）；guest 为 H5 浏览器匿名账号，生产仍可用
 auth:
   mock-enabled: ${AUTH_MOCK_ENABLED:false}

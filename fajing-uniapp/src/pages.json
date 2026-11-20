@@ -109,6 +109,34 @@
       }
     },
     {
+      "path": "pages/store/store",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "合作门店"
+      }
+    },
+    {
+      "path": "pages/employee/index",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "员工工作台"
+      }
+    },
+    {
+      "path": "pages/employee/demo",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "员工代客试发"
+      }
+    },
+    {
+      "path": "pages/claim/claim",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "领取试发结果"
+      }
+    },
+    {
       "path": "pages/agreement/privacy",
       "style": {
         "navigationStyle": "custom",

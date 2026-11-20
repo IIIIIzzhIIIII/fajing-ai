@@ -482,10 +482,6 @@ function askRecharge() {
   }
 }
 
-function needRecharge() {
-  askRecharge()
-}
-
 function confirmDlg() {
   const fn = dlg.value.action
   closeDlg()

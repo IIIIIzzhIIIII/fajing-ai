@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,41 +42,22 @@ public class CouponService {
     private final WechatPayService wechatPayService;
     private final WechatVirtualPayService wechatVirtualPayService;
     private final AlipayService alipayService;
+    private final CommissionService commissionService;
 
-    /** 默认档位：50 抵 69 / 100 抵 129 / 200 抵 239 */
-    private static final Object[][] DEFAULT_TIERS = {
-            {"50 元抵 69 元", new BigDecimal("50.00"), new BigDecimal("69.00"), "剪发/烫染通用，到店出示核销码"},
-            {"100 元抵 129 元", new BigDecimal("100.00"), new BigDecimal("129.00"), "剪发 + 造型组合更划算"},
-            {"200 元抵 239 元", new BigDecimal("200.00"), new BigDecimal("239.00"), "烫染套餐专享，门店通用"}
-    };
-
-    /** 档位列表：表为空时自动初始化默认档位 */
+    /** 平台默认档位（store_id=0）：新版本默认不启用，门店券由店长自行创建 */
     public List<CouponTier> listTiers() {
-        List<CouponTier> list = tierMapper.selectList(new QueryWrapper<CouponTier>()
-                .eq("status", 1).orderByAsc("sort"));
-        if (list != null && !list.isEmpty()) {
-            return list;
+        return tierMapper.selectList(new QueryWrapper<CouponTier>()
+                .eq("store_id", 0).eq("status", 1).orderByAsc("sort"));
+    }
+
+    /** 门店专属档位：只返回该门店上架的券，不回退到平台券，避免跨店核销 */
+    public List<CouponTier> listTiers(Long storeId) {
+        if (storeId == null || storeId <= 0) {
+            return listTiers();
         }
-        List<CouponTier> created = new ArrayList<>();
-        int sort = 0;
-        for (Object[] row : DEFAULT_TIERS) {
-            CouponTier tier = new CouponTier();
-            tier.setTitle((String) row[0]);
-            tier.setPayAmount((BigDecimal) row[1]);
-            tier.setValueAmount((BigDecimal) row[2]);
-            tier.setDescription((String) row[3]);
-            tier.setStatus(1);
-            tier.setSort(sort++);
-            try {
-                tierMapper.insert(tier);
-                created.add(tier);
-            } catch (Exception e) {
-                log.warn("团购券档位初始化失败：{}", e.getMessage());
-            }
-        }
-        return created.isEmpty()
-                ? tierMapper.selectList(new QueryWrapper<CouponTier>().orderByAsc("sort"))
-                : created;
+        return tierMapper.selectList(new QueryWrapper<CouponTier>()
+                .eq("store_id", storeId).eq("status", 1)
+                .orderByAsc("sort").orderByAsc("id"));
     }
 
     public CouponTier findTier(Long id) {
@@ -98,9 +78,14 @@ public class CouponService {
         coupon.setUserId(order.getUserId());
         coupon.setTierId(tier.getId());
         coupon.setOrderId(order.getId());
+        coupon.setStoreId(order.getStoreId() == null ? 0L : order.getStoreId());
+        coupon.setStaffId(order.getStaffId() == null ? 0L : order.getStaffId());
         coupon.setTitle(tier.getTitle());
         coupon.setPayAmount(tier.getPayAmount());
         coupon.setValueAmount(tier.getValueAmount());
+        coupon.setCommissionAmount(BigDecimal.ZERO);
+        coupon.setSettleStatus(order.getStoreId() != null && order.getStoreId() > 0 ? "pending" : "");
+        coupon.setVerifiedBy(0L);
         coupon.setCode(code());
         coupon.setQrUrl(qrUrl(coupon.getCode()));
         coupon.setStatus("unused");
@@ -114,6 +99,8 @@ public class CouponService {
                     .eq("order_id", order.getId()).last("limit 1"));
         }
         couponMapper.insert(coupon);
+        // 门店券支付成功即记平台佣金，核销后置为 settled，退款时 reversed
+        commissionService.record(order, coupon);
         return coupon;
     }
 
@@ -148,6 +135,44 @@ public class CouponService {
         coupon.setStatus("used");
         coupon.setUsedAt(LocalDateTime.now());
         couponMapper.updateById(coupon);
+        commissionService.settle(coupon.getOrderId());
+        coupon.setSettleStatus("settled");
+        return coupon;
+    }
+
+    /** 店长核销：只能核销本门店的券，核销后佣金台账置为 settled */
+    public UserCoupon redeemForStore(String code, Long storeId, Long adminId) {
+        if (code == null || code.isBlank() || storeId == null || storeId <= 0) {
+            return null;
+        }
+        UserCoupon coupon = couponMapper.selectOne(new QueryWrapper<UserCoupon>()
+                .eq("code", code.trim()).eq("store_id", storeId).last("limit 1"));
+        if (coupon == null) {
+            return null;
+        }
+        if (!"unused".equals(coupon.getStatus())) {
+            return null;
+        }
+        if (coupon.getExpireAt() != null && coupon.getExpireAt().isBefore(LocalDateTime.now())) {
+            coupon.setStatus("expired");
+            couponMapper.updateById(coupon);
+            return null;
+        }
+        int rows = couponMapper.update(null, new UpdateWrapper<UserCoupon>()
+                .eq("id", coupon.getId())
+                .eq("store_id", storeId)
+                .eq("status", "unused")
+                .set("status", "used")
+                .set("used_at", LocalDateTime.now())
+                .set("verified_by", adminId == null ? 0L : adminId));
+        if (rows == 0) {
+            return null;
+        }
+        coupon.setStatus("used");
+        coupon.setUsedAt(LocalDateTime.now());
+        coupon.setVerifiedBy(adminId);
+        commissionService.settle(coupon.getOrderId());
+        coupon.setSettleStatus("settled");
         return coupon;
     }
 
@@ -177,6 +202,7 @@ public class CouponService {
         if ("refunded".equals(order.getRefundStatus())) {
             coupon.setStatus("refunded");
             couponMapper.updateById(coupon);
+            commissionService.reverse(order.getId());
             Map<String, Object> data = toMap(coupon);
             data.put("refundStatus", "refunded");
             data.put("refundAmount", order.getRefundAmount());
@@ -243,6 +269,7 @@ public class CouponService {
         orderMapper.updateById(order);
         coupon.setStatus("refunded");
         couponMapper.updateById(coupon);
+        commissionService.reverse(order.getId());
         log.info("团购券退款 couponId={} orderId={} amount={} channel={}", couponId, order.getId(), amount, channel);
         Map<String, Object> data = toMap(coupon);
         data.put("refundStatus", refundStatus);
@@ -266,6 +293,7 @@ public class CouponService {
                 .eq("order_id", orderId)
                 .in("status", "unused", "refunding")
                 .set("status", "refunded"));
+        commissionService.reverse(orderId);
     }
 
     public Map<String, Object> toMap(UserCoupon coupon) {
@@ -274,6 +302,11 @@ public class CouponService {
         map.put("title", coupon.getTitle());
         map.put("payAmount", coupon.getPayAmount());
         map.put("valueAmount", coupon.getValueAmount());
+        map.put("storeId", coupon.getStoreId());
+        map.put("staffId", coupon.getStaffId());
+        map.put("commissionAmount", coupon.getCommissionAmount());
+        map.put("settleStatus", coupon.getSettleStatus());
+        map.put("verifiedBy", coupon.getVerifiedBy());
         map.put("code", coupon.getCode());
         map.put("qrUrl", coupon.getQrUrl());
         map.put("status", coupon.getStatus());

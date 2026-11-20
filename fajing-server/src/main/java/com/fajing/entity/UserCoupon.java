@@ -17,9 +17,15 @@ public class UserCoupon {
     private Long userId;
     private Long tierId;
     private Long orderId;
+    private Long storeId;
+    private Long staffId;
     private String title;
     private BigDecimal payAmount;
     private BigDecimal valueAmount;
+    private BigDecimal commissionAmount;
+    /** pending / settled / reversed */
+    private String settleStatus;
+    private Long verifiedBy;
     private String code;
     private String qrUrl;
     /** unused / used / expired */

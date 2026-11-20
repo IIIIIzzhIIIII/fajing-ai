@@ -322,10 +322,24 @@ export const API = {
   unlockColor: (payload) => request({ url: '/api/recommend/color/unlock', method: 'POST', data: payload }),
   recommendColor: (payload) => request({ url: '/api/recommend/color', method: 'POST', data: payload }),
   adReward: () => request({ url: '/api/ad/reward', method: 'POST' }),
-  couponTiers: () => request({ url: '/api/coupons/tiers' }),
+  couponTiers: (storeId) =>
+    request({ url: `/api/coupons/tiers${storeId ? '?storeId=' + encodeURIComponent(storeId) : ''}` }),
   myCoupons: () => request({ url: '/api/coupons/my' }),
   refundCoupon: (id) => request({ url: `/api/coupons/${id}/refund`, method: 'POST' }),
   shareReward: () => request({ url: '/api/share/reward', method: 'POST' }),
   siteSettings: () => request({ url: '/api/site-settings', silent: true, retry: false }),
-  pointsPackages: () => request({ url: '/api/points/packages', silent: true, retry: false })
+  pointsPackages: () => request({ url: '/api/points/packages', silent: true, retry: false }),
+  // 门店
+  nearbyStores: () => request({ url: '/api/store/nearby' }),
+  storeDetail: (id) => request({ url: `/api/store/${id}` }),
+  // 员工工作台
+  employeeMe: () => request({ url: '/api/employee/me' }),
+  employeeBind: (payload) =>
+    request({ url: '/api/employee/bind', method: 'POST', data: payload }),
+  employeeGenerate: (payload) =>
+    request({ url: '/api/employee/generate', method: 'POST', data: payload }),
+  employeeTask: (taskId) => request({ url: `/api/employee/task/${taskId}` }),
+  employeeClaim: (payload) =>
+    request({ url: '/api/employee/claim', method: 'POST', data: payload }),
+  employeeQuota: () => request({ url: '/api/employee/quota' })
 }

@@ -1,5 +1,6 @@
 package com.fajing.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -10,7 +11,8 @@ import java.time.LocalDateTime;
 @Data
 @TableName("site_setting")
 public class SiteSetting {
-    @TableId
+    /** 固定单行主键，必须显式写入 1 */
+    @TableId(type = IdType.INPUT)
     private Long id;
     /** 首页大标题第一行 */
     private String heroTitleMain;

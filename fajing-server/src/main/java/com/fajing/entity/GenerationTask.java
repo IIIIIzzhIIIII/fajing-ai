@@ -13,6 +13,14 @@ public class GenerationTask {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long userId;
+    private Long storeId;
+    private Long staffId;
+    /** user = 顾客自助；employee = 员工代客试发 */
+    private String source;
+    /** 员工试发结果的顾客领取令牌 */
+    private String claimToken;
+    private Long claimedUserId;
+    private LocalDateTime claimedAt;
     private String photoUrl;
     private String gender;
     private String mode;

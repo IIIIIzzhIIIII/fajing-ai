@@ -93,6 +93,61 @@ public class GenerationService {
         task.setFreeQuota(freeQuota ? 1 : 0);
         task.setRecommendId(recommendId == null ? 0L : recommendId);
         task.setAutoGen(0);
+        task.setSource("user");
+        task.setExpireAt(LocalDateTime.now().plusHours(24));
+        task.setCreatedAt(LocalDateTime.now());
+        taskMapper.insert(task);
+        return task;
+    }
+
+    /** 员工代客试发：免费生成全部所选款式，生成后由顾客扫码领取结果 */
+    public GenerationTask createEmployee(String photoUrl, String gender, List<String> styleIds,
+                                         Long storeId, Long staffId, String claimToken) {
+        if (photoUrl == null || photoUrl.isBlank()) {
+            throw new BizException("请先上传照片");
+        }
+        if (photoUrl.startsWith("http://tmp/") || photoUrl.startsWith("http://usr/")
+                || photoUrl.startsWith("wxfile://")) {
+            throw new BizException("照片未上传成功，请重新选择照片");
+        }
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        if (styleIds != null) {
+            for (String id : styleIds) {
+                if (id != null && !id.isBlank()) {
+                    ids.add(id.trim());
+                }
+            }
+        }
+        if (ids.isEmpty()) {
+            throw new BizException("请先选择发型");
+        }
+        if (ids.size() > 8) {
+            throw new BizException("员工演示一次最多生成 8 款");
+        }
+        long validCount = hairstyleMapper.selectBatchIds(ids).stream()
+                .filter(s -> s.getStatus() != null && s.getStatus() == 1)
+                .count();
+        if (validCount != ids.size()) {
+            throw new BizException("所选发型不存在或已下架，请刷新后重试");
+        }
+        GenerationTask task = new GenerationTask();
+        task.setUserId(UserContext.require());
+        task.setStoreId(storeId == null ? 0L : storeId);
+        task.setStaffId(staffId == null ? 0L : staffId);
+        task.setSource("employee");
+        task.setClaimToken(claimToken == null ? "" : claimToken);
+        task.setClaimedUserId(0L);
+        task.setPhotoUrl(photoUrl);
+        task.setGender("male".equals(gender) ? "male" : "female");
+        task.setMode("hair");
+        task.setStyleIds(String.join(",", ids));
+        task.setColorId("");
+        task.setStatus("pending");
+        task.setProgress(0);
+        task.setFreeQuota(0);
+        task.setRecommendId(0L);
+        // autoGen=1 表示全部款式立即生成并在结果中直接可看
+        task.setAutoGen(1);
         task.setExpireAt(LocalDateTime.now().plusHours(24));
         task.setCreatedAt(LocalDateTime.now());
         taskMapper.insert(task);
@@ -112,6 +167,7 @@ public class GenerationService {
         task.setProgress(0);
         task.setFreeQuota(0);
         task.setAutoGen(1);
+        task.setSource("user");
         task.setRecommendId(recommendId == null ? 0L : recommendId);
         task.setExpireAt(LocalDateTime.now().plusHours(24));
         task.setCreatedAt(LocalDateTime.now());
@@ -154,6 +210,7 @@ public class GenerationService {
             List<Map<String, Object>> items = new ArrayList<>();
             boolean freeBatch = task.getFreeQuota() != null && task.getFreeQuota() == 1;
             boolean autoGen = task.getAutoGen() != null && task.getAutoGen() == 1;
+            boolean employee = "employee".equals(task.getSource());
             // 免费批次：仅排名前 3 款自动解锁；第 4 款起需用魅力值解锁
             Set<String> freeIds = new HashSet<>();
             if (freeBatch) {
@@ -200,7 +257,8 @@ public class GenerationService {
                 if (!hasImage && (isFree || autoGen) && !freePending) {
                     item.put("failReason", "生成超时/服务异常");
                 }
-                item.put("unlocked", hasImage && (isFree || autoGen || isUnlocked(task.getUserId(), taskId, s.getId())));
+                item.put("unlocked", hasImage && (employee || isFree || autoGen
+                        || isUnlocked(task.getUserId(), taskId, s.getId())));
                 items.add(item);
             }
             result.put("styles", items);
@@ -213,7 +271,7 @@ public class GenerationService {
             task.setStatus("success");
             taskMapper.updateById(task);
 
-            if (!styles.isEmpty()) {
+            if (!styles.isEmpty() && !employee) {
                 UserRecord record = new UserRecord();
                 record.setUserId(task.getUserId());
                 record.setTaskId(taskId);
@@ -276,8 +334,9 @@ public class GenerationService {
             int index = ids.indexOf(styleId);
             boolean freeBatch = task.getFreeQuota() != null && task.getFreeQuota() == 1;
             boolean isFree = freeBatch && index >= 0 && index < 3;
+            boolean employee = "employee".equals(task.getSource());
             // 免费批次前三款出图即解锁，前端可直接点击预览
-            if (isFree) {
+            if (isFree && !employee) {
                 unlock(task.getUserId(), styleId, taskId);
             }
             for (Object o : list) {
@@ -292,7 +351,7 @@ public class GenerationService {
                 item.put("failed", false);
                 item.remove("pending");
                 item.remove("freePending");
-                item.put("unlocked", isFree || isUnlocked(task.getUserId(), taskId, styleId));
+                item.put("unlocked", employee || isFree || isUnlocked(task.getUserId(), taskId, styleId));
                 break;
             }
             taskMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<GenerationTask>()
@@ -462,6 +521,7 @@ public class GenerationService {
                         item.put("img", ok ? img : null);
                         item.put("failed", !ok);
                         item.remove("pending");
+                        boolean employee = "employee".equals(task.getSource());
                         if (ok) {
                             String[] ids = task.getStyleIds() == null ? new String[0] : task.getStyleIds().split(",");
                             boolean freeBatch = task.getFreeQuota() != null && task.getFreeQuota() == 1;
@@ -473,8 +533,8 @@ public class GenerationService {
                                     break;
                                 }
                             }
-                            // 免费批次前 3 款、以及发色变体重试成功后补解锁
-                            if (autoGen || (freeBatch && index > -1 && index < 3)) {
+                            // 免费批次前 3 款、以及发色变体重试成功后补解锁；员工演示不写个人解锁
+                            if (!employee && (autoGen || (freeBatch && index > -1 && index < 3))) {
                                 unlock(task.getUserId(), styleId, taskId);
                             }
                         }
@@ -483,7 +543,7 @@ public class GenerationService {
                         } else {
                             item.put("failReason", "生成超时/服务异常");
                         }
-                        item.put("unlocked", ok && isUnlocked(task.getUserId(), taskId, styleId));
+                        item.put("unlocked", ok && (employee || isUnlocked(task.getUserId(), taskId, styleId)));
                         changed = true;
                         break;
                     }
@@ -626,6 +686,12 @@ public class GenerationService {
         map.put("result", parseResult(task.getResultJson()));
         map.put("done", doneCount(task.getResultJson()));
         map.put("failed", failedCount(task.getResultJson()));
+        map.put("storeId", task.getStoreId());
+        map.put("staffId", task.getStaffId());
+        map.put("source", task.getSource());
+        map.put("claimToken", task.getClaimToken());
+        map.put("claimed", task.getClaimedUserId() != null && task.getClaimedUserId() > 0);
+        map.put("claimedUserId", task.getClaimedUserId());
         return map;
     }
 

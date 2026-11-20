@@ -2,21 +2,33 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Document, MagicStick, Picture, Scissor, SetUp, Setting, SwitchButton, Ticket, Tickets, TrendCharts, User, Wallet } from '@element-plus/icons-vue'
-import { clearToken } from '@/utils/auth'
+import {
+  Coin, DataLine, Document, MagicStick, OfficeBuilding, Picture, Scissor, SetUp, Setting,
+  Shop, SwitchButton, Ticket, Tickets, TrendCharts, User, UserFilled, Wallet
+} from '@element-plus/icons-vue'
+import { clearAdminInfo, clearToken, getAdminInfo } from '@/utils/auth'
 
 const route = useRoute()
 const router = useRouter()
+const adminInfo = getAdminInfo() || {}
+const isStore = adminInfo.role === 'STORE_MANAGER'
 
-const menuSections = [
+const platformSections = [
   {
-    title: '工作空间',
+    title: '平台工作空间',
     items: [
       { path: '/dashboard', title: '数据看板', icon: DataLine },
       { path: '/channels', title: '渠道与传播', icon: TrendCharts },
       { path: '/orders', title: '订单管理', icon: Tickets },
       { path: '/coupons', title: '团购券核销', icon: Ticket },
       { path: '/users', title: '用户管理', icon: User }
+    ]
+  },
+  {
+    title: '平台管理',
+    items: [
+      { path: '/platform/tenants', title: '租户与门店', icon: OfficeBuilding },
+      { path: '/platform/commissions', title: '佣金台账', icon: Coin }
     ]
   },
   {
@@ -38,11 +50,41 @@ const menuSections = [
   }
 ]
 
+const storeSections = [
+  {
+    title: '门店工作空间',
+    items: [
+      { path: '/store/dashboard', title: '门店工作台', icon: Shop },
+      { path: '/store/verify', title: '核销台', icon: Ticket },
+      { path: '/store/orders', title: '门店订单', icon: Tickets }
+    ]
+  },
+  {
+    title: '经营管理',
+    items: [
+      { path: '/store/coupons', title: '门店券管理', icon: Tickets },
+      { path: '/store/staff', title: '员工管理', icon: UserFilled }
+    ]
+  },
+  {
+    title: '门店配置',
+    items: [
+      { path: '/store/settings', title: '门店设置', icon: Setting }
+    ]
+  }
+]
+
+const menuSections = computed(() => (isStore ? storeSections : platformSections))
 const activeMenu = computed(() => route.path)
 const pageTitle = computed(() => route.meta.title || '发镜 AI 管理后台')
+const roleLabel = computed(() => (isStore ? '店长后台' : '平台总后台'))
+const userName = computed(() => adminInfo.displayName || adminInfo.username || '管理员')
+const storeLabel = computed(() => (isStore ? adminInfo.storeName || '' : ''))
+const avatarText = computed(() => (isStore ? '店' : '管'))
 
 function handleLogout() {
   clearToken()
+  clearAdminInfo()
   ElMessage.success('已退出登录')
   router.replace('/login')
 }
@@ -55,7 +97,7 @@ function handleLogout() {
         <div class="brand-logo">发</div>
         <div class="brand-text">
           <div class="brand-title">发镜 AI</div>
-          <div class="brand-sub">管理后台</div>
+          <div class="brand-sub">{{ roleLabel }}</div>
         </div>
       </div>
 
@@ -76,7 +118,7 @@ function handleLogout() {
         </template>
       </el-menu>
 
-      <div class="side-footer">发镜 AI · 管理端</div>
+      <div class="side-footer">发镜 AI · {{ roleLabel }}</div>
     </aside>
 
     <div class="main">
@@ -84,8 +126,9 @@ function handleLogout() {
         <div class="page-title">{{ pageTitle }}</div>
         <div class="topbar-right">
           <div class="user-entry">
-            <span class="avatar">管</span>
-            <span class="user-name">管理员</span>
+            <span class="avatar">{{ avatarText }}</span>
+            <span class="user-name">{{ userName }}</span>
+            <span v-if="storeLabel" class="user-store">{{ storeLabel }}</span>
           </div>
           <el-button text :icon="SwitchButton" class="logout-btn" @click="handleLogout">
             退出登录
@@ -257,6 +300,14 @@ $sidebar-width: 232px;
 .user-name {
   font-size: 14px;
   color: #3b3337;
+}
+
+.user-store {
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #a83f5e;
+  background: #fdf4f7;
+  border-radius: 999px;
 }
 
 .logout-btn {

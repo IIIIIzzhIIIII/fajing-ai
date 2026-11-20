@@ -101,6 +101,7 @@
       <text class="ag-mock-tip">H5 预览环境不发送短信，手机号为模拟绑定</text>
       <!-- #endif -->
 
+      <button v-if="phoneBound" class="ag-btn primary block" @click="finish">完成</button>
       <button class="ag-skip" @click="cancel">暂不授权</button>
       <text class="ag-cancel-tip">手机号为必填项，未授权将无法上传照片和充值</text>
     </template>
