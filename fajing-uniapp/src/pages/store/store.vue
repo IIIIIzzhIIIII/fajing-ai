@@ -60,6 +60,8 @@
         </block>
       </view>
     </scroll-view>
+
+    <FjLoginModal v-if="loginVisible" @done="onLoginDone" @cancel="onLoginCancel" />
   </view>
 </template>
 
@@ -68,11 +70,23 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { API } from '@/api/request'
 import { goBack } from '@/utils/nav'
+import FjLoginModal from '@/components/FjLoginModal.vue'
+import { useLoginGate } from '@/composables/useLoginGate'
 
 const store = ref(null)
 const tiers = ref([])
 const nearby = ref([])
 const buying = ref(false)
+
+const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
+
+function onLoginDone() {
+  finishLogin()
+}
+
+function onLoginCancel() {
+  closeLogin()
+}
 
 function money(value) {
   const n = Number(value)
@@ -101,7 +115,12 @@ async function loadStore(id) {
   } catch (e) { /* 已统一提示 */ }
 }
 
-async function buy(tier) {
+/** 购券前必须完成登录授权，未授权先弹授权引导 */
+function buy(tier) {
+  ensureLogin(() => doBuy(tier))
+}
+
+async function doBuy(tier) {
   if (buying.value) return
   buying.value = true
   try {

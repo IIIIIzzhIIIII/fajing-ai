@@ -68,6 +68,8 @@
         </view>
       </view>
     </scroll-view>
+
+    <FjLoginModal v-if="loginVisible" @done="onLoginDone" @cancel="onLoginCancel" />
   </view>
 </template>
 
@@ -79,9 +81,21 @@ import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { track } from '@/utils/track'
 import { goBack } from '@/utils/nav'
+import FjLoginModal from '@/components/FjLoginModal.vue'
+import { useLoginGate } from '@/composables/useLoginGate'
 
 const app = useAppStore()
 const ui = useUiStore()
+
+const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
+
+function onLoginDone() {
+  finishLogin()
+}
+
+function onLoginCancel() {
+  closeLogin()
+}
 
 const busy = ref(false)
 
@@ -143,7 +157,12 @@ function currentPlatform() {
   return platform
 }
 
-async function buy(pkg) {
+/** 充值前必须完成登录授权（头像昵称 + 手机号），未授权先弹授权引导 */
+function buy(pkg) {
+  ensureLogin(() => doBuy(pkg))
+}
+
+async function doBuy(pkg) {
   if (busy.value) return
   uni.showModal({
     title: pkg.main,

@@ -165,6 +165,8 @@
 
     <fj-sheet />
 
+    <FjLoginModal v-if="loginVisible" @done="onLoginDone" @cancel="onLoginCancel" />
+
     <!-- #ifdef MP-WEIXIN -->
     <canvas canvas-id="fajing-wm" class="wm-canvas" />
     <!-- #endif -->
@@ -179,9 +181,21 @@ import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { saveRemoteImage } from '@/utils/save'
 import { track } from '@/utils/track'
+import FjLoginModal from '@/components/FjLoginModal.vue'
+import { useLoginGate } from '@/composables/useLoginGate'
 
 const app = useAppStore()
 const ui = useUiStore()
+
+const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
+
+function onLoginDone() {
+  finishLogin()
+}
+
+function onLoginCancel() {
+  closeLogin()
+}
 
 const sliderRef = ref(null)
 const baPct = ref(50)
@@ -436,7 +450,12 @@ async function loadMyCoupons() {
 }
 
 /** 购买团购券：服务端按档位计价，支付成功后自动生成核销二维码 */
-async function buyTier(tier) {
+/** 购券前必须完成登录授权，未授权先弹授权引导 */
+function buyTier(tier) {
+  ensureLogin(() => doBuyTier(tier))
+}
+
+async function doBuyTier(tier) {
   if (buying.value) return
   uni.showModal({
     title: tier.title,
