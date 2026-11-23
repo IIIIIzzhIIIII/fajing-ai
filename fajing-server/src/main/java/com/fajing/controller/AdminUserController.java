@@ -47,8 +47,10 @@ public class AdminUserController {
 
     @Operation(summary = "用户列表（含生成/解锁/付费统计）")
     @GetMapping("/users")
-    public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String keyword,
-                                                  @RequestParam(required = false) Integer status) {
+    public Result<Map<String, Object>> list(@RequestParam(required = false) String keyword,
+                                            @RequestParam(required = false) Integer status,
+                                            @RequestParam(required = false) Integer page,
+                                            @RequestParam(required = false) Integer size) {
         QueryWrapper<AppUser> wrapper = new QueryWrapper<AppUser>().orderByDesc("id");
         if (status != null) {
             wrapper.eq("status", status);
@@ -57,20 +59,31 @@ public class AdminUserController {
             String kw = keyword.trim();
             wrapper.and(w -> w.like("nickname", kw).or().like("phone", kw));
         }
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        Long total = userMapper.selectCount(wrapper);
+        wrapper.last("limit " + (p - 1) * s + "," + s);
         List<AppUser> users = userMapper.selectList(wrapper);
+        List<Long> userIds = users.stream().map(AppUser::getId).toList();
 
-        Map<Long, Long> taskCounts = toCountMap(taskMapper.selectMaps(new QueryWrapper<GenerationTask>()
-                .select("user_id AS userId", "COUNT(*) AS cnt").groupBy("user_id")));
-        Map<Long, Long> recordCounts = toCountMap(recordMapper.selectMaps(new QueryWrapper<UserRecord>()
-                .select("user_id AS userId", "COUNT(*) AS cnt").groupBy("user_id")));
-        Map<Long, Long> unlockCounts = toCountMap(unlockMapper.selectMaps(new QueryWrapper<UserUnlock>()
-                .select("user_id AS userId", "COUNT(*) AS cnt").groupBy("user_id")));
-        Map<Long, BigDecimal> paidSums = toSumMap(orderMapper.selectMaps(new QueryWrapper<Order>()
+        Map<Long, Long> taskCounts = userIds.isEmpty() ? Map.of()
+                : toCountMap(taskMapper.selectMaps(new QueryWrapper<GenerationTask>()
+                .select("user_id AS userId", "COUNT(*) AS cnt").in("user_id", userIds).groupBy("user_id")));
+        Map<Long, Long> recordCounts = userIds.isEmpty() ? Map.of()
+                : toCountMap(recordMapper.selectMaps(new QueryWrapper<UserRecord>()
+                .select("user_id AS userId", "COUNT(*) AS cnt").in("user_id", userIds).groupBy("user_id")));
+        Map<Long, Long> unlockCounts = userIds.isEmpty() ? Map.of()
+                : toCountMap(unlockMapper.selectMaps(new QueryWrapper<UserUnlock>()
+                .select("user_id AS userId", "COUNT(*) AS cnt").in("user_id", userIds).groupBy("user_id")));
+        Map<Long, BigDecimal> paidSums = userIds.isEmpty() ? Map.of()
+                : toSumMap(orderMapper.selectMaps(new QueryWrapper<Order>()
                 .select("user_id AS userId", "IFNULL(SUM(amount),0) AS total")
                 .eq("status", "paid")
+                .and(w -> w.isNull("refund_status").or().ne("refund_status", "refunded"))
+                .in("user_id", userIds)
                 .groupBy("user_id")));
 
-        return Result.ok(users.stream().map(u -> {
+        List<Map<String, Object>> rows = users.stream().map(u -> {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", u.getId());
             map.put("nickname", u.getNickname());
@@ -85,7 +98,14 @@ public class AdminUserController {
             map.put("unlockCount", unlockCounts.getOrDefault(u.getId(), 0L));
             map.put("paidAmount", paidSums.getOrDefault(u.getId(), BigDecimal.ZERO));
             return map;
-        }).collect(java.util.stream.Collectors.toList()));
+        }).collect(java.util.stream.Collectors.toList());
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("list", rows);
+        data.put("total", total == null ? 0 : total);
+        data.put("page", p);
+        data.put("size", s);
+        return Result.ok(data);
     }
 
     @Operation(summary = "启用/停用用户")

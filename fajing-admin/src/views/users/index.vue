@@ -10,19 +10,23 @@ const loadFailed = ref(false)
 const list = ref([])
 const keyword = ref('')
 const status = ref('')
+const page = ref(1)
+const size = ref(20)
+const total = ref(0)
 
-const totalCount = computed(() => list.value.length)
+const totalCount = computed(() => total.value)
 
 function loadList() {
   loading.value = true
   loadFailed.value = false
-  const params = {}
+  const params = { page: page.value, size: size.value }
   const kw = keyword.value.trim()
   if (kw) params.keyword = kw
   if (status.value !== '') params.status = status.value
   fetchUsers(params)
     .then((data) => {
-      list.value = Array.isArray(data) ? data : []
+      list.value = data && Array.isArray(data.list) ? data.list : []
+      total.value = data && typeof data.total === 'number' ? data.total : 0
     })
     .catch(() => {
       list.value = []
@@ -36,6 +40,18 @@ function loadList() {
 function resetQuery() {
   keyword.value = ''
   status.value = ''
+  page.value = 1
+  loadList()
+}
+
+function onPageChange(value) {
+  page.value = value
+  loadList()
+}
+
+function onSizeChange(value) {
+  size.value = value
+  page.value = 1
   loadList()
 }
 
@@ -162,6 +178,18 @@ onMounted(loadList)
         />
       </template>
     </el-table>
+
+    <el-pagination
+      v-if="total > 0"
+      style="margin-top: 16px; justify-content: flex-end"
+      layout="total, sizes, prev, pager, next"
+      :total="total"
+      :page-size="size"
+      :current-page="page"
+      :page-sizes="[10, 20, 50, 100]"
+      @current-change="onPageChange"
+      @size-change="onSizeChange"
+    />
   </div>
 </template>
 

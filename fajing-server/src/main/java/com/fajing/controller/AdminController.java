@@ -163,10 +163,19 @@ public class AdminController {
 
     @Operation(summary = "操作日志")
     @GetMapping("/logs")
-    public Result<List<AdminLog>> logs(@RequestParam(required = false) Integer limit) {
-        int size = limit == null ? 100 : Math.max(1, Math.min(500, limit));
-        return Result.ok(adminLogMapper.selectList(new QueryWrapper<AdminLog>()
-                .orderByDesc("created_at").last("limit " + size)));
+    public Result<Map<String, Object>> logs(@RequestParam(required = false) Integer page,
+                                            @RequestParam(required = false) Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        Long total = adminLogMapper.selectCount(null);
+        List<AdminLog> rows = adminLogMapper.selectList(new QueryWrapper<AdminLog>()
+                .orderByDesc("created_at").last("limit " + (p - 1) * s + "," + s));
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("list", rows);
+        data.put("total", total == null ? 0 : total);
+        data.put("page", p);
+        data.put("size", s);
+        return Result.ok(data);
     }
 
     @Operation(summary = "今日运营数据（生成量、成本、成功率、付费转化）")
@@ -254,6 +263,9 @@ public class AdminController {
         if (hairstyle.getName() == null || hairstyle.getName().isBlank()) {
             throw new BizException("发型名称不能为空");
         }
+        if (hairstyle.getEn() == null || hairstyle.getEn().isBlank()) {
+            throw new BizException("英文提示词不能为空");
+        }
         if (hairstyle.getId() == null || hairstyle.getId().isBlank()) {
             hairstyle.setId((("male".equals(hairstyle.getGender()) ? "m" : "f")
                     + UUID.randomUUID().toString().substring(0, 6)));
@@ -302,10 +314,18 @@ public class AdminController {
 
     @Operation(summary = "订单列表")
     @GetMapping("/orders")
-    public Result<List<Order>> orders(@RequestParam(required = false) Integer limit) {
-        // 默认最多返回 200 条，避免订单量增长后一次性拉全表导致超时
-        int size = limit == null ? 200 : Math.max(1, Math.min(500, limit));
-        return Result.ok(orderMapper.selectList(new QueryWrapper<Order>()
-                .orderByDesc("created_at").last("limit " + size)));
+    public Result<Map<String, Object>> orders(@RequestParam(required = false) Integer page,
+                                              @RequestParam(required = false) Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        Long total = orderMapper.selectCount(null);
+        List<Order> rows = orderMapper.selectList(new QueryWrapper<Order>()
+                .orderByDesc("created_at").last("limit " + (p - 1) * s + "," + s));
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("list", rows);
+        data.put("total", total == null ? 0 : total);
+        data.put("page", p);
+        data.put("size", s);
+        return Result.ok(data);
     }
 }

@@ -1,0 +1,22 @@
+# 本地三域名 HTTPS 预演：Caddy 内部 CA 自动签发证书
+# 需要先在本机 hosts 写入：
+#   127.0.0.1 fajing.local admin.fajing.local api.fajing.local
+
+https://fajing.local {
+	tls internal
+	root * /srv/h5
+	try_files {path} /index.html
+	file_server
+}
+
+https://admin.fajing.local {
+	tls internal
+	root * /srv/admin
+	try_files {path} /index.html
+	file_server
+}
+
+https://api.fajing.local {
+	tls internal
+	reverse_proxy server:8081
+}

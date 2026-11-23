@@ -8,20 +8,24 @@ import { formatDateTime, formatMoney } from '@/utils/format'
 const loading = ref(false)
 const loadFailed = ref(false)
 const list = ref([])
+const page = ref(1)
+const size = ref(20)
+const total = ref(0)
 
 const refundVisible = ref(false)
 const refundSubmitting = ref(false)
 const refundRow = ref(null)
 const refundForm = reactive({ amount: 0, reason: '' })
 
-const totalCount = computed(() => list.value.length)
+const totalCount = computed(() => total.value)
 
 function loadList() {
   loading.value = true
   loadFailed.value = false
-  fetchOrders()
+  fetchOrders({ page: page.value, size: size.value })
     .then((data) => {
-      list.value = Array.isArray(data) ? data : []
+      list.value = data && Array.isArray(data.list) ? data.list : []
+      total.value = data && typeof data.total === 'number' ? data.total : 0
     })
     .catch(() => {
       list.value = []
@@ -101,6 +105,17 @@ async function submitRefund() {
   } finally {
     refundSubmitting.value = false
   }
+}
+
+function onPageChange(value) {
+  page.value = value
+  loadList()
+}
+
+function onSizeChange(value) {
+  size.value = value
+  page.value = 1
+  loadList()
 }
 
 onMounted(loadList)
@@ -204,6 +219,18 @@ onMounted(loadList)
         />
       </template>
     </el-table>
+
+    <el-pagination
+      v-if="total > 0"
+      style="margin-top: 16px; justify-content: flex-end"
+      layout="total, sizes, prev, pager, next"
+      :total="total"
+      :page-size="size"
+      :current-page="page"
+      :page-sizes="[10, 20, 50, 100]"
+      @current-change="onPageChange"
+      @size-change="onSizeChange"
+    />
 
     <el-dialog v-model="refundVisible" title="订单退款" width="420px">
       <el-form label-width="90px">

@@ -6,12 +6,16 @@ import { formatDateTime } from '@/utils/format'
 
 const loading = ref(false)
 const list = ref([])
+const page = ref(1)
+const size = ref(20)
+const total = ref(0)
 
 function load() {
   loading.value = true
-  fetchAdminLogs(200)
+  fetchAdminLogs(page.value, size.value)
     .then((data) => {
-      list.value = Array.isArray(data) ? data : []
+      list.value = data && Array.isArray(data.list) ? data.list : []
+      total.value = data && typeof data.total === 'number' ? data.total : 0
     })
     .catch(() => {
       list.value = []
@@ -19,6 +23,17 @@ function load() {
     .finally(() => {
       loading.value = false
     })
+}
+
+function onPageChange(value) {
+  page.value = value
+  load()
+}
+
+function onSizeChange(value) {
+  size.value = value
+  page.value = 1
+  load()
 }
 
 onMounted(load)
@@ -40,6 +55,18 @@ onMounted(load)
         <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
       </el-table-column>
     </el-table>
+
+    <el-pagination
+      v-if="total > 0"
+      style="margin-top: 16px; justify-content: flex-end"
+      layout="total, sizes, prev, pager, next"
+      :total="total"
+      :page-size="size"
+      :current-page="page"
+      :page-sizes="[10, 20, 50, 100]"
+      @current-change="onPageChange"
+      @size-change="onSizeChange"
+    />
   </div>
 </template>
 

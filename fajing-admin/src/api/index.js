@@ -113,8 +113,8 @@ export function saveTradeRule(data) {
   return service.put('/api/admin/trade-rule', data)
 }
 
-export function fetchAdminLogs(limit) {
-  return service.get('/api/admin/logs', { params: limit ? { limit } : {} })
+export function fetchAdminLogs(page, size) {
+  return service.get('/api/admin/logs', { params: { page, size } })
 }
 
 export function fetchHairstyles(gender) {
@@ -137,8 +137,8 @@ export function updateHairstyleStatus(id, status) {
   })
 }
 
-export function fetchOrders() {
-  return service.get('/api/admin/orders')
+export function fetchOrders(params) {
+  return service.get('/api/admin/orders', { params })
 }
 
 export function fetchUsers(params) {
