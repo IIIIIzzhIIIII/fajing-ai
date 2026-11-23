@@ -214,31 +214,47 @@ public class PlatformAdminService {
                 .set("status", next));
     }
 
-    public List<Map<String, Object>> commissions(String status) {
+    public Map<String, Object> commissions(String status, int page, int size) {
+        boolean hasStatus = status != null && !status.isBlank();
+        String from = "FROM commission_ledger cl "
+                + "JOIN store s ON s.id=cl.store_id JOIN tenant t ON t.id=cl.tenant_id "
+                + "LEFT JOIN staff st ON st.id=cl.staff_id LEFT JOIN orders o ON o.id=cl.order_id ";
+        String where = hasStatus ? "WHERE cl.status=? " : "";
+        long total = hasStatus
+                ? count("SELECT COUNT(*) " + from + where, status)
+                : count("SELECT COUNT(*) " + from + where);
         String sql = "SELECT cl.id, cl.order_id AS orderId, cl.order_amount AS orderAmount, "
                 + "cl.commission_rate AS commissionRate, cl.commission_amount AS commissionAmount, "
                 + "cl.status, cl.created_at AS createdAt, cl.settled_at AS settledAt, cl.reversed_at AS reversedAt, "
                 + "s.name AS storeName, t.name AS tenantName, st.name AS staffName, o.out_trade_no AS outTradeNo "
-                + "FROM commission_ledger cl "
-                + "JOIN store s ON s.id=cl.store_id JOIN tenant t ON t.id=cl.tenant_id "
-                + "LEFT JOIN staff st ON st.id=cl.staff_id LEFT JOIN orders o ON o.id=cl.order_id "
-                + (status == null || status.isBlank() ? "" : "WHERE cl.status=? ")
-                + "ORDER BY cl.id DESC LIMIT 300";
-        if (status == null || status.isBlank()) {
-            return jdbc.queryForList(sql);
-        }
-        return jdbc.queryForList(sql, status);
+                + from + where + "ORDER BY cl.id DESC LIMIT ?,?";
+        List<Map<String, Object>> rows = hasStatus
+                ? jdbc.queryForList(sql, status, (page - 1) * size, size)
+                : jdbc.queryForList(sql, (page - 1) * size, size);
+        return pageData(rows, total, page, size);
     }
 
-    public List<Map<String, Object>> platformOrders() {
-        return jdbc.queryForList(
-                "SELECT o.id, o.out_trade_no AS outTradeNo, o.amount, o.status AS orderStatus, "
-                        + "o.pay_channel AS payChannel, o.created_at AS createdAt, o.paid_at AS paidAt, "
-                        + "o.refund_status AS refundStatus, s.name AS storeName, t.name AS tenantName, "
-                        + "st.name AS staffName, c.code AS couponCode, c.status AS couponStatus "
-                        + "FROM orders o JOIN store s ON s.id=o.store_id JOIN tenant t ON t.id=s.tenant_id "
-                        + "LEFT JOIN staff st ON st.id=o.staff_id LEFT JOIN user_coupon c ON c.order_id=o.id "
-                        + "WHERE o.biz_type='coupon' ORDER BY o.id DESC LIMIT 300");
+    public Map<String, Object> platformOrders(int page, int size) {
+        String from = "FROM orders o JOIN store s ON s.id=o.store_id JOIN tenant t ON t.id=s.tenant_id "
+                + "LEFT JOIN staff st ON st.id=o.staff_id LEFT JOIN user_coupon c ON c.order_id=o.id "
+                + "WHERE o.biz_type='coupon' ";
+        long total = count("SELECT COUNT(*) " + from);
+        String sql = "SELECT o.id, o.out_trade_no AS outTradeNo, o.amount, o.status AS orderStatus, "
+                + "o.pay_channel AS payChannel, o.created_at AS createdAt, o.paid_at AS paidAt, "
+                + "o.refund_status AS refundStatus, s.name AS storeName, t.name AS tenantName, "
+                + "st.name AS staffName, c.code AS couponCode, c.status AS couponStatus "
+                + from + "ORDER BY o.id DESC LIMIT ?,?";
+        List<Map<String, Object>> rows = jdbc.queryForList(sql, (page - 1) * size, size);
+        return pageData(rows, total, page, size);
+    }
+
+    private Map<String, Object> pageData(List<Map<String, Object>> rows, long total, int page, int size) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("list", rows);
+        data.put("total", total);
+        data.put("page", page);
+        data.put("size", size);
+        return data;
     }
 
     private long count(String sql, Object... args) {

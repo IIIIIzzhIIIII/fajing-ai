@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,13 +32,29 @@ public class AdminCouponController {
 
     @Operation(summary = "团购券列表")
     @GetMapping
-    public Result<List<Map<String, Object>>> list(@RequestParam(required = false) String status) {
-        QueryWrapper<UserCoupon> wrapper = new QueryWrapper<UserCoupon>().orderByDesc("id").last("limit 200");
-        if (status != null && !status.isBlank()) {
+    public Result<Map<String, Object>> list(@RequestParam(required = false) String status,
+                                            @RequestParam(required = false) Integer page,
+                                            @RequestParam(required = false) Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        boolean hasStatus = status != null && !status.isBlank();
+        QueryWrapper<UserCoupon> countWrapper = new QueryWrapper<>();
+        if (hasStatus) {
+            countWrapper.eq("status", status);
+        }
+        Long total = couponMapper.selectCount(countWrapper);
+        QueryWrapper<UserCoupon> wrapper = new QueryWrapper<UserCoupon>()
+                .orderByDesc("id").last("limit " + (p - 1) * s + "," + s);
+        if (hasStatus) {
             wrapper.eq("status", status);
         }
         List<UserCoupon> list = couponMapper.selectList(wrapper);
-        return Result.ok(list.stream().map(couponService::toMap).collect(Collectors.toList()));
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("list", list.stream().map(couponService::toMap).collect(Collectors.toList()));
+        data.put("total", total == null ? 0 : total);
+        data.put("page", p);
+        data.put("size", s);
+        return Result.ok(data);
     }
 
     @Operation(summary = "门店核销核销码")

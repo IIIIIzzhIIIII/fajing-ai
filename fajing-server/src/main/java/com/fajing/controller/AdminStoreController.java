@@ -105,15 +105,23 @@ public class AdminStoreController {
 
     @Operation(summary = "门店订单")
     @GetMapping("/orders")
-    public Result<List<Map<String, Object>>> orders(@RequestParam(required = false) String status) {
-        return Result.ok(storeAdminService.orders(AdminContext.requireStoreId(), status));
+    public Result<Map<String, Object>> orders(@RequestParam(required = false) String status,
+                                             @RequestParam(required = false) Integer page,
+                                             @RequestParam(required = false) Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        return Result.ok(storeAdminService.orders(AdminContext.requireStoreId(), status, p, s));
     }
 
     @Operation(summary = "门店券实例")
     @GetMapping("/coupon-instances")
-    public Result<List<Map<String, Object>>> couponInstances(
-            @RequestParam(required = false) String status) {
-        return Result.ok(storeAdminService.couponInstances(AdminContext.requireStoreId(), status));
+    public Result<Map<String, Object>> couponInstances(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        return Result.ok(storeAdminService.couponInstances(AdminContext.requireStoreId(), status, p, s));
     }
 
     @Operation(summary = "核销券（可指定归因员工）")

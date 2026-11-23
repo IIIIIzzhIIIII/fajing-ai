@@ -9,16 +9,39 @@ const redeeming = ref(false)
 const code = ref('')
 const status = ref('unused')
 const list = ref([])
+const page = ref(1)
+const size = ref(20)
+const total = ref(0)
 
 async function load() {
   loading.value = true
   try {
-    list.value = (await fetchCoupons(status.value)) || []
+    const params = { page: page.value, size: size.value }
+    if (status.value) params.status = status.value
+    const data = await fetchCoupons(params)
+    list.value = data && Array.isArray(data.list) ? data.list : []
+    total.value = data && typeof data.total === 'number' ? data.total : 0
   } catch (e) {
-    // 请求层已提示
+    list.value = []
   } finally {
     loading.value = false
   }
+}
+
+function onStatusChange() {
+  page.value = 1
+  load()
+}
+
+function onPageChange(value) {
+  page.value = value
+  load()
+}
+
+function onSizeChange(value) {
+  size.value = value
+  page.value = 1
+  load()
 }
 
 async function redeem() {
@@ -92,7 +115,7 @@ onMounted(load)
         @keyup.enter="redeem"
       />
       <el-button type="primary" size="large" :loading="redeeming" @click="redeem">确认核销</el-button>
-      <el-select v-model="status" style="width: 140px" @change="load">
+      <el-select v-model="status" style="width: 140px" @change="onStatusChange">
         <el-option label="未使用" value="unused" />
         <el-option label="已核销" value="used" />
         <el-option label="已退款" value="refunded" />
@@ -118,6 +141,18 @@ onMounted(load)
         <template #default="{ row }">{{ row.usedAt ? formatDateTime(row.usedAt) : '—' }}</template>
       </el-table-column>
     </el-table>
+
+    <el-pagination
+      v-if="total > 0"
+      style="margin-top: 16px; justify-content: flex-end"
+      layout="total, sizes, prev, pager, next"
+      :total="total"
+      :page-size="size"
+      :current-page="page"
+      :page-sizes="[10, 20, 50, 100]"
+      @current-change="onPageChange"
+      @size-change="onSizeChange"
+    />
   </div>
 </template>
 

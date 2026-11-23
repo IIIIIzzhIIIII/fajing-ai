@@ -151,8 +151,8 @@ export function updateUserStatus(id, status) {
   })
 }
 
-export function fetchCoupons(status) {
-  return service.get('/api/admin/coupons', { params: status ? { status } : {} })
+export function fetchCoupons(params) {
+  return service.get('/api/admin/coupons', { params })
 }
 
 export function redeemCoupon(code) {
@@ -252,12 +252,12 @@ export function deleteStoreStaff(id) {
   return service.delete(`/api/admin/store/staff/${id}`)
 }
 
-export function fetchStoreOrders(status) {
-  return service.get('/api/admin/store/orders', { params: status ? { status } : {} })
+export function fetchStoreOrders(params) {
+  return service.get('/api/admin/store/orders', { params })
 }
 
-export function fetchStoreCouponInstances(status) {
-  return service.get('/api/admin/store/coupon-instances', { params: status ? { status } : {} })
+export function fetchStoreCouponInstances(params) {
+  return service.get('/api/admin/store/coupon-instances', { params })
 }
 
 export function verifyStoreCoupon(code, staffId) {
@@ -293,12 +293,12 @@ export function updateStoreCommission(id, rate) {
   return service.put(`/api/admin/platform/stores/${id}/commission`, null, { params: { rate } })
 }
 
-export function fetchCommissions(status) {
-  return service.get('/api/admin/platform/commissions', { params: status ? { status } : {} })
+export function fetchCommissions(params) {
+  return service.get('/api/admin/platform/commissions', { params })
 }
 
-export function fetchPlatformOrders() {
-  return service.get('/api/admin/platform/orders')
+export function fetchPlatformOrders(params) {
+  return service.get('/api/admin/platform/orders', { params })
 }
 
 export default service

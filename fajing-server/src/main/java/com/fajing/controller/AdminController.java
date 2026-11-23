@@ -18,6 +18,7 @@ import com.fajing.service.AdminLogService;
 import com.fajing.service.ChannelStatsService;
 import com.fajing.service.CouponService;
 import com.fajing.service.OrderSettlementService;
+import com.fajing.service.ReconciliationService;
 import com.fajing.service.TradeRuleService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.WechatPayService;
@@ -68,6 +69,7 @@ public class AdminController {
     private final CouponService couponService;
     private final OrderSettlementService settlementService;
     private final WechatVirtualPayService wechatVirtualPayService;
+    private final ReconciliationService reconciliationService;
 
     @Operation(summary = "订单退款（微信 / 支付宝）")
     @PostMapping("/orders/{id}/refund")
@@ -176,6 +178,23 @@ public class AdminController {
         data.put("page", p);
         data.put("size", s);
         return Result.ok(data);
+    }
+
+    @Operation(summary = "按日对账汇总（默认前一日）")
+    @GetMapping("/reconciliation")
+    public Result<Map<String, Object>> reconciliation(
+            @RequestParam(required = false) String date) {
+        LocalDate day;
+        if (date == null || date.isBlank()) {
+            day = LocalDate.now().minusDays(1);
+        } else {
+            try {
+                day = LocalDate.parse(date);
+            } catch (RuntimeException e) {
+                throw new BizException("日期格式不正确，应为 yyyy-MM-dd");
+            }
+        }
+        return Result.ok(reconciliationService.summary(day));
     }
 
     @Operation(summary = "今日运营数据（生成量、成本、成功率、付费转化）")

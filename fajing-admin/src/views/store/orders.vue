@@ -6,14 +6,39 @@ import { formatDateTime, formatMoney } from '@/utils/format'
 const loading = ref(false)
 const status = ref('')
 const list = ref([])
+const page = ref(1)
+const size = ref(20)
+const total = ref(0)
 
 async function load() {
   loading.value = true
   try {
-    list.value = (await fetchStoreOrders(status.value)) || []
+    const params = { page: page.value, size: size.value }
+    if (status.value) params.status = status.value
+    const data = await fetchStoreOrders(params)
+    list.value = data && Array.isArray(data.list) ? data.list : []
+    total.value = data && typeof data.total === 'number' ? data.total : 0
+  } catch {
+    list.value = []
   } finally {
     loading.value = false
   }
+}
+
+function onStatusChange() {
+  page.value = 1
+  load()
+}
+
+function onPageChange(value) {
+  page.value = value
+  load()
+}
+
+function onSizeChange(value) {
+  size.value = value
+  page.value = 1
+  load()
 }
 
 function statusText(row) {
@@ -33,7 +58,7 @@ onMounted(load)
         <div class="page-title">门店订单</div>
         <div class="page-sub">只展示本门店售出的团购券订单，订单归因到员工码</div>
       </div>
-      <el-select v-model="status" style="width: 140px" @change="load">
+      <el-select v-model="status" style="width: 140px" @change="onStatusChange">
         <el-option label="全部" value="" />
         <el-option label="已支付" value="paid" />
         <el-option label="未支付" value="created" />
@@ -72,6 +97,18 @@ onMounted(load)
         <template #default="{ row }">{{ row.paidAt ? formatDateTime(row.paidAt) : '—' }}</template>
       </el-table-column>
     </el-table>
+
+    <el-pagination
+      v-if="total > 0"
+      style="margin-top: 16px; justify-content: flex-end"
+      layout="total, sizes, prev, pager, next"
+      :total="total"
+      :page-size="size"
+      :current-page="page"
+      :page-sizes="[10, 20, 50, 100]"
+      @current-change="onPageChange"
+      @size-change="onSizeChange"
+    />
   </div>
 </template>
 

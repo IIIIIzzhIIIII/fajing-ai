@@ -271,41 +271,54 @@ public class StoreAdminService {
         jdbc.update("DELETE FROM staff_customer_binding WHERE staff_id=?", id);
     }
 
-    public List<Map<String, Object>> orders(Long storeId, String status) {
+    public Map<String, Object> orders(Long storeId, String status, int page, int size) {
+        boolean hasStatus = status != null && !status.isBlank();
+        String from = "FROM orders o LEFT JOIN app_user u ON u.id=o.user_id "
+                + "LEFT JOIN staff s ON s.id=o.staff_id "
+                + "LEFT JOIN user_coupon c ON c.order_id=o.id "
+                + "WHERE o.store_id=? AND o.biz_type='coupon' "
+                + (hasStatus ? "AND o.status=? " : "");
+        long total = hasStatus
+                ? count("SELECT COUNT(*) " + from, storeId, status)
+                : count("SELECT COUNT(*) " + from, storeId);
         String sql = "SELECT o.id, o.out_trade_no AS outTradeNo, o.amount, o.status AS orderStatus, "
                 + "o.pay_channel AS payChannel, o.created_at AS createdAt, o.paid_at AS paidAt, "
                 + "o.refund_status AS refundStatus, o.store_id AS storeId, o.staff_id AS staffId, "
                 + "u.nickname AS customerName, s.name AS staffName, c.code AS couponCode, c.status AS couponStatus "
-                + "FROM orders o LEFT JOIN app_user u ON u.id=o.user_id "
-                + "LEFT JOIN staff s ON s.id=o.staff_id "
-                + "LEFT JOIN user_coupon c ON c.order_id=o.id "
-                + "WHERE o.store_id=? AND o.biz_type='coupon' "
-                + (status == null || status.isBlank() ? "" : "AND o.status=? ")
-                + "ORDER BY o.id DESC LIMIT 200";
-        List<Object> args = new ArrayList<>();
-        args.add(storeId);
-        if (status != null && !status.isBlank()) {
-            args.add(status);
-        }
-        return jdbc.queryForList(sql, args.toArray());
+                + from + "ORDER BY o.id DESC LIMIT ?,?";
+        List<Map<String, Object>> rows = hasStatus
+                ? jdbc.queryForList(sql, storeId, status, (page - 1) * size, size)
+                : jdbc.queryForList(sql, storeId, (page - 1) * size, size);
+        return pageData(rows, total, page, size);
     }
 
-    public List<Map<String, Object>> couponInstances(Long storeId, String status) {
+    public Map<String, Object> couponInstances(Long storeId, String status, int page, int size) {
+        boolean hasStatus = status != null && !status.isBlank();
+        String from = "FROM user_coupon c LEFT JOIN app_user u ON u.id=c.user_id "
+                + "LEFT JOIN staff s ON s.id=c.staff_id "
+                + "WHERE c.store_id=? "
+                + (hasStatus ? "AND c.status=? " : "");
+        long total = hasStatus
+                ? count("SELECT COUNT(*) " + from, storeId, status)
+                : count("SELECT COUNT(*) " + from, storeId);
         String sql = "SELECT c.id, c.code, c.title, c.pay_amount AS payAmount, c.value_amount AS valueAmount, "
                 + "c.commission_amount AS commissionAmount, c.settle_status AS settleStatus, c.status, "
                 + "c.created_at AS createdAt, c.used_at AS usedAt, c.expire_at AS expireAt, "
                 + "u.nickname AS customerName, s.name AS staffName "
-                + "FROM user_coupon c LEFT JOIN app_user u ON u.id=c.user_id "
-                + "LEFT JOIN staff s ON s.id=c.staff_id "
-                + "WHERE c.store_id=? "
-                + (status == null || status.isBlank() ? "" : "AND c.status=? ")
-                + "ORDER BY c.id DESC LIMIT 200";
-        List<Object> args = new ArrayList<>();
-        args.add(storeId);
-        if (status != null && !status.isBlank()) {
-            args.add(status);
-        }
-        return jdbc.queryForList(sql, args.toArray());
+                + from + "ORDER BY c.id DESC LIMIT ?,?";
+        List<Map<String, Object>> rows = hasStatus
+                ? jdbc.queryForList(sql, storeId, status, (page - 1) * size, size)
+                : jdbc.queryForList(sql, storeId, (page - 1) * size, size);
+        return pageData(rows, total, page, size);
+    }
+
+    private Map<String, Object> pageData(List<Map<String, Object>> rows, long total, int page, int size) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("list", rows);
+        data.put("total", total);
+        data.put("page", page);
+        data.put("size", size);
+        return data;
     }
 
     @Transactional

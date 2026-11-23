@@ -74,14 +74,22 @@ public class AdminPlatformController {
 
     @Operation(summary = "佣金台账")
     @GetMapping("/commissions")
-    public Result<List<Map<String, Object>>> commissions(
-            @RequestParam(required = false) String status) {
-        return Result.ok(platformAdminService.commissions(status));
+    public Result<Map<String, Object>> commissions(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        return Result.ok(platformAdminService.commissions(status, p, s));
     }
 
     @Operation(summary = "平台订单")
     @GetMapping("/orders")
-    public Result<List<Map<String, Object>>> orders() {
-        return Result.ok(platformAdminService.platformOrders());
+    public Result<Map<String, Object>> orders(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        int p = page == null || page < 1 ? 1 : page;
+        int s = size == null ? 20 : Math.max(1, Math.min(100, size));
+        return Result.ok(platformAdminService.platformOrders(p, s));
     }
 }

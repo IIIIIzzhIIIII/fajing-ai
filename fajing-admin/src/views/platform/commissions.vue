@@ -8,16 +8,61 @@ const tab = ref('commissions')
 const status = ref('')
 const commissions = ref([])
 const orders = ref([])
+const commissionPage = ref(1)
+const commissionSize = ref(20)
+const commissionTotal = ref(0)
+const orderPage = ref(1)
+const orderSize = ref(20)
+const orderTotal = ref(0)
+
+async function loadCommissions() {
+  const params = { page: commissionPage.value, size: commissionSize.value }
+  if (status.value) params.status = status.value
+  const data = await fetchCommissions(params)
+  commissions.value = data && Array.isArray(data.list) ? data.list : []
+  commissionTotal.value = data && typeof data.total === 'number' ? data.total : 0
+}
+
+async function loadOrders() {
+  const data = await fetchPlatformOrders({ page: orderPage.value, size: orderSize.value })
+  orders.value = data && Array.isArray(data.list) ? data.list : []
+  orderTotal.value = data && typeof data.total === 'number' ? data.total : 0
+}
 
 async function load() {
   loading.value = true
   try {
-    const [c, o] = await Promise.all([fetchCommissions(status.value), fetchPlatformOrders()])
-    commissions.value = c || []
-    orders.value = o || []
+    await Promise.all([loadCommissions(), loadOrders()])
   } finally {
     loading.value = false
   }
+}
+
+function onStatusChange() {
+  commissionPage.value = 1
+  loadCommissions()
+}
+
+function onCommissionPageChange(value) {
+  commissionPage.value = value
+  loadCommissions()
+}
+
+function onCommissionSizeChange(value) {
+  commissionSize.value = value
+  commissionPage.value = 1
+  loadCommissions()
+}
+
+function onOrderPageChange(value) {
+  orderPage.value = value
+  loadOrders()
+}
+
+function onOrderSizeChange(value) {
+  orderSize.value = value
+  orderPage.value = 1
+  loadOrders()
 }
 
 function statusText(value) {
@@ -44,7 +89,7 @@ onMounted(load)
         <div class="page-title">佣金台账</div>
         <div class="page-sub">支付记待结算，门店核销后转已结算，退款自动冲正</div>
       </div>
-      <el-select v-model="status" style="width: 140px" @change="load">
+      <el-select v-model="status" style="width: 140px" @change="onStatusChange">
         <el-option label="全部状态" value="" />
         <el-option label="待结算" value="available" />
         <el-option label="已结算" value="settled" />
@@ -83,6 +128,17 @@ onMounted(load)
             </template>
           </el-table-column>
         </el-table>
+        <el-pagination
+          v-if="commissionTotal > 0"
+          style="margin-top: 16px; justify-content: flex-end"
+          layout="total, sizes, prev, pager, next"
+          :total="commissionTotal"
+          :page-size="commissionSize"
+          :current-page="commissionPage"
+          :page-sizes="[10, 20, 50, 100]"
+          @current-change="onCommissionPageChange"
+          @size-change="onCommissionSizeChange"
+        />
       </el-tab-pane>
 
       <el-tab-pane label="平台订单" name="orders">
@@ -114,6 +170,17 @@ onMounted(load)
             <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
           </el-table-column>
         </el-table>
+        <el-pagination
+          v-if="orderTotal > 0"
+          style="margin-top: 16px; justify-content: flex-end"
+          layout="total, sizes, prev, pager, next"
+          :total="orderTotal"
+          :page-size="orderSize"
+          :current-page="orderPage"
+          :page-sizes="[10, 20, 50, 100]"
+          @current-change="onOrderPageChange"
+          @size-change="onOrderSizeChange"
+        />
       </el-tab-pane>
     </el-tabs>
   </div>

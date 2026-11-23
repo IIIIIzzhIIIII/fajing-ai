@@ -13,15 +13,40 @@ const list = ref([])
 const staffList = ref([])
 const staffId = ref(null)
 const scanVisible = ref(false)
+const page = ref(1)
+const size = ref(20)
+const total = ref(0)
 let scanner = null
 
 async function load() {
   loading.value = true
   try {
-    list.value = (await fetchStoreCouponInstances(status.value)) || []
+    const params = { page: page.value, size: size.value }
+    if (status.value) params.status = status.value
+    const data = await fetchStoreCouponInstances(params)
+    list.value = data && Array.isArray(data.list) ? data.list : []
+    total.value = data && typeof data.total === 'number' ? data.total : 0
+  } catch {
+    list.value = []
   } finally {
     loading.value = false
   }
+}
+
+function onStatusChange() {
+  page.value = 1
+  load()
+}
+
+function onPageChange(value) {
+  page.value = value
+  load()
+}
+
+function onSizeChange(value) {
+  size.value = value
+  page.value = 1
+  load()
 }
 
 async function loadStaff() {
@@ -153,7 +178,7 @@ onBeforeUnmount(() => {
       />
       <el-button type="primary" size="large" :loading="verifying" @click="verify">确认核销</el-button>
       <el-button size="large" :disabled="!staffId" @click="openScan">扫码验券</el-button>
-      <el-select v-model="status" style="width: 140px" @change="load">
+      <el-select v-model="status" style="width: 140px" @change="onStatusChange">
         <el-option label="待核销" value="unused" />
         <el-option label="已核销" value="used" />
         <el-option label="已退款" value="refunded" />
@@ -186,6 +211,18 @@ onBeforeUnmount(() => {
         <template #default="{ row }">{{ row.usedAt ? formatDateTime(row.usedAt) : '—' }}</template>
       </el-table-column>
     </el-table>
+
+    <el-pagination
+      v-if="total > 0"
+      style="margin-top: 16px; justify-content: flex-end"
+      layout="total, sizes, prev, pager, next"
+      :total="total"
+      :page-size="size"
+      :current-page="page"
+      :page-sizes="[10, 20, 50, 100]"
+      @current-change="onPageChange"
+      @size-change="onSizeChange"
+    />
 
     <el-dialog
       v-model="scanVisible"
