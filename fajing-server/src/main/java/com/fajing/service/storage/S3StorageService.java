@@ -11,10 +11,15 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.UUID;
 
 /**
@@ -24,7 +29,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @ConditionalOnProperty(name = "storage.type", havingValue = "s3")
-public class S3StorageService implements StorageService {
+public class S3StorageService implements StorageService, StorageUrlSigner {
 
     @Value("${storage.s3.endpoint:}")
     private String endpoint;
@@ -42,6 +47,7 @@ public class S3StorageService implements StorageService {
     private String prefix;
 
     private S3Client client;
+    private S3Presigner presigner;
 
     private synchronized S3Client client() {
         if (client != null) {
@@ -80,6 +86,43 @@ public class S3StorageService implements StorageService {
             log.error("对象存储上传失败", e);
             throw new BizException("图片上传到对象存储失败");
         }
+    }
+
+    /** 私有桶预签名：用户生成图按对象 key 生成短时访问地址 */
+    @Override
+    public String presign(String url, Duration ttl) {
+        String key = keyOf(url);
+        if (key.isBlank()) {
+            return url;
+        }
+        try {
+            GetObjectRequest object = GetObjectRequest.builder().bucket(bucket).key(key).build();
+            GetObjectPresignRequest request = GetObjectPresignRequest.builder()
+                    .signatureDuration(ttl)
+                    .getObjectRequest(object)
+                    .build();
+            return presigner().presignGetObject(request).url().toString();
+        } catch (Exception e) {
+            log.warn("对象存储预签名失败：{}", e.getMessage());
+            return url;
+        }
+    }
+
+    private synchronized S3Presigner presigner() {
+        if (presigner != null) {
+            return presigner;
+        }
+        if (isBlank(endpoint) || isBlank(bucket) || isBlank(accessKey) || isBlank(secretKey)) {
+            throw new BizException("对象存储配置不完整，请检查 S3_ENDPOINT / S3_BUCKET / S3_ACCESS_KEY / S3_SECRET_KEY");
+        }
+        presigner = S3Presigner.builder()
+                .endpointOverride(URI.create(endpoint))
+                .region(Region.of(isBlank(region) ? "auto" : region))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(accessKey, secretKey)))
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .build();
+        return presigner;
     }
 
     @Override

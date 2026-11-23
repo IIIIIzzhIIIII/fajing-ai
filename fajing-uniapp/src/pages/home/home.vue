@@ -90,7 +90,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { API } from '@/api/request'
@@ -103,6 +103,19 @@ import { PORTRAIT, STYLES, STYLE_IMG } from '@/mock/constants'
 
 const app = useAppStore()
 const stores = ref([])
+const hotStyles = ref([])
+
+/** 热门发型优先用后台发型库，接口失败时回退本地静态数据 */
+async function loadHotStyles() {
+  try {
+    const rows = await API.hairstyles(app.gender)
+    hotStyles.value = Array.isArray(rows) ? rows : []
+  } catch (e) {
+    hotStyles.value = []
+  }
+}
+
+watch(() => app.gender, loadHotStyles)
 
 const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
 
@@ -117,6 +130,7 @@ function onLoginCancel() {
 // 从充值/看广告页返回时刷新魅力值，免费次数用完后的文案才能实时更新
 onShow(async () => {
   loadStores()
+  loadHotStyles()
   if (!getToken()) return
   try {
     const quota = await API.quota()
@@ -141,6 +155,14 @@ const ctaSub = computed(() => {
 
 const hotList = computed(() => {
   const tags = ['热门', '新上', '圆脸友好', '显脸小', '学生感', '好打理']
+  if (hotStyles.value.length) {
+    return hotStyles.value.slice(0, 6).map((s, i) => ({
+      id: s.id,
+      name: s.name,
+      tag: tags[i] || s.cat || '热门',
+      img: s.img || PORTRAIT(s.en, app.gender)
+    }))
+  }
   const list = STYLES[app.gender] || STYLES.female
   return list.slice(0, 6).map((s, i) => ({
     id: s.id,

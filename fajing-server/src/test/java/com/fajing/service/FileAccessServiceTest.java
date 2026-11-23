@@ -1,5 +1,6 @@
 package com.fajing.service;
 
+import com.fajing.service.storage.StorageUrlSigner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -85,6 +86,25 @@ class FileAccessServiceTest {
     void publicFileAlwaysPassesVerification() {
         assertThat(service.verify("style-f13.jpg", null, null)).isTrue();
         assertThat(service.verify("ai_model_123.png", null, null)).isTrue();
+    }
+
+    @Test
+    void s3PrivateImageIsPresigned() {
+        ReflectionTestUtils.setField(service, "storageUrlSigner",
+                (StorageUrlSigner) (url, ttl) -> url + "?X-Amz-Signature=test");
+        String url = "https://cdn.example.com/fajing/ai_1_f1_1.png";
+
+        assertThat(service.sign(url)).isEqualTo(url + "?X-Amz-Signature=test");
+        assertThat(service.sign("https://cdn.example.com/fajing/style-f13.jpg"))
+                .isEqualTo("https://cdn.example.com/fajing/style-f13.jpg");
+        assertThat(service.sign("https://cdn.example.com/fajing/ai_model_1.png"))
+                .isEqualTo("https://cdn.example.com/fajing/ai_model_1.png");
+    }
+
+    @Test
+    void s3UrlKeepsOriginalWithoutSigner() {
+        String url = "https://cdn.example.com/fajing/ai_1_f1_1.png";
+        assertThat(service.sign(url)).isEqualTo(url);
     }
 
     @Test

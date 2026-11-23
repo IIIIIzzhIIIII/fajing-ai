@@ -2,6 +2,7 @@ package com.fajing.controller;
 
 import com.fajing.common.Result;
 import com.fajing.entity.AiConfig;
+import com.fajing.service.AdminLogService;
 import com.fajing.service.AiConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiConfigController {
 
     private final AiConfigService configService;
+    private final AdminLogService adminLogService;
 
     @Operation(summary = "读取 AI 配置（密钥已脱敏）")
     @GetMapping
@@ -33,6 +35,10 @@ public class AiConfigController {
     @Operation(summary = "保存 AI 配置")
     @PutMapping
     public Result<AiConfig> save(@RequestBody AiConfig req) {
-        return Result.ok(configService.masked(configService.save(req)));
+        AiConfig saved = configService.save(req);
+        // 记录变更审计：只记模型与提供方，不记录密钥
+        adminLogService.log("SAVE_AI_CONFIG",
+                saved.getImageProvider() + "/" + saved.getImageModel() + "," + saved.getTextModel());
+        return Result.ok(configService.masked(saved));
     }
 }
