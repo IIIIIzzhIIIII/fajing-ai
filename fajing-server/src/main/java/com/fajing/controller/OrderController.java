@@ -91,6 +91,11 @@ public class OrderController {
         if (bizType.isBlank() || "unlock".equals(bizType)) {
             throw new BizException("发型解锁请使用魅力值");
         }
+        // 支付前必须完成手机号授权，避免只有游客身份就能直接充值 / 购券
+        AppUser user = userMapper.selectById(userId);
+        if (user == null || user.getPhone() == null || user.getPhone().isBlank()) {
+            throw new BizException("请先完成手机号授权后再支付");
+        }
         return createBizOrder(bizType, body, userId);
     }
 

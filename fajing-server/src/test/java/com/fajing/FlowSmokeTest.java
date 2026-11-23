@@ -2,6 +2,8 @@ package com.fajing;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fajing.entity.AppUser;
+import com.fajing.mapper.AppUserMapper;
 import com.fajing.service.AiImageService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +39,9 @@ class FlowSmokeTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private AppUserMapper userMapper;
 
     @MockBean
     private AiImageService aiImageService;
@@ -96,21 +101,27 @@ class FlowSmokeTest {
         assertThat(hasUnlock(unlocksBefore, taskId, "f1")).isTrue();
         int beforeCount = unlocksBefore.size();
 
-        // 6. 下单解锁第 2 款（未接微信支付，走 mock 直接支付成功）
+        // 6. 充值魅力值（未接微信支付，走 mock 直接支付成功）
+        long pointsBefore = body(mvc.perform(get("/api/quota")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn()).path("data").path("points").asLong();
         MvcResult paid = mvc.perform(post("/api/order/create")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"taskId\":" + taskId + ",\"styleIds\":[\"f2\"],\"plan\":\"one\"}"))
+                        .content("{\"bizType\":\"points\",\"packageId\":1,\"platform\":\"h5\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(body(paid).path("data").path("paid").asBoolean()).isTrue();
 
-        // 7. 解锁列表增加且包含第 2 款
+        // 7. 魅力值到账，解锁记录保持
+        JsonNode quotaAfter = body(mvc.perform(get("/api/quota")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn()).path("data");
+        assertThat(quotaAfter.path("points").asLong()).isEqualTo(pointsBefore + 100);
         JsonNode unlocksAfter = body(mvc.perform(get("/api/unlocks")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn()).path("data");
-        assertThat(unlocksAfter.size()).isEqualTo(beforeCount + 1);
-        assertThat(hasUnlock(unlocksAfter, taskId, "f2")).isTrue();
+        assertThat(unlocksAfter.size()).isGreaterThanOrEqualTo(beforeCount);
     }
 
     private String login() throws Exception {
@@ -121,6 +132,12 @@ class FlowSmokeTest {
                 .andReturn();
         String token = body(result).path("data").path("token").asText();
         assertThat(token).isNotBlank();
+        // 支付前必须绑定手机号：测试用户直接补一个手机号，避免依赖微信授权
+        AppUser user = userMapper.selectById(1L);
+        if (user != null && (user.getPhone() == null || user.getPhone().isBlank())) {
+            user.setPhone("13800000000");
+            userMapper.updateById(user);
+        }
         return token;
     }
 
