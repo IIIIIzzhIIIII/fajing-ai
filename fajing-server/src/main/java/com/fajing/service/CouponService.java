@@ -242,12 +242,18 @@ public class CouponService {
             throw new BizException("订单正在退款或已退款");
         }
         String channel = order.getPayChannel() == null ? "" : order.getPayChannel();
+        boolean asyncRefund = false;
         try {
             switch (channel) {
-                case "wx" -> wechatPayService.refund(order.getOutTradeNo(),
-                        "RF" + order.getOutTradeNo() + System.currentTimeMillis(),
-                        amount, order.getAmount(), "团购券退款");
-                case "wx-virtual" -> wechatVirtualPayService.refund(userId, order.getOutTradeNo(), amount, "团购券退款");
+                case "wx" -> {
+                    WechatPayService.RefundResult result = wechatPayService.refund(order.getOutTradeNo(),
+                            "RF" + order.getOutTradeNo(), amount, order.getAmount(), "团购券退款");
+                    asyncRefund = !"SUCCESS".equalsIgnoreCase(result.status());
+                }
+                case "wx-virtual" -> {
+                    wechatVirtualPayService.refund(userId, order.getOutTradeNo(), amount, "团购券退款");
+                    asyncRefund = true;
+                }
                 case "alipay" -> alipayService.refund(order.getOutTradeNo(), amount, "团购券退款");
                 case "mock" -> {
                     // 本地模拟订单无需调用渠道
@@ -262,8 +268,8 @@ public class CouponService {
                     .set("refund_status", "none"));
             throw e;
         }
-        // 虚拟支付退款是异步任务，订单保持 refunding，最终结果由定时查单更新
-        String refundStatus = "wx-virtual".equals(channel) ? "refunding" : "refunded";
+        // 异步退款保持 refunding，最终结果由退款查单任务更新
+        String refundStatus = asyncRefund ? "refunding" : "refunded";
         order.setRefundStatus(refundStatus);
         order.setRefundAmount(amount);
         orderMapper.updateById(order);
@@ -282,6 +288,16 @@ public class CouponService {
                 .eq("id", couponId)
                 .eq("status", "refunding")
                 .set("status", "unused"));
+    }
+
+    /** 订单下是否存在已核销的券：已到店消费的订单不允许退款 */
+    public boolean hasUsedCoupon(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return false;
+        }
+        Long count = couponMapper.selectCount(new QueryWrapper<UserCoupon>()
+                .eq("order_id", orderId).eq("status", "used"));
+        return count != null && count > 0;
     }
 
     /** 后台整单退款后同步券状态，避免券仍显示可用 */

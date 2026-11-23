@@ -8,6 +8,7 @@ import com.fajing.entity.Recommendation;
 import com.fajing.entity.UserQuota;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.service.ColorUnlockService;
+import com.fajing.service.FileAccessService;
 import com.fajing.service.GenerationProcessor;
 import com.fajing.service.GenerationService;
 import com.fajing.service.PointsService;
@@ -47,6 +48,7 @@ public class RecommendController {
     private final GenerationTaskMapper taskMapper;
     private final PointsService pointsService;
     private final ColorUnlockService colorUnlockService;
+    private final FileAccessService fileAccessService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Operation(summary = "分析照片并返回发型/发色排名")
@@ -192,7 +194,7 @@ public class RecommendController {
         Object cached = colorVariant(color, styleId);
         if (cached != null && !String.valueOf(cached).isBlank()) {
             data.put("cached", true);
-            data.put("img", cached);
+            data.put("img", fileAccessService.sign(String.valueOf(cached)));
             data.put("points", pointsService.toMap(pointsService.get(userId)).get("points"));
             return Result.ok(data);
         }

@@ -42,7 +42,7 @@ const rules = {
 const dialogTitle = computed(() => (editingId.value ? '编辑发型' : '新增发型'))
 const uploading = ref(false)
 
-/** 上传示例照片：走 /api/upload，返回可直接访问的 URL */
+/** 上传示例照片：走 /api/admin/upload，返回可直接访问的 URL */
 async function uploadImage(options) {
   const file = options?.file
   if (!file) return
@@ -58,7 +58,7 @@ async function uploadImage(options) {
   try {
     const formData = new FormData()
     formData.append('file', file)
-    const data = await service.post('/api/upload', formData, {
+    const data = await service.post('/api/admin/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     if (data && data.url) {

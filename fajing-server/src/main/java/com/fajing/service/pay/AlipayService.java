@@ -149,6 +149,8 @@ public class AlipayService {
         PayConfig cfg = requireAlipayReady();
         Map<String, String> biz = new LinkedHashMap<>();
         biz.put("out_trade_no", outTradeNo);
+        // 同一订单只允许退一次，用确定性退款请求号防重复退款
+        biz.put("out_request_no", "RF" + outTradeNo);
         biz.put("refund_amount", amountYuan.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
         biz.put("refund_reason", reason == null ? "" : reason);
         Map<String, String> params = baseParams(cfg, "alipay.trade.refund");

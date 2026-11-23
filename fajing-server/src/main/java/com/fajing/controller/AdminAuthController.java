@@ -7,9 +7,12 @@ import com.fajing.entity.AdminUser;
 import com.fajing.entity.Store;
 import com.fajing.mapper.AdminUserMapper;
 import com.fajing.mapper.StoreMapper;
+import com.fajing.service.AdminLogService;
+import com.fajing.service.RateLimitService;
 import com.fajing.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,11 +36,16 @@ public class AdminAuthController {
     private final AdminUserMapper adminUserMapper;
     private final StoreMapper storeMapper;
     private final JwtUtil jwtUtil;
+    private final RateLimitService rateLimitService;
+    private final AdminLogService adminLogService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Operation(summary = "管理员登录")
     @PostMapping("/login")
-    public Result<Map<String, Object>> login(@RequestBody Map<String, String> body) {
+    public Result<Map<String, Object>> login(@RequestBody Map<String, String> body,
+                                             HttpServletRequest request) {
+        String ip = clientIp(request);
+        rateLimitService.checkLogin("admin", ip);
         String username = body == null ? null : body.get("username");
         String password = body == null ? null : body.get("password");
         if (username == null || username.isBlank() || password == null || password.isEmpty()) {
@@ -47,6 +55,8 @@ public class AdminAuthController {
                 .eq("username", username.trim()).last("limit 1"));
         if (user == null || user.getPasswordHash() == null
                 || !passwordEncoder.matches(password, user.getPasswordHash())) {
+            // 记录失败审计，便于发现撞库；不记录密码
+            adminLogService.log("ADMIN_LOGIN_FAIL", username.trim() + ",ip:" + ip);
             throw new BizException("账号或密码错误");
         }
         if (user.getStatus() == null || user.getStatus() != 1) {
@@ -90,5 +100,25 @@ public class AdminAuthController {
             return "PLATFORM_ADMIN";
         }
         return role.trim().toUpperCase();
+    }
+
+    /** 取真实客户端 IP：仅当直连方是受信代理（本机/内网）时才采信转发头 */
+    private String clientIp(HttpServletRequest request) {
+        String remote = request.getRemoteAddr();
+        boolean trusted = "127.0.0.1".equals(remote) || "::1".equals(remote)
+                || "0:0:0:0:0:0:0:1".equals(remote)
+                || remote.startsWith("10.") || remote.startsWith("192.168.")
+                || remote.matches("172\\.(1[6-9]|2\\d|3[0-1])\\..*");
+        if (!trusted) {
+            return remote;
+        }
+        String ip = request.getHeader("X-Real-IP");
+        if (ip == null || ip.isBlank()) {
+            String forwarded = request.getHeader("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                ip = forwarded.split(",")[0].trim();
+            }
+        }
+        return ip == null || ip.isBlank() ? remote : ip;
     }
 }

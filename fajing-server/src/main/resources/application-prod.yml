@@ -1,5 +1,11 @@
 # 生产环境：关闭 mock 登录与旧管理端 token，跨域只放正式域名
 # guest 为 H5 浏览器匿名账号入口，生产保留（受每 IP 每日建档上限保护）
+spring:
+  sql:
+    init:
+      # 生产默认不自动执行 schema/data；首次部署可临时设 SQL_INIT_MODE=always
+      mode: ${SQL_INIT_MODE:never}
+
 auth:
   mock-enabled: false
   guest-enabled: ${AUTH_GUEST_ENABLED:true}

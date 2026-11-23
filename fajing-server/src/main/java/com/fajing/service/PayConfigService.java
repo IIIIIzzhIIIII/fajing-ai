@@ -50,8 +50,6 @@ public class PayConfigService {
         if (notBlank(req.getWxNotifyUrl())) cfg.setWxNotifyUrl(req.getWxNotifyUrl().trim());
         if (notBlank(req.getWxVirtualOfferId())) cfg.setWxVirtualOfferId(req.getWxVirtualOfferId().trim());
         if (req.getWxVirtualEnv() != null) cfg.setWxVirtualEnv(req.getWxVirtualEnv());
-        if (notBlank(req.getWxVirtualProductOne())) cfg.setWxVirtualProductOne(req.getWxVirtualProductOne().trim());
-        if (notBlank(req.getWxVirtualProductAll())) cfg.setWxVirtualProductAll(req.getWxVirtualProductAll().trim());
 
         if (req.getDouyinEnabled() != null) cfg.setDouyinEnabled(req.getDouyinEnabled());
         if (notBlank(req.getDouyinAppId())) cfg.setDouyinAppId(req.getDouyinAppId().trim());
@@ -109,8 +107,6 @@ public class PayConfigService {
         view.setWxNotifyUrl(cfg.getWxNotifyUrl());
         view.setWxVirtualOfferId(cfg.getWxVirtualOfferId());
         view.setWxVirtualEnv(cfg.getWxVirtualEnv());
-        view.setWxVirtualProductOne(cfg.getWxVirtualProductOne());
-        view.setWxVirtualProductAll(cfg.getWxVirtualProductAll());
         view.setDouyinEnabled(cfg.getDouyinEnabled());
         view.setDouyinAppId(cfg.getDouyinAppId());
         view.setDouyinNotifyUrl(cfg.getDouyinNotifyUrl());
@@ -164,13 +160,11 @@ public class PayConfigService {
 
     /** 微信小程序虚拟支付：用 offerId + AppKey 签名，由客户端拉起 wx.requestVirtualPayment */
     public boolean wxVirtualReady(PayConfig cfg) {
-        // 两个道具都要配：首单 5 折用 ¥3 道具，优惠用完后用 ¥6 道具按数量购买
+        // 具体道具按充值档位在下单时校验，就绪判定只看基础参数
         return cfg != null && Integer.valueOf(1).equals(cfg.getWxEnabled())
                 && "virtual".equalsIgnoreCase(cfg.getWxPayMode())
                 && notBlank(cfg.getWxVirtualOfferId())
-                && notBlank(codec.decryptOrNull(cfg.getWxVirtualAppkeyEnc()))
-                && notBlank(cfg.getWxVirtualProductOne())
-                && notBlank(cfg.getWxVirtualProductAll());
+                && notBlank(codec.decryptOrNull(cfg.getWxVirtualAppkeyEnc()));
     }
 
     public boolean douyinReady(PayConfig cfg) {
@@ -229,8 +223,6 @@ public class PayConfigService {
         cfg.setWxVirtualAppkeyEnc("");
         cfg.setWxVirtualOfferId("");
         cfg.setWxVirtualEnv(0);
-        cfg.setWxVirtualProductOne("");
-        cfg.setWxVirtualProductAll("");
         cfg.setDouyinEnabled(0);
         cfg.setDouyinAppId("");
         cfg.setDouyinSecretEnc("");

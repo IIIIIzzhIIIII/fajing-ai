@@ -263,6 +263,27 @@ public class PointsService {
                 .set("updated_at", LocalDateTime.now()));
     }
 
+    /** 退款回收 VIP：从到期时间倒扣购买天数，扣成过去时间即视为失效 */
+    public void revokeVip(Long userId, int days) {
+        UserQuota quota = get(userId);
+        if (quota.getVipExpireAt() == null || days <= 0) {
+            return;
+        }
+        quotaMapper.update(null, new UpdateWrapper<UserQuota>()
+                .eq("user_id", userId)
+                .set("vip_expire_at", quota.getVipExpireAt().minusDays(days))
+                .set("updated_at", LocalDateTime.now()));
+    }
+
+    /** 退款回收 VVIP */
+    public void revokeVvip(Long userId) {
+        get(userId);
+        quotaMapper.update(null, new UpdateWrapper<UserQuota>()
+                .eq("user_id", userId)
+                .set("vvip", false)
+                .set("updated_at", LocalDateTime.now()));
+    }
+
     public Map<String, Object> toMap(UserQuota quota) {
         Map<String, Object> map = new LinkedHashMap<>();
         int freeBatches = quota.getFreeBatches() == null ? 0 : quota.getFreeBatches();

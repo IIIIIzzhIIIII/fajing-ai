@@ -6,9 +6,6 @@ export const useUiStore = defineStore('ui', {
     toastText: '',
     toastVisible: false,
     sheet: '',
-    payPlan: 'all',
-    payStyleId: '',
-    payChannel: '',
     quotaReason: ''
   }),
   actions: {

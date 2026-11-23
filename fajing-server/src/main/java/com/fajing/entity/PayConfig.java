@@ -28,10 +28,6 @@ public class PayConfig {
     private String wxVirtualAppkeyEnc;
     private String wxVirtualOfferId;
     private Integer wxVirtualEnv;
-    /** 单张解锁的虚拟道具 ID（价格 6 元） */
-    private String wxVirtualProductOne;
-    /** 全部解锁的虚拟道具 ID（单价 3 元，按数量购买） */
-    private String wxVirtualProductAll;
     /** 充值套餐虚拟道具 ID：10 / 20 / 29 / 99 元 */
     private String wxVirtualProductP10;
     private String wxVirtualProductP20;

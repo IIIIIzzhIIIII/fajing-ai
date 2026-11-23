@@ -19,10 +19,15 @@ public class RateLimitService {
     /** 同一 IP 24 小时内最多创建的游客账号数 */
     private static final int GUEST_CREATE_MAX = 20;
     private static final long GUEST_WINDOW_MS = 24 * 60 * 60 * 1000L;
+    /** 登录接口：同一 IP 每分钟最多尝试次数（成功失败都计），防撞库 */
+    private static final int LOGIN_MAX = 20;
+    private static final long LOGIN_WINDOW_MS = 60_000L;
 
     private final Map<Long, Long> lastCallAt = new ConcurrentHashMap<>();
     /** IP → 窗口内建档时间戳，防止 H5 游客登录被批量注册 */
     private final Map<String, List<Long>> guestCreates = new ConcurrentHashMap<>();
+    /** scope:ip → 窗口内登录尝试时间戳 */
+    private final Map<String, List<Long>> loginAttempts = new ConcurrentHashMap<>();
 
     public void checkGenerate(Long userId) {
         if (userId == null) {
@@ -57,6 +62,29 @@ public class RateLimitService {
                 List<Long> list = e.getValue();
                 synchronized (list) {
                     list.removeIf(t -> now - t > GUEST_WINDOW_MS);
+                    return list.isEmpty();
+                }
+            });
+        }
+    }
+
+    /** 登录尝试限流：scope 区分 wx / guest / admin，按 IP 每分钟 20 次 */
+    public void checkLogin(String scope, String ip) {
+        String key = (scope == null ? "login" : scope) + ":" + (ip == null || ip.isBlank() ? "unknown" : ip);
+        long now = System.currentTimeMillis();
+        List<Long> records = loginAttempts.computeIfAbsent(key, k -> new ArrayList<>());
+        synchronized (records) {
+            records.removeIf(t -> now - t > LOGIN_WINDOW_MS);
+            if (records.size() >= LOGIN_MAX) {
+                throw new BizException("登录尝试过于频繁，请稍后再试");
+            }
+            records.add(now);
+        }
+        if (loginAttempts.size() > 5000) {
+            loginAttempts.entrySet().removeIf(e -> {
+                List<Long> list = e.getValue();
+                synchronized (list) {
+                    list.removeIf(t -> now - t > LOGIN_WINDOW_MS);
                     return list.isEmpty();
                 }
             });

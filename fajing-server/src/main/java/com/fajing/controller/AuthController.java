@@ -2,6 +2,7 @@ package com.fajing.controller;
 
 import com.fajing.common.Result;
 import com.fajing.service.AuthService;
+import com.fajing.service.RateLimitService;
 import com.fajing.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,11 +23,15 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final RateLimitService rateLimitService;
 
     /** 小程序：wx.login 的 code 换本系统 token */
     @Operation(summary = "小程序 wx.login 的 code 换 token")
     @PostMapping("/login")
-    public Result<Map<String, Object>> login(@RequestBody Map<String, String> body) {
+    public Result<Map<String, Object>> login(@RequestBody Map<String, String> body,
+                                             HttpServletRequest request) {
+        String ip = clientIp(request);
+        rateLimitService.checkLogin("wx", ip);
         String code = body == null ? null : body.get("code");
         return Result.ok(authService.loginByCode(code));
     }
@@ -35,8 +40,10 @@ public class AuthController {
     @PostMapping("/login/guest")
     public Result<Map<String, Object>> guestLogin(@RequestBody(required = false) Map<String, String> body,
                                                   HttpServletRequest request) {
+        String ip = clientIp(request);
+        rateLimitService.checkLogin("guest", ip);
         String guestKey = body == null ? null : body.get("guestKey");
-        return Result.ok(authService.guestLogin(guestKey, clientIp(request)));
+        return Result.ok(authService.guestLogin(guestKey, ip));
     }
 
     @Operation(summary = "当前登录用户信息")

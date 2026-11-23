@@ -43,8 +43,6 @@ const form = reactive({
   wxVirtualAppkeyEnc: '',
   wxVirtualOfferId: '',
   wxVirtualEnv: 0,
-  wxVirtualProductOne: '',
-  wxVirtualProductAll: '',
   douyinEnabled: 0,
   douyinAppId: '',
   douyinSecretEnc: '',
@@ -273,14 +271,7 @@ onMounted(load)
               <el-radio :value="1">沙箱环境</el-radio>
             </el-radio-group>
           </el-form-item>
-          <el-form-item label="单张道具 ID">
-            <el-input v-model="form.wxVirtualProductOne" placeholder="单价 6 元的道具 productId" />
-          </el-form-item>
-          <el-form-item label="全部道具 ID">
-            <el-input v-model="form.wxVirtualProductAll" placeholder="单价 3 元的道具 productId（按数量购买）" />
-            <div class="field-tip">
-              首单 5 折用该道具 × 款数；优惠用完后改用上方 6 元道具 × 款数，两个都要配置。
-            </div>
+          <el-form-item label="查单依赖">
             <div class="field-tip">
               虚拟支付查单依赖服务端环境变量 WECHAT_APPID / WECHAT_SECRET；用户 session_key 过期时需重新进入小程序。
             </div>

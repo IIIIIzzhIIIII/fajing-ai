@@ -4,8 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fajing.entity.Order;
 import com.fajing.mapper.OrderMapper;
-import com.fajing.service.GenerationService;
+import com.fajing.service.OrderSettlementService;
+import com.fajing.service.PayConfigService;
+import com.fajing.service.pay.WechatPayService;
 import com.fajing.service.pay.WechatVirtualPayService;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -16,8 +19,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 订单维护：关闭长期未支付的悬挂单、确认虚拟支付退款终态。
- * 两者都是补偿动作，失败只记录日志，不影响主流程。
+ * 订单维护：关闭长期未支付的悬挂单、确认微信 / 虚拟支付退款终态。
+ * 都属于补偿动作，失败只记录日志，不影响主流程。
  */
 @Slf4j
 @Component
@@ -27,16 +30,34 @@ public class OrderMaintenanceTask {
     /** 未支付订单保留时长：超过后关闭，避免后台长期堆积 created 单据 */
     private static final int CLOSE_AFTER_HOURS = 2;
 
-    /** 每轮最多确认的退款单数，避免一次拉取过多 */
+    /** 每轮最多处理的退款单数，避免一次拉取过多 */
     private static final int REFUND_CONFIRM_LIMIT = 50;
 
     private final OrderMapper orderMapper;
+    private final PayConfigService payConfigService;
+    private final WechatPayService wechatPayService;
     private final WechatVirtualPayService wechatVirtualPayService;
-    private final GenerationService generationService;
+    private final OrderSettlementService settlementService;
 
     @Scheduled(cron = "0 10 * * * ?")
     public void closeStaleOrders() {
         try {
+            List<Order> stale = orderMapper.selectList(new QueryWrapper<Order>()
+                    .eq("status", "created")
+                    .lt("created_at", LocalDateTime.now().minusHours(CLOSE_AFTER_HOURS))
+                    .orderByAsc("id")
+                    .last("limit 100"));
+            boolean wxReady = payConfigService.wxReady(payConfigService.get());
+            for (Order order : stale) {
+                // JSAPI 订单先通知微信关单；虚拟支付没有关单接口，只做本地关闭
+                if (wxReady && "wx".equals(order.getPayChannel())) {
+                    try {
+                        wechatPayService.close(order.getOutTradeNo());
+                    } catch (Exception e) {
+                        log.debug("微信关单失败 orderId={}: {}", order.getId(), e.getMessage());
+                    }
+                }
+            }
             int closed = orderMapper.update(null, new UpdateWrapper<Order>()
                     .eq("status", "created")
                     .lt("created_at", LocalDateTime.now().minusHours(CLOSE_AFTER_HOURS))
@@ -60,7 +81,7 @@ public class OrderMaintenanceTask {
                     .orderByAsc("id")
                     .last("limit " + REFUND_CONFIRM_LIMIT));
         } catch (Exception e) {
-            log.warn("查询退款中订单失败：{}", e.getMessage());
+            log.warn("查询虚拟支付退款中订单失败：{}", e.getMessage());
             return;
         }
         for (Order order : orders) {
@@ -73,14 +94,12 @@ public class OrderMaintenanceTask {
                 boolean refunded = snapshot.leftFee <= 0
                         || (refundCents > 0 && snapshot.paidFee - snapshot.leftFee >= refundCents);
                 if (refunded) {
-                    orderMapper.update(null, new UpdateWrapper<Order>()
+                    int rows = orderMapper.update(null, new UpdateWrapper<Order>()
                             .eq("id", order.getId())
                             .eq("refund_status", "refunding")
                             .set("refund_status", "refunded"));
-                    // 退款完成后收回解锁，与微信同步退款、支付宝同步退款保持同一口径
-                    if (order.getRefundAmount() != null && order.getAmount() != null
-                            && order.getRefundAmount().compareTo(order.getAmount()) == 0) {
-                        generationService.revokeUnlocks(order.getUserId(), order.getTaskId(), order.getStyleIds());
+                    if (rows > 0 && isFullRefund(order)) {
+                        settlementService.revokeBenefits(order);
                     }
                     log.info("虚拟支付退款已完成 orderId={}", order.getId());
                 }
@@ -88,5 +107,54 @@ public class OrderMaintenanceTask {
                 log.debug("虚拟支付退款查单失败 orderId={}: {}", order.getId(), e.getMessage());
             }
         }
+    }
+
+    /** JSAPI 退款可能是异步的（银行卡等），定期查退款单确认终态 */
+    @Scheduled(cron = "30 */10 * * * ?")
+    public void confirmWxRefunds() {
+        if (!payConfigService.wxReady(payConfigService.get())) {
+            return;
+        }
+        List<Order> orders;
+        try {
+            orders = orderMapper.selectList(new QueryWrapper<Order>()
+                    .eq("pay_channel", "wx")
+                    .eq("refund_status", "refunding")
+                    .orderByAsc("id")
+                    .last("limit " + REFUND_CONFIRM_LIMIT));
+        } catch (Exception e) {
+            log.warn("查询微信退款中订单失败：{}", e.getMessage());
+            return;
+        }
+        for (Order order : orders) {
+            try {
+                JsonNode refund = wechatPayService.queryRefund("RF" + order.getOutTradeNo());
+                String status = refund.path("status").asText("");
+                if ("SUCCESS".equalsIgnoreCase(status)) {
+                    int rows = orderMapper.update(null, new UpdateWrapper<Order>()
+                            .eq("id", order.getId())
+                            .eq("refund_status", "refunding")
+                            .set("refund_status", "refunded"));
+                    if (rows > 0 && isFullRefund(order)) {
+                        settlementService.revokeBenefits(order);
+                    }
+                    log.info("微信退款已完成 orderId={}", order.getId());
+                } else if ("CLOSED".equalsIgnoreCase(status) || "ABNORMAL".equalsIgnoreCase(status)) {
+                    // 退款失败：回滚为可退款，便于人工重试
+                    orderMapper.update(null, new UpdateWrapper<Order>()
+                            .eq("id", order.getId())
+                            .eq("refund_status", "refunding")
+                            .set("refund_status", "none"));
+                    log.warn("微信退款失败，已回滚为可退款 orderId={} status={}", order.getId(), status);
+                }
+            } catch (Exception e) {
+                log.debug("微信退款查单失败 orderId={}: {}", order.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private static boolean isFullRefund(Order order) {
+        return order.getRefundAmount() != null && order.getAmount() != null
+                && order.getRefundAmount().compareTo(order.getAmount()) == 0;
     }
 }

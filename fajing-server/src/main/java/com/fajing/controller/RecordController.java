@@ -7,6 +7,7 @@ import com.fajing.entity.GenerationTask;
 import com.fajing.entity.UserRecord;
 import com.fajing.mapper.GenerationTaskMapper;
 import com.fajing.mapper.UserRecordMapper;
+import com.fajing.service.FileAccessService;
 import com.fajing.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +34,7 @@ public class RecordController {
     private final UserRecordMapper recordMapper;
     private final GenerationTaskMapper taskMapper;
     private final ObjectMapper objectMapper;
+    private final FileAccessService fileAccessService;
 
     @Operation(summary = "我的试发记录")
     @GetMapping("/records")
@@ -69,7 +71,7 @@ public class RecordController {
         map.put("taskId", r.getTaskId());
         map.put("title", r.getTitle());
         map.put("before", r.getBeforeUrl());
-        map.put("cover", r.getCoverUrl());
+        map.put("cover", fileAccessService.sign(r.getCoverUrl()));
         map.put("styleIds", splitIds(r.getStyleIds()));
         map.put("createdAt", r.getCreatedAt());
         map.put("items", itemsOf(r));
@@ -105,7 +107,8 @@ public class RecordController {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("styleId", src.get("styleId"));
                     item.put("name", src.get("name"));
-                    item.put("img", src.get("img"));
+                    Object img = src.get("img");
+                    item.put("img", img instanceof String url ? fileAccessService.sign(url) : img);
                     // 付费款在支付前不生成（pending），不能标记为失败，否则记录页会隐藏解锁入口
                     boolean pending = Boolean.TRUE.equals(src.get("pending"));
                     item.put("pending", pending);

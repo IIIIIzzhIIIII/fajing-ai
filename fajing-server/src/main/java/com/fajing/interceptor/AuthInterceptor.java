@@ -42,6 +42,11 @@ public class AuthInterceptor implements HandlerInterceptor {
             unauthorized(response);
             return false;
         }
+        // 管理端 token（role=ADMIN）不能直接调用 C 端接口，避免用 admin id 越权读用户数据
+        if (!"USER".equals(claims.get("role", String.class))) {
+            unauthorized(response);
+            return false;
+        }
         Long userId;
         try {
             userId = Long.valueOf(claims.getSubject());

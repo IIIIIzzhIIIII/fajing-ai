@@ -48,6 +48,7 @@ public class RecommendService {
     private final HairstyleMapper hairstyleMapper;
     private final HairColorMapper hairColorMapper;
     private final RecommendationMapper recommendationMapper;
+    private final PhotoUrlValidator photoUrlValidator;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder()
@@ -67,6 +68,7 @@ public class RecommendService {
 
     /** 分析照片并生成排名（不生成图片）；同一用户同一张照片 30 分钟内复用结果，避免重复消耗视觉模型 */
     public Map<String, Object> analyze(String photoUrl, String gender) {
+        photoUrl = photoUrlValidator.check(photoUrl);
         Long userId = UserContext.require();
         String g = "male".equals(gender) ? "male" : "female";
         Recommendation cached = recommendationMapper.selectOne(new QueryWrapper<Recommendation>()

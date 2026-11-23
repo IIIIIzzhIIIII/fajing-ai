@@ -56,78 +56,6 @@ public class WechatVirtualPayService {
     private volatile String accessToken = "";
     private volatile long accessTokenAt = 0;
 
-    /** 生成客户端拉起虚拟支付所需参数 */
-    public Map<String, Object> payParams(Long userId, String outTradeNo, BigDecimal amount,
-                                         String plan, int quantity) {
-        PayConfig cfg = payConfigService.get();
-        if (!payConfigService.wxVirtualReady(cfg)) {
-            throw new BizException("微信虚拟支付参数未配置完整，请在管理端「支付配置」补全 offerId 与 AppKey");
-        }
-        AppUser user = userMapper.selectById(userId);
-        if (user == null || user.getOpenid() == null || user.getOpenid().isBlank()) {
-            throw new BizException("缺少用户 openid，无法发起微信虚拟支付");
-        }
-        if (user.getSessionKey() == null || user.getSessionKey().isBlank()) {
-            throw new BizException("登录态已过期，请退出重新进入小程序后支付");
-        }
-        boolean single = "one".equals(plan);
-        int expectCents = toCents(amount);
-        int unitPrice;
-        int buyQuantity;
-        String productId;
-        if (single) {
-            // 单张解锁固定 ¥6，购买 1 份 ¥6 道具
-            unitPrice = 600;
-            buyQuantity = 1;
-            productId = cfg.getWxVirtualProductOne();
-        } else {
-            // 全部解锁按款数购买：首单 5 折用 ¥3 道具，优惠用完后回到 ¥6 道具 × 款数
-            int count = Math.max(1, quantity);
-            buyQuantity = count;
-            if (expectCents == 300 * count) {
-                unitPrice = 300;
-                productId = cfg.getWxVirtualProductAll();
-            } else if (expectCents == 600 * count) {
-                unitPrice = 600;
-                productId = cfg.getWxVirtualProductOne();
-            } else {
-                throw new BizException("订单金额与虚拟道具价格不匹配，请检查道具定价");
-            }
-        }
-        if (productId == null || productId.isBlank()) {
-            throw new BizException(single ? "未配置单张解锁虚拟道具 ID" : "未配置全部解锁虚拟道具 ID");
-        }
-        if (expectCents != unitPrice * buyQuantity) {
-            throw new BizException("订单金额与虚拟道具价格不匹配，请检查道具定价");
-        }
-        int env = cfg.getWxVirtualEnv() == null ? 0 : cfg.getWxVirtualEnv();
-
-        Map<String, Object> signMap = new LinkedHashMap<>();
-        signMap.put("offerId", cfg.getWxVirtualOfferId());
-        signMap.put("buyQuantity", buyQuantity);
-        signMap.put("env", env);
-        signMap.put("currencyType", "CNY");
-        signMap.put("productId", productId);
-        signMap.put("goodsPrice", unitPrice);
-        signMap.put("outTradeNo", outTradeNo);
-        signMap.put("attach", "order:" + outTradeNo);
-        signMap.put("mode", "short_series_goods");
-
-        String signData;
-        try {
-            signData = objectMapper.writeValueAsString(signMap);
-        } catch (Exception e) {
-            throw new BizException("虚拟支付参数序列化失败");
-        }
-        String appKey = payConfigService.wxVirtualAppkey(cfg);
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("signData", signData);
-        result.put("paySig", hmacHex(appKey, URI_VIRTUAL_PAY + "&" + signData));
-        result.put("signature", hmacHex(user.getSessionKey(), signData));
-        result.put("mode", "short_series_goods");
-        return result;
-    }
-
     /** 充值套餐 / VIP 等固定价格道具：按档位商品 ID 生成支付参数 */
     public Map<String, Object> payParamsForProduct(Long userId, String outTradeNo, BigDecimal amount, String productId) {
         PayConfig cfg = payConfigService.get();
@@ -178,7 +106,7 @@ public class WechatVirtualPayService {
         PayConfig cfg = payConfigService.get();
         if (!payConfigService.wxVirtualReady(cfg)) {
             result.put("ok", false);
-            result.put("msg", "虚拟支付参数不完整：需开启微信支付，并填写 OfferID、AppKey、¥6 道具 ID、¥3 道具 ID");
+            result.put("msg", "虚拟支付参数不完整：需开启微信支付，并填写 OfferID、AppKey");
             return result;
         }
         try {

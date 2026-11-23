@@ -3,10 +3,8 @@ package com.fajing.config;
 import com.fajing.interceptor.AdminInterceptor;
 import com.fajing.interceptor.AuthInterceptor;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
@@ -15,9 +13,6 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final AdminInterceptor adminInterceptor;
     private final AuthInterceptor authInterceptor;
-
-    @Value("${fajing.upload-dir}")
-    private String uploadDir;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
@@ -32,12 +27,5 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/site-settings", "/api/points/packages",
                         // 支付渠道服务端回调不带用户 token，需放行（回调内部自行验签）
                         "/api/order/notify", "/api/order/notify/**", "/api/pay/**");
-    }
-
-    @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String location = uploadDir.endsWith("/") || uploadDir.endsWith("\\") ? uploadDir : uploadDir + "/";
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + location);
     }
 }

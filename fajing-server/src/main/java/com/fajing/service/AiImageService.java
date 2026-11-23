@@ -61,11 +61,24 @@ public class AiImageService {
     @Value("${fajing.upload-dir}")
     private String uploadDir;
 
+    /** 本站域名与 S3 公网域名：用户照片只允许从这两个来源拉取，防止 SSRF */
+    @Value("${fajing.base-url:}")
+    private String baseUrl;
+
+    @Value("${storage.s3.public-base-url:}")
+    private String s3PublicBaseUrl;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
             // 参考图/结果图常带 301/302 跳转，必须跟随，否则下载失败
             .followRedirects(HttpClient.Redirect.ALWAYS)
+            .build();
+
+    /** 用户照片下载：禁止跳转，避免白名单域名 302 到内网地址 */
+    private final HttpClient photoHttp = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
     /**
@@ -195,7 +208,7 @@ public class AiImageService {
             }
         }
         if (raw == null && photoUrl != null && photoUrl.startsWith("http")) {
-            raw = httpGet(photoUrl);
+            raw = httpGetPhoto(photoUrl);
         }
         if (raw == null || raw.length == 0) {
             throw new BizException("读取上传照片失败");
@@ -347,6 +360,65 @@ public class AiImageService {
             throw new BizException("图片下载失败（" + resp.statusCode() + "）");
         }
         return resp.body();
+    }
+
+    /** 用户照片只允许本站 /uploads 或已配置的 S3 公网域名，且不跟随跳转 */
+    private byte[] httpGetPhoto(String url) throws Exception {
+        if (!isAllowedPhotoUrl(url)) {
+            throw new BizException("照片地址不合法");
+        }
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(30))
+                .GET()
+                .build();
+        HttpResponse<byte[]> resp = photoHttp.send(req, HttpResponse.BodyHandlers.ofByteArray());
+        if (resp.statusCode() != 200) {
+            throw new BizException("图片下载失败（" + resp.statusCode() + "）");
+        }
+        return resp.body();
+    }
+
+    private boolean isAllowedPhotoUrl(String url) {
+        try {
+            URI target = URI.create(url);
+            String scheme = target.getScheme();
+            if (scheme == null
+                    || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+                return false;
+            }
+            URI base = parseUri(baseUrl);
+            if (base != null && sameOrigin(target, base)
+                    && target.getPath() != null && target.getPath().startsWith("/uploads/")) {
+                return true;
+            }
+            URI s3 = parseUri(s3PublicBaseUrl);
+            return s3 != null && sameOrigin(target, s3);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static URI parseUri(String url) {
+        try {
+            return url == null || url.isBlank() ? null : URI.create(url.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean sameOrigin(URI a, URI b) {
+        return a.getScheme() != null && b.getScheme() != null
+                && a.getScheme().equalsIgnoreCase(b.getScheme())
+                && a.getHost() != null && b.getHost() != null
+                && a.getHost().equalsIgnoreCase(b.getHost())
+                && portOf(a) == portOf(b);
+    }
+
+    private static int portOf(URI uri) {
+        if (uri.getPort() > 0) {
+            return uri.getPort();
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
     private static String fileNameOf(String url) {

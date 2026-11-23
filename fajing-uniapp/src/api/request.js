@@ -303,13 +303,9 @@ export const API = {
   quota: () => request({ url: '/api/quota' }),
   checkPhoto: (photoUrl) =>
     request({ url: '/api/photo/check', method: 'POST', data: { photoUrl } }),
-  mockOrder: (payload) => request({ url: '/api/order/mock', method: 'POST', data: payload }),
   createOrder: (payload) => request({ url: '/api/order/create', method: 'POST', data: payload }),
-  payMethods: (platform) =>
-    request({ url: `/api/order/pay-methods?platform=${encodeURIComponent(platform || '')}` }),
-  /** 价格与首单优惠只影响展示，取不到时静默回退为原价，不打断用户 */
-  pricing: () => request({ url: '/api/order/pricing', silent: true }),
   virtualConfirm: (id) => request({ url: `/api/order/${id}/virtual-confirm`, method: 'POST' }),
+  syncOrder: (id) => request({ url: `/api/order/${id}/sync`, method: 'POST' }),
   orderStatus: (id) => request({ url: `/api/order/${id}` }),
   unlocks: () => request({ url: '/api/unlocks' }),
   unlock: (payload) => request({ url: '/api/unlock', method: 'POST', data: payload }),

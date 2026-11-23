@@ -192,6 +192,8 @@ async function buy(pkg) {
         }
         if (data && data.payParams) {
           await requestWxPay(data.payParams)
+          // 回调可能延迟，先主动查单兜底一次
+          await API.syncOrder(data.orderId).catch(() => null)
           for (let i = 0; i < 8; i++) {
             await new Promise((resolve) => setTimeout(resolve, 1500))
             const st = await API.orderStatus(data.orderId)

@@ -42,17 +42,13 @@ public class GenerationService {
     private final UserUnlockMapper unlockMapper;
     private final RecommendationMapper recommendationMapper;
     private final ObjectMapper objectMapper;
+    private final FileAccessService fileAccessService;
+    private final PhotoUrlValidator photoUrlValidator;
 
     public GenerationTask create(String photoUrl, String gender, String mode, List<String> styleIds, String colorId,
                                  boolean freeQuota, Long recommendId) {
-        if (photoUrl == null || photoUrl.isBlank()) {
-            throw new BizException("请先上传照片");
-        }
-        // 小程序临时文件路径（http://tmp/、wxfile://）服务端无法访问，提前拦截避免白跑 AI
-        if (photoUrl.startsWith("http://tmp/") || photoUrl.startsWith("http://usr/")
-                || photoUrl.startsWith("wxfile://")) {
-            throw new BizException("照片未上传成功，请重新选择照片");
-        }
+        // 只允许本站 /uploads、相对路径或已配置 S3 域名，拦截临时路径与任意外链
+        photoUrl = photoUrlValidator.check(photoUrl);
         // 去重并保持用户选择顺序：重复/无效 ID 会导致出图数量与所选不一致
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
         if (styleIds != null) {
@@ -103,13 +99,7 @@ public class GenerationService {
     /** 员工代客试发：免费生成全部所选款式，生成后由顾客扫码领取结果 */
     public GenerationTask createEmployee(String photoUrl, String gender, List<String> styleIds,
                                          Long storeId, Long staffId, String claimToken) {
-        if (photoUrl == null || photoUrl.isBlank()) {
-            throw new BizException("请先上传照片");
-        }
-        if (photoUrl.startsWith("http://tmp/") || photoUrl.startsWith("http://usr/")
-                || photoUrl.startsWith("wxfile://")) {
-            throw new BizException("照片未上传成功，请重新选择照片");
-        }
+        photoUrl = photoUrlValidator.check(photoUrl);
         java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
         if (styleIds != null) {
             for (String id : styleIds) {
@@ -156,6 +146,7 @@ public class GenerationService {
 
     /** 发色变体：单款发型 + 指定发色，创建后立即生成并在成功后解锁 */
     public GenerationTask createColor(String photoUrl, String gender, String styleId, String colorId, Long recommendId) {
+        photoUrl = photoUrlValidator.check(photoUrl);
         GenerationTask task = new GenerationTask();
         task.setUserId(UserContext.require());
         task.setPhotoUrl(photoUrl == null ? "" : photoUrl);
@@ -683,7 +674,9 @@ public class GenerationService {
         map.put("taskId", task.getId());
         map.put("status", task.getStatus());
         map.put("progress", task.getProgress());
-        map.put("result", parseResult(task.getResultJson()));
+        Object result = parseResult(task.getResultJson());
+        signResultImages(result);
+        map.put("result", result);
         map.put("done", doneCount(task.getResultJson()));
         map.put("failed", failedCount(task.getResultJson()));
         map.put("storeId", task.getStoreId());
@@ -721,6 +714,19 @@ public class GenerationService {
             }
         }
         return count;
+    }
+
+    /** 返回前端前给生成图加短时签名，避免私有图被直接访问 */
+    @SuppressWarnings("unchecked")
+    private void signResultImages(Object parsed) {
+        if (!(parsed instanceof Map<?, ?> map) || !(map.get("styles") instanceof List<?> styles)) {
+            return;
+        }
+        for (Object o : styles) {
+            if (o instanceof Map<?, ?> item && item.get("img") instanceof String url) {
+                ((Map<String, Object>) item).put("img", fileAccessService.sign(url));
+            }
+        }
     }
 
     private Object parseResult(String json) {

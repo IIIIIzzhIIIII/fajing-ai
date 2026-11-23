@@ -29,7 +29,8 @@ public class UploadController {
     private final StorageService storageService;
 
     @Operation(summary = "上传图片，返回可访问 URL")
-    @PostMapping("/upload")
+    // 管理端单独走 /api/admin/upload，避免管理端 token 调用 C 端接口
+    @PostMapping({"/upload", "/admin/upload"})
     public Result<Map<String, Object>> upload(@RequestParam("file") MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {
             throw new BizException("请选择要上传的照片");

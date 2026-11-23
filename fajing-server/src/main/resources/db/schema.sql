@@ -203,8 +203,6 @@ CREATE TABLE IF NOT EXISTS pay_config (
   wx_virtual_appkey_enc VARCHAR(512) NOT NULL DEFAULT '',
   wx_virtual_offer_id VARCHAR(64) NOT NULL DEFAULT '',
   wx_virtual_env TINYINT NOT NULL DEFAULT 0,
-  wx_virtual_product_one VARCHAR(64) NOT NULL DEFAULT '',
-  wx_virtual_product_all VARCHAR(64) NOT NULL DEFAULT '',
   douyin_enabled TINYINT NOT NULL DEFAULT 0,
   douyin_app_id VARCHAR(64) NOT NULL DEFAULT '',
   douyin_secret_enc VARCHAR(512) NOT NULL DEFAULT '',

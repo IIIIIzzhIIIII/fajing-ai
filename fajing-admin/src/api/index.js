@@ -60,7 +60,7 @@ export function generateModelShot(imageUrl) {
 export function uploadImage(file) {
   const form = new FormData()
   form.append('file', file)
-  return service.post('/api/upload', form, {
+  return service.post('/api/admin/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 60000
   })

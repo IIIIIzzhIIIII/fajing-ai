@@ -106,8 +106,12 @@ public class WechatPayService {
                 Map.of("mchid", cfg.getWxMchId()));
     }
 
-    /** 申请退款，返回微信退款单号 */
-    public String refund(String outTradeNo, String refundNo, BigDecimal refundYuan, BigDecimal totalYuan, String reason) {
+    /** 退款受理结果：status 为微信返回的退款状态（SUCCESS / PROCESSING / CLOSED / ABNORMAL） */
+    public record RefundResult(String refundId, String outRefundNo, String status) {}
+
+    /** 申请退款；微信对银行卡等渠道是异步处理，返回的 status 可能为 PROCESSING */
+    public RefundResult refund(String outTradeNo, String refundNo, BigDecimal refundYuan,
+                               BigDecimal totalYuan, String reason) {
         PayConfig cfg = requireWxReady();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("out_trade_no", outTradeNo);
@@ -118,7 +122,20 @@ public class WechatPayService {
                 "total", toCents(totalYuan),
                 "currency", "CNY"));
         JsonNode resp = request(cfg, "POST", "/v3/refund/domestic/refunds", body);
-        return resp.path("refund_id").asText("");
+        return new RefundResult(resp.path("refund_id").asText(""), refundNo, resp.path("status").asText(""));
+    }
+
+    /** 主动查单：回调丢失时的兜底，返回微信订单 JSON */
+    public JsonNode queryOrder(String outTradeNo) {
+        PayConfig cfg = requireWxReady();
+        return request(cfg, "GET",
+                "/v3/pay/transactions/out-trade-no/" + outTradeNo + "?mchid=" + cfg.getWxMchId(), null);
+    }
+
+    /** 查询退款单状态：用于确认异步退款是否到账 */
+    public JsonNode queryRefund(String outRefundNo) {
+        PayConfig cfg = requireWxReady();
+        return request(cfg, "GET", "/v3/refund/domestic/refunds/" + outRefundNo, null);
     }
 
     /** 回调验签 + 解密 resource，返回解密后的业务 JSON */

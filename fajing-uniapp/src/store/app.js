@@ -96,8 +96,6 @@ export const useAppStore = defineStore('app', {
       this.result = null
       this.taskId = ''
       uni.removeStorageSync(KEY)
-      uni.removeStorageSync('fajing_pending_order')
-      uni.removeStorageSync('fajing_pending_result')
       uni.removeStorageSync('fajing_picked_styles')
     }
   }

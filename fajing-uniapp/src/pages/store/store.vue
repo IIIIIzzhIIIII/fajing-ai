@@ -112,22 +112,43 @@ async function buy(tier) {
       platform
     })
     if (data && data.paid) {
-      uni.showToast({ title: '购买成功，已放入券包', icon: 'none', duration: 2000 })
-      setTimeout(() => uni.navigateTo({ url: '/pages/coupons/coupons' }), 800)
+      buySuccess()
+      return
+    }
+    // #ifdef MP-WEIXIN
+    if (data && data.virtualPay) {
+      await requestVirtualPay(data.virtualPay)
+      for (let i = 0; i < 8; i++) {
+        const st = await API.virtualConfirm(data.orderId).catch(() => null)
+        if (st && st.paid) break
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+      }
+      buySuccess()
       return
     }
     if (data && data.payParams) {
-      // 微信小程序真实支付需在支付配置完成后接入
-      uni.showModal({
-        title: '待支付',
-        content: '当前环境未开启模拟支付，请在支付参数配置完成后重试。',
-        showCancel: false
-      })
+      await requestWxPay(data.payParams)
+      // 回调可能延迟，先主动查单兜底一次
+      await API.syncOrder(data.orderId).catch(() => null)
+      for (let i = 0; i < 8; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        const st = await API.orderStatus(data.orderId)
+        if (st && st.paid) break
+      }
+      buySuccess()
       return
     }
+    // #endif
+    // #ifdef H5
+    if (data && data.payForm) {
+      document.write(data.payForm)
+      document.close()
+      return
+    }
+    // #endif
     uni.showModal({
       title: '支付未完成',
-      content: data && data.payForm ? '请在浏览器中完成支付' : '支付通道未配置，请联系门店',
+      content: '支付通道未配置，请联系门店',
       showCancel: false
     })
   } catch (e) {
@@ -136,6 +157,40 @@ async function buy(tier) {
     buying.value = false
   }
 }
+
+function buySuccess() {
+  uni.showToast({ title: '购买成功，已放入券包', icon: 'none', duration: 2000 })
+  setTimeout(() => uni.navigateTo({ url: '/pages/coupons/coupons' }), 800)
+}
+
+// #ifdef MP-WEIXIN
+function requestVirtualPay(payload) {
+  return new Promise((resolve, reject) => {
+    // eslint-disable-next-line no-undef
+    wx.requestVirtualPayment({
+      signData: payload.signData,
+      paySig: payload.paySig,
+      signature: payload.signature,
+      mode: payload.mode,
+      success: resolve,
+      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
+    })
+  })
+}
+// #endif
+
+// #ifndef H5
+function requestWxPay(payParams) {
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      provider: 'wxpay',
+      ...payParams,
+      success: resolve,
+      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
+    })
+  })
+}
+// #endif
 
 function getPlatform() {
   // #ifdef MP-WEIXIN

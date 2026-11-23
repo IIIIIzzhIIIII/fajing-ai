@@ -17,6 +17,7 @@ import com.fajing.mapper.OrderMapper;
 import com.fajing.service.AdminLogService;
 import com.fajing.service.ChannelStatsService;
 import com.fajing.service.CouponService;
+import com.fajing.service.OrderSettlementService;
 import com.fajing.service.TradeRuleService;
 import com.fajing.service.pay.AlipayService;
 import com.fajing.service.pay.WechatPayService;
@@ -65,8 +66,8 @@ public class AdminController {
     private final ChannelStatsService channelStatsService;
     private final TradeRuleService tradeRuleService;
     private final CouponService couponService;
+    private final OrderSettlementService settlementService;
     private final WechatVirtualPayService wechatVirtualPayService;
-    private final com.fajing.service.GenerationService generationService;
 
     @Operation(summary = "订单退款（微信 / 支付宝）")
     @PostMapping("/orders/{id}/refund")
@@ -81,6 +82,14 @@ public class AdminController {
         }
         if ("refunded".equals(order.getRefundStatus())) {
             throw new BizException("该订单已退款");
+        }
+        // 魅力值是即时消耗型资产，充值后不支持退款
+        if ("points".equals(order.getBizType())) {
+            throw new BizException("魅力值充值订单不支持退款");
+        }
+        // 团购券已核销说明用户已到店消费，不能再退
+        if ("coupon".equals(order.getBizType()) && couponService.hasUsedCoupon(order.getId())) {
+            throw new BizException("团购券已核销，无法退款");
         }
         Integer refundDays = tradeRuleService.get().getRefundDays();
         if (refundDays != null && refundDays > 0 && order.getPaidAt() != null
@@ -108,13 +117,19 @@ public class AdminController {
         if (locked == 0) {
             throw new BizException("该订单正在退款或已退款");
         }
+        boolean asyncRefund = false;
         try {
             switch (channel) {
-                case "wx" -> wechatPayService.refund(order.getOutTradeNo(),
-                        "RF" + order.getOutTradeNo() + System.currentTimeMillis(),
-                        amount, order.getAmount(), reason);
-                case "wx-virtual" -> wechatVirtualPayService.refund(order.getUserId(),
-                        order.getOutTradeNo(), amount, reason);
+                case "wx" -> {
+                    WechatPayService.RefundResult result = wechatPayService.refund(order.getOutTradeNo(),
+                            "RF" + order.getOutTradeNo(), amount, order.getAmount(), reason);
+                    // 银行卡等渠道微信异步处理，最终结果由退款查单任务确认
+                    asyncRefund = !"SUCCESS".equalsIgnoreCase(result.status());
+                }
+                case "wx-virtual" -> {
+                    wechatVirtualPayService.refund(order.getUserId(), order.getOutTradeNo(), amount, reason);
+                    asyncRefund = true;
+                }
                 case "alipay" -> alipayService.refund(order.getOutTradeNo(), amount, reason);
                 case "mock" -> {
                     // 本地模拟订单无需调用渠道
@@ -129,17 +144,14 @@ public class AdminController {
                     .set("refund_status", "none"));
             throw e;
         }
-        // 虚拟支付退款是异步任务，先保持 refunding，最终结果以微信查单为准
-        String refundStatus = "wx-virtual".equals(channel) ? "refunding" : "refunded";
+        // 异步退款保持 refunding，最终结果以退款查单任务为准
+        String refundStatus = asyncRefund ? "refunding" : "refunded";
         order.setRefundStatus(refundStatus);
         order.setRefundAmount(amount);
         orderMapper.updateById(order);
-        // 全额退款收回对应解锁，避免退款后仍保留付费内容；团购券订单同步作废券
+        // 全额退款且已确认到账时回收权益；异步退款等查单确认后再回收
         if ("refunded".equals(refundStatus) && amount.compareTo(order.getAmount()) == 0) {
-            generationService.revokeUnlocks(order.getUserId(), order.getTaskId(), order.getStyleIds());
-            if ("coupon".equals(order.getBizType())) {
-                couponService.markRefundedByOrder(order.getId());
-            }
+            settlementService.revokeBenefits(order);
         }
         adminLogService.log("ORDER_REFUND", "order:" + id + ",amount:" + amount);
         Map<String, Object> data = new LinkedHashMap<>();
@@ -171,11 +183,14 @@ public class AdminController {
                 .ge("created_at", start));
         long costCents = sumOf(aiCallLogMapper.selectMaps(new QueryWrapper<AiCallLog>()
                 .select("IFNULL(SUM(cost_cents),0) AS total").ge("created_at", start)));
+        // 统计口径剔除已全额退款订单，避免「退款单也算付费」
         Long paidOrders = orderMapper.selectCount(new QueryWrapper<Order>()
-                .eq("status", "paid").ge("created_at", start));
+                .eq("status", "paid").ge("created_at", start)
+                .and(w -> w.isNull("refund_status").or().ne("refund_status", "refunded")));
         long payingUsers = sumOf(orderMapper.selectMaps(new QueryWrapper<Order>()
                 .select("COUNT(DISTINCT user_id) AS total")
-                .eq("status", "paid").ge("created_at", start)));
+                .eq("status", "paid").ge("created_at", start)
+                .and(w -> w.isNull("refund_status").or().ne("refund_status", "refunded"))));
         long generateUsers = sumOf(taskMapper.selectMaps(new QueryWrapper<GenerationTask>()
                 .select("COUNT(DISTINCT user_id) AS total").ge("created_at", start)));
 
@@ -287,7 +302,10 @@ public class AdminController {
 
     @Operation(summary = "订单列表")
     @GetMapping("/orders")
-    public Result<List<Order>> orders() {
-        return Result.ok(orderMapper.selectList(new QueryWrapper<Order>().orderByDesc("created_at")));
+    public Result<List<Order>> orders(@RequestParam(required = false) Integer limit) {
+        // 默认最多返回 200 条，避免订单量增长后一次性拉全表导致超时
+        int size = limit == null ? 200 : Math.max(1, Math.min(500, limit));
+        return Result.ok(orderMapper.selectList(new QueryWrapper<Order>()
+                .orderByDesc("created_at").last("limit " + size)));
     }
 }
