@@ -43,7 +43,9 @@
               <view class="tc-title">{{ tier.title }}</view>
               <view class="tc-desc">{{ tier.description || '到店出示核销码使用' }}</view>
             </view>
-            <view class="tc-buy" @click="buy(tier)">购买</view>
+            <view class="tc-buy" :class="{ disabled: payHidden }" @click="buy(tier)">
+              {{ payHidden ? 'iOS 暂不支持' : '购买' }}
+            </view>
           </view>
 
           <view v-if="!tiers.length" class="empty">该门店暂未上架团购券</view>
@@ -70,6 +72,7 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { API } from '@/api/request'
 import { goBack } from '@/utils/nav'
+import { requestWxPay, isIOSMiniProgram } from '@/utils/pay'
 import FjLoginModal from '@/components/FjLoginModal.vue'
 import { useLoginGate } from '@/composables/useLoginGate'
 
@@ -77,6 +80,9 @@ const store = ref(null)
 const tiers = ref([])
 const nearby = ref([])
 const buying = ref(false)
+
+/** iOS 小程序不展示团购券购买入口 */
+const payHidden = isIOSMiniProgram()
 
 const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
 
@@ -117,6 +123,10 @@ async function loadStore(id) {
 
 /** 购券前必须完成登录授权，未授权先弹授权引导 */
 function buy(tier) {
+  if (payHidden) {
+    uni.showToast({ title: 'iOS 端暂不支持购买，请使用安卓或在 H5 中购买', icon: 'none' })
+    return
+  }
   ensureLogin(() => doBuy(tier))
 }
 
@@ -151,6 +161,8 @@ async function doBuy(tier) {
       await API.syncOrder(data.orderId).catch(() => null)
       for (let i = 0; i < 8; i++) {
         await new Promise((resolve) => setTimeout(resolve, 1500))
+        // 回调可能丢失：轮询期间持续主动查单兜底
+        await API.syncOrder(data.orderId).catch(() => null)
         const st = await API.orderStatus(data.orderId)
         if (st && st.paid) break
       }
@@ -159,6 +171,20 @@ async function doBuy(tier) {
     }
     // #endif
     // #ifdef H5
+    if (data && data.payParams) {
+      await requestWxPay(data.payParams)
+      // 回调可能延迟，先主动查单兜底一次
+      await API.syncOrder(data.orderId).catch(() => null)
+      for (let i = 0; i < 8; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        // 回调可能丢失：轮询期间持续主动查单兜底
+        await API.syncOrder(data.orderId).catch(() => null)
+        const st = await API.orderStatus(data.orderId)
+        if (st && st.paid) break
+      }
+      buySuccess()
+      return
+    }
     if (data && data.payForm) {
       document.write(data.payForm)
       document.close()
@@ -191,19 +217,6 @@ function requestVirtualPay(payload) {
       paySig: payload.paySig,
       signature: payload.signature,
       mode: payload.mode,
-      success: resolve,
-      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
-    })
-  })
-}
-// #endif
-
-// #ifndef H5
-function requestWxPay(payParams) {
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      provider: 'wxpay',
-      ...payParams,
       success: resolve,
       fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
     })
@@ -347,6 +360,11 @@ onLoad((options) => {
   color: #fff;
   background: linear-gradient(135deg, #d46a88, #b14a6b);
   border-radius: 999px;
+  white-space: nowrap;
+}
+.tc-buy.disabled {
+  background: #e7e1e3;
+  color: #9b8f95;
 }
 .my-coupon {
   display: flex;

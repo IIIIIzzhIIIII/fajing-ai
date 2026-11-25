@@ -27,7 +27,10 @@
           <text class="sec-title">充值套餐</text>
           <text class="sec-hint">一次购买，长期可用</text>
         </view>
-        <view class="pkg-grid">
+        <view v-if="payHidden" class="ios-pay-tip">
+          iOS 端暂不支持购买充值套餐，可在安卓设备或微信 H5 中完成购买；已获得的魅力值仍可正常使用。
+        </view>
+        <view v-else class="pkg-grid">
           <view v-for="p in packages" :key="p.key" class="pkg" @click="buy(p)">
             <view class="pkg-badge" v-if="p.badge">{{ p.badge }}</view>
             <view class="pkg-main">{{ p.main }}</view>
@@ -81,11 +84,15 @@ import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { track } from '@/utils/track'
 import { goBack } from '@/utils/nav'
+import { requestWxPay, isIOSMiniProgram } from '@/utils/pay'
 import FjLoginModal from '@/components/FjLoginModal.vue'
 import { useLoginGate } from '@/composables/useLoginGate'
 
 const app = useAppStore()
 const ui = useUiStore()
+
+/** iOS 小程序不展示虚拟商品购买入口 */
+const payHidden = isIOSMiniProgram()
 
 const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
 
@@ -159,6 +166,10 @@ function currentPlatform() {
 
 /** 充值前必须完成登录授权（头像昵称 + 手机号），未授权先弹授权引导 */
 function buy(pkg) {
+  if (payHidden) {
+    ui.toast('iOS 端暂不支持购买，请使用安卓或在 H5 中完成')
+    return
+  }
   ensureLogin(() => doBuy(pkg))
 }
 
@@ -186,6 +197,21 @@ async function doBuy(pkg) {
           return
         }
         // #ifdef H5
+        if (data && data.payParams) {
+          await requestWxPay(data.payParams)
+          // 回调可能延迟，先主动查单兜底一次
+          await API.syncOrder(data.orderId).catch(() => null)
+          for (let i = 0; i < 8; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 1500))
+            // 回调可能丢失：轮询期间持续主动查单兜底
+            await API.syncOrder(data.orderId).catch(() => null)
+            const st = await API.orderStatus(data.orderId)
+            if (st && st.paid) break
+          }
+          await refresh()
+          ui.toast('购买成功')
+          return
+        }
         if (data && data.payForm) {
           document.write(data.payForm)
           document.close()
@@ -215,6 +241,8 @@ async function doBuy(pkg) {
           await API.syncOrder(data.orderId).catch(() => null)
           for (let i = 0; i < 8; i++) {
             await new Promise((resolve) => setTimeout(resolve, 1500))
+            // 回调可能丢失：轮询期间持续主动查单兜底
+            await API.syncOrder(data.orderId).catch(() => null)
             const st = await API.orderStatus(data.orderId)
             if (st && st.paid) break
           }
@@ -300,19 +328,6 @@ function requestVirtualPay(payload) {
 }
 // #endif
 
-// #ifndef H5
-function requestWxPay(payParams) {
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      provider: 'wxpay',
-      ...payParams,
-      success: resolve,
-      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
-    })
-  })
-}
-// #endif
-
 onShow(() => {
   refresh()
 })
@@ -362,8 +377,15 @@ onShow(() => {
   font-size: 10px;
   color: var(--muted);
 }
-.pkg-grid {
-  display: grid;
+.ios-pay-tip {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff6e8;
+  color: #a9701b;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.pkg-grid {  display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }

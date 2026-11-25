@@ -120,7 +120,7 @@
               券包 {{ app.quota.couponCount || 0 }} 张
             </view>
           </view>
-          <view v-for="t in tiers" :key="t.id" class="coupon-row" @click="buyTier(t)">
+          <view v-for="t in tiers" v-show="!payHidden" :key="t.id" class="coupon-row" @click="buyTier(t)">
             <view class="coupon-amount">
               <text class="ca-pay">¥{{ money(t.payAmount) }}</text>
               <text class="ca-value">抵 ¥{{ money(t.valueAmount) }}</text>
@@ -131,7 +131,8 @@
             </view>
             <view class="coupon-buy">购买</view>
           </view>
-          <view v-if="!tiers.length" class="coupon-empty">团购券即将上线，敬请期待</view>
+          <view v-if="payHidden" class="coupon-empty">iOS 端暂不支持购买团购券，可在安卓设备或微信 H5 中购买</view>
+          <view v-if="!tiers.length && !payHidden" class="coupon-empty">团购券即将上线，敬请期待</view>
         </view>
 
         <view v-if="myCoupons.length" class="my-coupon">
@@ -180,12 +181,16 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { saveRemoteImage } from '@/utils/save'
+import { requestWxPay, isIOSMiniProgram } from '@/utils/pay'
 import { track } from '@/utils/track'
 import FjLoginModal from '@/components/FjLoginModal.vue'
 import { useLoginGate } from '@/composables/useLoginGate'
 
 const app = useAppStore()
 const ui = useUiStore()
+
+/** iOS 小程序不展示虚拟商品购买入口（团购券、充值） */
+const payHidden = isIOSMiniProgram()
 
 const { visible: loginVisible, ensureLogin, finishLogin, closeLogin } = useLoginGate()
 
@@ -303,6 +308,10 @@ function onPrimary() {
 }
 
 function needRecharge() {
+  if (payHidden) {
+    ui.toast('iOS 端暂不支持购买魅力值，可在安卓设备或 H5 充值')
+    return
+  }
   uni.showModal({
     title: '魅力值不足',
     content: '解锁单款需要 10 点魅力值，去充值或看广告获取？',
@@ -452,6 +461,10 @@ async function loadMyCoupons() {
 /** 购买团购券：服务端按档位计价，支付成功后自动生成核销二维码 */
 /** 购券前必须完成登录授权，未授权先弹授权引导 */
 function buyTier(tier) {
+  if (payHidden) {
+    ui.toast('iOS 端暂不支持购买团购券，请使用安卓或在 H5 中购买')
+    return
+  }
   ensureLogin(() => doBuyTier(tier))
 }
 
@@ -479,6 +492,21 @@ async function doBuyTier(tier) {
           return
         }
         // #ifdef H5
+        if (data && data.payParams) {
+          await requestWxPay(data.payParams)
+          // 回调可能延迟，先主动查单兜底一次
+          await API.syncOrder(data.orderId).catch(() => null)
+          for (let i = 0; i < 8; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 1500))
+            // 回调可能丢失：轮询期间持续主动查单兜底
+            await API.syncOrder(data.orderId).catch(() => null)
+            const st = await API.orderStatus(data.orderId)
+            if (st && st.paid) break
+          }
+          await loadMyCoupons()
+          ui.toast('购买成功，核销二维码已生成')
+          return
+        }
         if (data && data.payForm) {
           document.write(data.payForm)
           document.close()
@@ -499,6 +527,8 @@ async function doBuyTier(tier) {
           await API.syncOrder(data.orderId).catch(() => null)
           for (let i = 0; i < 8; i++) {
             await new Promise((resolve) => setTimeout(resolve, 1500))
+            // 回调可能丢失：轮询期间持续主动查单兜底
+            await API.syncOrder(data.orderId).catch(() => null)
             const st = await API.orderStatus(data.orderId)
             if (st && st.paid) break
           }
@@ -527,19 +557,6 @@ function requestVirtualPay(payload) {
       paySig: payload.paySig,
       signature: payload.signature,
       mode: payload.mode,
-      success: resolve,
-      fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
-    })
-  })
-}
-// #endif
-
-// #ifndef H5
-function requestWxPay(payParams) {
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      provider: 'wxpay',
-      ...payParams,
       success: resolve,
       fail: (err) => reject(new Error((err && err.errMsg) || '支付失败'))
     })

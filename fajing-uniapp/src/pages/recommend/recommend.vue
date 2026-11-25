@@ -36,42 +36,64 @@
           <!-- 发型推荐 -->
           <template v-if="tab === 'hair'">
             <view v-for="s in topStyles" :key="s.styleId" class="rec-card" @click="pickStyle(s)">
-              <view class="rec-thumb">
-                <image v-if="imgOf(s)" :src="imgOf(s)" mode="aspectFill" class="rec-img" />
-                <view v-else class="rec-img-empty">
-                  <template v-if="isGenerating(s)">
-                    <view class="gen-progress">
-                      <view class="gp-track"><view class="gp-fill" :style="{ width: progressOf(s) + '%' }" /></view>
-                      <view class="gp-t">AI 生成中 {{ progressOf(s) }}%</view>
-                    </view>
-                  </template>
-                  <template v-else-if="itemOf(s) && itemOf(s).failed">
-                    <fj-icon name="refresh" :size="22" color="#B7A8AF" />
-                    <text class="empty-tip">生成失败 · 点击重试</text>
-                  </template>
-                  <template
-                    v-else-if="(itemOf(s) && itemOf(s).freePending) || (!itemOf(s) && isFreeSlot(s))"
-                  >
-                    <fj-icon name="gift" :size="22" color="#B7A8AF" />
-                    <text class="empty-tip">本批次免费生成</text>
-                  </template>
-                  <template v-else>
-                    <fj-icon name="lock" :size="22" color="#B7A8AF" />
-                    <text class="empty-tip">10 魅力值解锁</text>
-                  </template>
-                </view>
+              <view class="rec-left">
                 <view class="badge-row">
                   <text class="rank-badge">TOP {{ s.rank }}</text>
                   <text class="score-badge">{{ s.score }}分</text>
                 </view>
-              </view>
-              <view class="rec-info">
                 <view class="rec-name-row">
                   <text class="rec-name">{{ s.name }}</text>
                   <text class="rec-action" :class="{ free: isOpen(s) }">{{ actionText(s) }}</text>
                 </view>
                 <view class="rec-reason">{{ s.reason }}</view>
                 <view class="rec-tag-line">{{ s.len }} · 适合{{ s.face }}</view>
+
+                <!-- 生成中：左下角圆形进度环，完成后图片直接落在右侧框内 -->
+                <view v-if="isGenerating(s)" class="rec-progress">
+                  <view class="rp-ring-wrap">
+                    <!-- #ifdef H5 -->
+                    <svg width="66" height="66" viewBox="0 0 66 66">
+                      <circle class="rp-bg" cx="33" cy="33" r="27" fill="none" stroke-width="5" />
+                      <circle
+                        class="rp-fg"
+                        cx="33"
+                        cy="33"
+                        r="27"
+                        fill="none"
+                        stroke-width="5"
+                        stroke-linecap="round"
+                        stroke-dasharray="169.6"
+                        :stroke-dashoffset="ringDashOf(s)"
+                      />
+                    </svg>
+                    <!-- #endif -->
+                    <!-- #ifndef H5 -->
+                    <view class="rp-ring" :style="ringStyleOf(s)">
+                      <view class="rp-ring-in" />
+                    </view>
+                    <!-- #endif -->
+                    <text class="rp-num">{{ progressOf(s) }}%</text>
+                  </view>
+                  <text class="rp-label">AI 生成中，<br />完成后显示在右侧</text>
+                </view>
+              </view>
+
+              <view class="rec-media" @click.stop="onMediaTap(s)">
+                <image
+                  v-if="imgOf(s)"
+                  :src="imgOf(s)"
+                  mode="aspectFill"
+                  class="rec-media-img"
+                  :class="{ blur: !isOpen(s) }"
+                />
+                <view v-else class="rec-media-empty">
+                  <fj-icon :name="mediaIcon(s)" :size="20" color="#B7A8AF" />
+                  <text class="rec-media-tip">{{ mediaTip(s) }}</text>
+                </view>
+                <view v-if="imgOf(s) && !isOpen(s)" class="rec-media-mask">
+                  <fj-icon name="lock" :size="15" color="#FFFFFF" />
+                  <text>10 魅力值</text>
+                </view>
               </view>
             </view>
 
@@ -183,7 +205,12 @@
         </template>
         <view v-else class="dlg-actions">
           <view class="dlg-btn ghost" @click="closeDlg">再想想</view>
-          <view class="dlg-btn primary" @click="confirmDlg">{{ dlg.confirmText }}</view>
+          <view v-if="!(dlg.type === 'recharge' && payHidden)" class="dlg-btn primary" @click="confirmDlg">
+            {{ dlg.confirmText }}
+          </view>
+        </view>
+        <view v-if="dlg.type === 'recharge' && payHidden" class="dlg-ios-tip">
+          iOS 端暂不支持购买魅力值，可继续通过看广告获取免费解锁次数
         </view>
       </view>
     </view>
@@ -197,10 +224,14 @@ import { useAppStore } from '@/store/app'
 import { useUiStore } from '@/store/ui'
 import { API } from '@/api/request'
 import { track } from '@/utils/track'
+import { isIOSMiniProgram } from '@/utils/pay'
 import { goBack } from '@/utils/nav'
 
 const app = useAppStore()
 const ui = useUiStore()
+
+/** iOS 小程序不展示虚拟商品购买入口 */
+const payHidden = isIOSMiniProgram()
 
 const loading = ref(true)
 const tab = ref('hair')
@@ -291,6 +322,42 @@ function progressOf(s) {
   const paid = paidProgress.value[s.styleId]
   if (paid != null) return Math.min(100, Math.round(paid))
   return Math.min(99, Math.round(batchProgress.value || 0))
+}
+
+/** 圆形进度环：H5 用 SVG dashoffset（r=27，周长约 169.6），小程序用 conic-gradient */
+function ringDashOf(s) {
+  const p = Math.max(0, Math.min(100, progressOf(s)))
+  return 169.6 - (169.6 * p) / 100
+}
+
+function ringStyleOf(s) {
+  const p = Math.max(0, Math.min(100, progressOf(s)))
+  return `background: conic-gradient(from -90deg, #C95676 0% ${p}%, #F1DDE2 ${p}% 100%)`
+}
+
+function mediaIcon(s) {
+  const item = itemOf(s)
+  if (item && item.failed) return 'refresh'
+  if (isGenerating(s)) return 'sparkles'
+  if ((item && item.freePending) || (!item && isFreeSlot(s))) return 'gift'
+  return 'lock'
+}
+
+function mediaTip(s) {
+  const item = itemOf(s)
+  if (item && item.failed) return '生成失败 · 点击重试'
+  if (isGenerating(s)) return 'AI 生成中'
+  if ((item && item.freePending) || (!item && isFreeSlot(s))) return '免费生成'
+  return '10 魅力值解锁'
+}
+
+/** 点右侧图片：已解锁直接进对比页，否则走解锁/重试 */
+function onMediaTap(s) {
+  if (isOpen(s)) {
+    openResult(s.styleId)
+    return
+  }
+  pickStyle(s)
 }
 
 function actionText(s) {
@@ -476,7 +543,9 @@ function askRecharge() {
     show: true,
     type: 'recharge',
     title: '魅力值不足',
-    desc: '解锁 1 款发型需要 10 点魅力值，可通过充值或看广告获取',
+    desc: payHidden
+      ? 'iOS 端暂不支持购买魅力值，可继续通过看广告获取免费解锁次数，或使用安卓设备 / 微信 H5 充值'
+      : '解锁 1 款发型需要 10 点魅力值，可通过充值或看广告获取',
     confirmText: '去充值',
     action: () => goPoints()
   }
@@ -921,43 +990,124 @@ onUnload(() => {
   margin: 4px 0 14px;
 }
 .rec-card {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 14px;
   background: #fff;
   border-radius: 20px;
-  overflow: hidden;
   box-shadow: var(--sh-sm);
   margin-bottom: 16px;
 }
-.rec-thumb {
+.rec-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.badge-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+.rec-progress {
+  margin-top: auto;
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rp-ring-wrap {
   position: relative;
-  height: 232px;
+  width: 66px;
+  height: 66px;
+  flex: none;
+}
+.rp-bg {
+  stroke: #f1dde2;
+}
+.rp-fg {
+  stroke: #c95676;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 0.4s ease;
+}
+.rp-ring {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rp-ring-in {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #fff;
+}
+.rp-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #b54263;
+}
+.rp-label {
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.rec-media {
+  width: 124px;
+  height: 158px;
+  flex: none;
+  align-self: center;
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
   background: linear-gradient(145deg, #f5e7ea, #eee9f2);
 }
-.rec-img {
+.rec-media-img {
   width: 100%;
   height: 100%;
 }
-.rec-img-empty {
+.rec-media-img.blur {
+  filter: blur(14px);
+  transform: scale(1.15);
+}
+.rec-media-empty {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #9c8f95;
-  overflow: hidden;
+  gap: 6px;
+  padding: 0 10px;
 }
-.empty-tip {
-  font-size: 11px;
+.rec-media-tip {
+  font-size: 10px;
+  line-height: 1.4;
   color: #9c8f95;
+  text-align: center;
 }
-.gen-progress {
-  width: 62%;
+.rec-media-mask {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(35, 27, 31, 0.42);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
 }
 .gp-track {
   width: 100%;
@@ -1009,14 +1159,11 @@ onUnload(() => {
   font-weight: 800;
   white-space: nowrap;
 }
-.rec-info {
-  padding: 11px 14px 12px;
-}
 .rec-name-row {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
 }
 .rec-name {
   font-size: 15px;
@@ -1373,6 +1520,12 @@ onUnload(() => {
   display: flex;
   gap: 10px;
   margin-top: 18px;
+}
+.dlg-ios-tip {
+  margin-top: 12px;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: #a9701b;
 }
 .dlg-btn {
   flex: 1;
