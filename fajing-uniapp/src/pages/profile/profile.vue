@@ -76,6 +76,11 @@
           <text>关于我们</text>
           <view class="chev"><fj-icon name="chevron-right" :size="16" color="#C9BFC3" /></view>
         </view>
+        <view class="menu-item" @click="cancelAccount">
+          <view class="menu-ico"><fj-icon name="x" :size="16" color="#C95676" /></view>
+          <text>注销账号</text>
+          <view class="chev"><fj-icon name="chevron-right" :size="16" color="#C9BFC3" /></view>
+        </view>
       </view>
 
       <view class="logout-btn" @click="logout">退出登录</view>
@@ -232,6 +237,29 @@ function contact() {
 
 function about() {
   ui.openSheet('about')
+}
+
+/** 注销账号：删除照片与记录，账号停用；订单按法规保留 */
+function cancelAccount() {
+  uni.showModal({
+    title: '注销账号',
+    content: '注销后将删除你的照片、试发记录与解锁数据，且无法恢复；订单与券包等交易记录按法规要求保留。确定注销？',
+    confirmText: '确认注销',
+    confirmColor: '#C95676',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        await API.cancelAccount()
+        clearToken()
+        clearProfileComplete()
+        app.resetAll()
+        uni.showToast({ title: '已注销', icon: 'success' })
+        setTimeout(() => uni.reLaunch({ url: '/pages/home/home' }), 800)
+      } catch (e) {
+        // request 内部已提示
+      }
+    }
+  })
 }
 </script>
 

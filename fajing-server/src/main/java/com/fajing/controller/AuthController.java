@@ -86,10 +86,27 @@ public class AuthController {
         return Result.ok(authService.bindPhone(UserContext.require(), code));
     }
 
+    @Operation(summary = "H5 手动绑定手机号（无短信验证，带限流）")
+    @PostMapping("/phone/manual")
+    public Result<Map<String, Object>> bindPhoneManual(@RequestBody(required = false) Map<String, String> body,
+                                                       HttpServletRequest request) {
+        // 没有短信通道，至少按 IP 限流，避免被批量写入垃圾号码
+        rateLimitService.checkLogin("phone", clientIp(request));
+        String phone = body == null ? null : body.get("phone");
+        return Result.ok(authService.bindPhoneManual(UserContext.require(), phone));
+    }
+
     @Operation(summary = "退出登录（客户端清除 token）")
     @PostMapping("/logout")
     public Result<Void> logout() {
         return Result.ok();
+    }
+
+    @Operation(summary = "注销账号：删除照片与记录并停用账号")
+    @PostMapping("/cancel")
+    public Result<Void> cancel() {
+        authService.cancelAccount(UserContext.require());
+        return Result.ok(null);
     }
 
     /** 取真实客户端 IP：仅当直连方是受信代理（本机/内网）时才采信 X-Real-IP / X-Forwarded-For，避免伪造头绕过限流 */

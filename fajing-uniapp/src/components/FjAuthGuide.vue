@@ -232,7 +232,7 @@ function cancel() {
   emit('cancel')
 }
 
-/** H5 预览：使用模拟手机号完成绑定 */
+/** H5：手动输入手机号完成绑定（无短信通道，接口带登录态与限流） */
 async function bindMockPhone() {
   if (binding.value || phoneBound.value) return
   const phone = (mockPhone.value || '').trim()
@@ -242,7 +242,7 @@ async function bindMockPhone() {
   }
   binding.value = true
   try {
-    const profile = await API.bindPhoneMock(phone)
+    const profile = await API.bindPhoneManual(phone)
     boundPhone.value = (profile && profile.phone) || phone
     phoneBound.value = true
     uni.showToast({ title: '手机号绑定成功', icon: 'success' })

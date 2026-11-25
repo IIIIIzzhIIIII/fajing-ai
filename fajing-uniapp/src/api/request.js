@@ -455,7 +455,8 @@ export const API = {
   me: () => request({ url: '/api/auth/me' }),
   updateProfile: (payload) => request({ url: '/api/auth/profile', method: 'POST', data: payload }),
   bindPhone: (code) => request({ url: '/api/auth/phone', method: 'POST', data: { code } }),
-  bindPhoneMock: (phone) => request({ url: '/api/auth/phone/mock', method: 'POST', data: { phone } }),
+  bindPhoneManual: (phone) => request({ url: '/api/auth/phone/manual', method: 'POST', data: { phone } }),
+  cancelAccount: () => request({ url: '/api/auth/cancel', method: 'POST' }),
   logout: () => request({ url: '/api/auth/logout', method: 'POST' }),
   hairstyles: (gender, cat) =>
     request({

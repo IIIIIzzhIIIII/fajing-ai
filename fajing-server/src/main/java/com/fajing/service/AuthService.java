@@ -1,6 +1,7 @@
 package com.fajing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fajing.service.storage.StorageService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fajing.common.BizException;
@@ -13,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -24,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -42,6 +46,8 @@ public class AuthService {
     private final EventLogMapper eventLogMapper;
     private final JwtUtil jwtUtil;
     private final RateLimitService rateLimitService;
+    private final JdbcTemplate jdbc;
+    private final StorageService storageService;
 
     @Value("${wechat.appid:}")
     private String appid;
@@ -362,21 +368,74 @@ public class AuthService {
         return me(userId);
     }
 
-    /** H5 演示绑定手机号：不校验短信验证码，仅 auth.mock-enabled=true 时可用 */
-    public Map<String, Object> bindPhoneMock(long userId, String phone) {
+    /**
+     * H5 手动绑定手机号：当前没有短信通道，只做格式校验（带登录态与接口限流），
+     * 供公众号/H5 授权页在微信内无法调用 getPhoneNumber 时使用。
+     */
+    public Map<String, Object> bindPhoneManual(long userId, String phone) {
         String value = phone == null ? "" : phone.trim();
         if (!value.matches("^1[3-9]\\d{9}$")) {
             throw new BizException("请输入正确的手机号");
         }
         AppUser user = userMapper.selectById(userId);
-        if (user == null) {
-            throw new BizException("用户不存在");
+        if (user == null || (user.getStatus() != null && user.getStatus() == 0)) {
+            throw new BizException("用户不存在或已注销");
         }
         userMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<AppUser>()
                 .eq("id", userId)
                 .set("phone", value));
-        log.info("用户 {} 模拟绑定手机号 {}", userId, maskPhone(value));
+        log.info("用户 {} 手动绑定手机号 {}", userId, maskPhone(value));
         return me(userId);
+    }
+
+    /** H5 演示绑定手机号：复用正式实现，仅 auth.mock-enabled=true 时由演示接口暴露 */
+    public Map<String, Object> bindPhoneMock(long userId, String phone) {
+        return bindPhoneManual(userId, phone);
+    }
+
+    /**
+     * 注销账号：删除照片、试发记录、解锁与推荐数据，账号匿名化并停用。
+     * 订单与券包属于交易记录，按《电子商务法》等要求保留，便于对账与售后。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelAccount(long userId) {
+        AppUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        if (user.getStatus() != null && user.getStatus() == 0) {
+            return;
+        }
+        List<String> photos = jdbc.queryForList(
+                "SELECT photo_url FROM generation_task WHERE user_id=? AND photo_url IS NOT NULL AND photo_url<>''",
+                String.class, userId);
+        for (String url : photos) {
+            try {
+                storageService.delete(url);
+            } catch (Exception e) {
+                log.warn("注销账号删除原图失败 userId={}: {}", userId, e.getMessage());
+            }
+        }
+        jdbc.update("DELETE FROM generation_task WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM user_record WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM user_unlock WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM user_color_unlock WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM recommendation WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM user_quota WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM quota_refund WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM event_log WHERE user_id=?", userId);
+        jdbc.update("DELETE FROM staff_customer_binding WHERE customer_id=?", userId);
+        userMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<AppUser>()
+                .eq("id", userId)
+                .set("openid", "deleted_" + userId)
+                .set("phone", "")
+                .set("nickname", "已注销用户")
+                .set("avatar", "")
+                .set("session_key", "")
+                .set("password_hash", "")
+                .set("status", 0)
+                .set("last_active_at", LocalDateTime.now()));
+        log.info("用户 {} 注销账号，已删除照片与记录，订单与券包按法规保留", userId);
     }
 
     /** 用 getPhoneNumber 的 code 换取手机号，access_token 失效时自动刷新重试一次 */    private String fetchPhoneNumber(String code) {
