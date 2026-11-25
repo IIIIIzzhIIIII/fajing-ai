@@ -3,7 +3,9 @@ package com.fajing;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fajing.entity.AppUser;
+import com.fajing.entity.UserQuota;
 import com.fajing.mapper.AppUserMapper;
+import com.fajing.mapper.UserQuotaMapper;
 import com.fajing.service.AiImageService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +44,9 @@ class FlowSmokeTest {
 
     @Autowired
     private AppUserMapper userMapper;
+
+    @Autowired
+    private UserQuotaMapper quotaMapper;
 
     @MockBean
     private AiImageService aiImageService;
@@ -137,6 +142,22 @@ class FlowSmokeTest {
         if (user != null && (user.getPhone() == null || user.getPhone().isBlank())) {
             user.setPhone("13800000000");
             userMapper.updateById(user);
+        }
+        // 用例多次运行会耗尽终身免费批次，这里重置为 3 批，保证「首款默认解锁」断言稳定
+        UserQuota quota = quotaMapper.selectById(1L);
+        if (quota == null) {
+            quota = new UserQuota();
+            quota.setUserId(1L);
+            quota.setPoints(50);
+            quota.setFreeBatches(3);
+            quota.setFreeLeft(3);
+            quota.setQuotaDate(java.time.LocalDate.now());
+            quota.setUpdatedAt(java.time.LocalDateTime.now());
+            quotaMapper.insert(quota);
+        } else {
+            quota.setFreeBatches(3);
+            quota.setFreeLeft(3);
+            quotaMapper.updateById(quota);
         }
         return token;
     }
