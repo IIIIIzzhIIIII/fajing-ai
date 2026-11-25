@@ -273,6 +273,8 @@ public class AiImageService {
         if (portrait) {
             output = toThreeFour(output);
         }
+        // 写入 AIGC 隐式标识（PNG tEXt / JPEG COM），满足生成内容标识要求
+        output = com.fajing.util.AigcMetadata.mark(output);
         return storageService.put(output, "png", prefix + System.currentTimeMillis());
     }
 
