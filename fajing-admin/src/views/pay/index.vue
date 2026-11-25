@@ -71,9 +71,9 @@ function applyConfig(config) {
       form[key] = config[key]
     }
   })
-  // 虚拟商品只用小程序虚拟支付，历史数据统一收敛
+  // 公众号 H5 / 小程序普通支付用 normal，虚拟商品用 virtual
   if (form.wxPayMode !== 'virtual') {
-    form.wxPayMode = 'virtual'
+    form.wxPayMode = 'normal'
   }
   ;[
     'wxApiV3KeyEnc',
@@ -198,7 +198,7 @@ onMounted(load)
       <el-card shadow="never" class="pay-card">
         <template #header>
           <div class="card-head">
-            <span>微信小程序支付</span>
+            <span>微信支付（公众号 H5 / 小程序）</span>
             <el-tag :type="ready.wx || ready.wxVirtual ? 'success' : 'info'" size="small">
               {{ ready.wx || ready.wxVirtual ? '参数完整' : '参数未完整' }}
             </el-tag>
@@ -211,12 +211,18 @@ onMounted(load)
           </el-form-item>
           <el-form-item label="支付模式">
             <el-radio-group v-model="form.wxPayMode">
+              <el-radio value="normal">普通 JSAPI（小程序）</el-radio>
               <el-radio value="virtual">小程序虚拟支付</el-radio>
             </el-radio-group>
-            <div class="field-tip">虚拟商品必须选「小程序虚拟支付」，否则审核驳回。</div>
+            <div class="field-tip">
+              该模式只作用于小程序；公众号 H5 始终走普通 JSAPI，无需在此切换。
+            </div>
           </el-form-item>
-          <el-form-item label="微信小程序AppID">
-            <el-input v-model="form.wxAppid" placeholder="微信小程序 AppID" />
+          <el-form-item label="小程序 AppID">
+            <el-input v-model="form.wxAppid" placeholder="小程序 AppID，需与商户号完成授权" />
+            <div class="field-tip">
+              公众号 H5 支付使用服务端环境变量 WECHAT_OAUTH_APPID（需与网页授权 AppID 一致），不在后台重复填写。
+            </div>
           </el-form-item>
           <el-form-item label="商户号">
             <el-input v-model="form.wxMchId" placeholder="微信支付商户号 mchid" />
@@ -246,7 +252,7 @@ onMounted(load)
             <div class="cert-field">
               <el-input
                 v-model="form.wxNotifyUrl"
-                placeholder="${PUBLIC_HTTPS_DOMAIN}/api/pay/wechat/miniprogram/notify"
+                placeholder="https://你的公网域名/api/order/notify/wx"
               />
               <el-button :icon="CopyDocument" @click="copy(form.wxNotifyUrl)">复制</el-button>
             </div>

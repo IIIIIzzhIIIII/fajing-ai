@@ -13,6 +13,7 @@ import com.fajing.mapper.AppUserMapper;
 import com.fajing.mapper.OrderMapper;
 import com.fajing.mapper.StoreMapper;
 import com.fajing.service.CouponService;
+import com.fajing.service.AuthService;
 import com.fajing.service.OrderSettlementService;
 import com.fajing.service.PayConfigService;
 import com.fajing.service.PointsPackageService;
@@ -26,6 +27,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,6 +69,7 @@ public class OrderController {
     private final OrderMapper orderMapper;
     private final AppUserMapper userMapper;
     private final OrderSettlementService settlementService;
+    private final AuthService authService;
     private final PayConfigService payConfigService;
     private final WechatPayService wechatPayService;
     private final WechatVirtualPayService wechatVirtualPayService;
@@ -84,7 +87,8 @@ public class OrderController {
 
     @Operation(summary = "创建充值 / VIP / 团购券订单")
     @PostMapping("/create")
-    public Result<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
+    public Result<Map<String, Object>> create(@RequestBody Map<String, Object> body,
+                                              HttpServletRequest request) {
         Long userId = UserContext.require();
         String bizType = str(body.get("bizType"));
         // 发型解锁已统一改为魅力值（/api/unlock），这里不再接受现金解锁订单
@@ -96,11 +100,12 @@ public class OrderController {
         if (user == null || user.getPhone() == null || user.getPhone().isBlank()) {
             throw new BizException("请先完成手机号授权后再支付");
         }
-        return createBizOrder(bizType, body, userId);
+        return createBizOrder(bizType, body, userId, isWechatBrowser(request));
     }
 
     /** 充值 / VIP / VVIP / 团购券下单：金额与权益只以服务端档位为准 */
-    private Result<Map<String, Object>> createBizOrder(String bizType, Map<String, Object> body, Long userId) {
+    private Result<Map<String, Object>> createBizOrder(String bizType, Map<String, Object> body, Long userId,
+                                                       boolean wxBrowser) {
         PayConfig cfg = payConfigService.get();
         BigDecimal amount;
         int points = 0;
@@ -151,7 +156,8 @@ public class OrderController {
         }
         if (channel.isBlank()) {
             if ("h5".equals(platform)) {
-                channel = "alipay";
+                // 微信内打开 H5：公众号授权与商户参数都就绪才走公众号 JSAPI，否则保持支付宝 H5
+                channel = wxBrowser && wxReady && authService.oauthEnabled() ? "wx" : "alipay";
             } else if ("mp-weixin".equals(platform)) {
                 channel = "wx";
             } else if ("mp-toutiao".equals(platform)) {
@@ -221,7 +227,9 @@ public class OrderController {
         };
 
         if ("wx".equals(channel)) {
-            if (wxVirtualMode) {
+            boolean h5Pay = "h5".equals(platform);
+            // 小程序虚拟支付只作用于小程序；公众号 H5 始终走普通 JSAPI
+            if (wxVirtualMode && !h5Pay) {
                 if (!wxVirtualReady) {
                     throw new BizException("微信虚拟支付参数未配置完整，请在管理端「支付配置」补全");
                 }
@@ -238,16 +246,27 @@ public class OrderController {
             if (!wxReady) {
                 throw new BizException("微信支付参数未配置完整，请在管理端「支付配置」补全");
             }
+            // 公众号支付必须使用公众号 AppID（与网页授权拿到的 openid 同源），小程序用后台配置的小程序 AppID
+            String payAppId = cfg.getWxAppid();
+            if (h5Pay) {
+                if (!authService.oauthEnabled()) {
+                    throw new BizException("公众号网页授权未配置，暂时无法在微信内支付");
+                }
+                payAppId = authService.oauthAppid();
+            }
             AppUser user = userMapper.selectById(userId);
+            if (user == null || user.getOpenid() == null || user.getOpenid().isBlank()) {
+                throw new BizException("请重新进入页面完成微信授权后再支付");
+            }
             orderMapper.insert(order);
             try {
                 String prepayId = wechatPayService.createJsapi(
-                        order.getOutTradeNo(), amount, subject, user == null ? "" : user.getOpenid());
+                        order.getOutTradeNo(), amount, subject, user.getOpenid(), h5Pay ? payAppId : null);
                 order.setPrepayId(prepayId);
                 orderMapper.updateById(order);
                 data.put("orderId", order.getId());
                 data.put("outTradeNo", order.getOutTradeNo());
-                data.put("payParams", wechatPayService.payParams(prepayId));
+                data.put("payParams", wechatPayService.payParams(prepayId, h5Pay, payAppId));
             } catch (BizException e) {
                 order.setStatus("closed");
                 orderMapper.updateById(order);
@@ -329,10 +348,13 @@ public class OrderController {
             if (order == null) {
                 throw new BizException("订单不存在：" + outTradeNo);
             }
-            // 校验商户号/AppID，防止其他商户的有效签名回调被用来标记本商户订单
+            // 校验商户号/AppID，防止其他商户的有效签名回调被用来标记本商户订单；
+            // 公众号 H5 订单的 AppID 是公众号 AppID，与小程序不同
             PayConfig cfg = payConfigService.get();
+            String expectAppId = "h5".equals(order.getPlatform())
+                    ? authService.oauthAppid() : cfg.getWxAppid();
             if (!String.valueOf(data.path("mchid").asText("")).equals(String.valueOf(cfg.getWxMchId()))
-                    || !String.valueOf(data.path("appid").asText("")).equals(String.valueOf(cfg.getWxAppid()))) {
+                    || !String.valueOf(data.path("appid").asText("")).equals(String.valueOf(expectAppId))) {
                 throw new BizException("微信回调商户信息不匹配");
             }
             int expectCents = order.getAmount().multiply(BigDecimal.valueOf(100)).intValueExact();
@@ -493,8 +515,10 @@ public class OrderController {
             PayConfig cfg = payConfigService.get();
             if (payConfigService.wxReady(cfg)) {
                 JsonNode payload = wechatPayService.queryOrder(order.getOutTradeNo());
+                String expectAppId = "h5".equals(order.getPlatform())
+                        ? authService.oauthAppid() : cfg.getWxAppid();
                 if (!String.valueOf(payload.path("mchid").asText("")).equals(String.valueOf(cfg.getWxMchId()))
-                        || !String.valueOf(payload.path("appid").asText("")).equals(String.valueOf(cfg.getWxAppid()))) {
+                        || !String.valueOf(payload.path("appid").asText("")).equals(String.valueOf(expectAppId))) {
                     throw new BizException("微信订单商户信息不匹配");
                 }
                 int totalCents = payload.path("amount").path("total").asInt(-1);
@@ -562,6 +586,12 @@ public class OrderController {
             case "mp-xhs", "xhs", "xiaohongshu" -> "mp-xhs";
             default -> "";
         };
+    }
+
+    /** 微信内置浏览器判断：决定 H5 下单走公众号 JSAPI 还是支付宝 */
+    private static boolean isWechatBrowser(HttpServletRequest request) {
+        String ua = request == null ? null : request.getHeader("User-Agent");
+        return ua != null && ua.toLowerCase().contains("micromessenger");
     }
 
     private Order findByTradeNo(String outTradeNo) {

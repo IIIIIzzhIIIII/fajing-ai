@@ -7,6 +7,7 @@ import com.fajing.entity.PayConfig;
 import com.fajing.service.PayConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -23,10 +24,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.Signature;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -53,15 +56,29 @@ public class WechatPayService {
             .connectTimeout(Duration.ofSeconds(15))
             .build();
 
+    /** 微信支付公钥模式：新商户回调签名头为 PUB_KEY_ID_xxx，用公钥而非平台证书验签 */
+    @Value("${pay.wechat.public-key-path:}")
+    private String wechatPayPublicKeyPath;
+
+    @Value("${pay.wechat.public-key-id:}")
+    private String wechatPayPublicKeyId;
+
     private final Map<String, X509Certificate> platformCerts = new ConcurrentHashMap<>();
     private volatile long certFetchedAt = 0;
     /** 平台证书缓存对应的商户号，切换商户号时需要强制刷新 */
     private volatile String certMchId = "";
 
-    /** JSAPI 下单，返回 prepay_id */
-    public String createJsapi(String outTradeNo, BigDecimal amountYuan, String description, String openid) {
+    /**
+     * JSAPI 下单，返回 prepay_id。
+     *
+     * @param appId 公众号 H5 支付必须传公众号 AppID（与用户 openid 同源）；小程序传 null 用后台配置的小程序 AppID
+     */
+    public String createJsapi(String outTradeNo, BigDecimal amountYuan, String description, String openid,
+                              String appId) {
         PayConfig cfg = requireWxReady();
-        if (!"normal".equalsIgnoreCase(cfg.getWxPayMode())
+        boolean h5Pay = appId != null && !appId.isBlank();
+        // 虚拟支付模式只约束小程序；公众号 H5 始终走普通 JSAPI
+        if (!h5Pay && !"normal".equalsIgnoreCase(cfg.getWxPayMode())
                 && !"miniprogram".equalsIgnoreCase(cfg.getWxPayMode())) {
             throw new BizException("当前为小程序虚拟支付模式，需先在微信侧开通虚拟支付并完成对接；可先将支付模式改为小程序支付（MINIPROGRAM）");
         }
@@ -69,7 +86,7 @@ public class WechatPayService {
             throw new BizException("缺少用户 openid，无法发起微信支付");
         }
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("appid", cfg.getWxAppid());
+        body.put("appid", h5Pay ? appId : cfg.getWxAppid());
         body.put("mchid", cfg.getWxMchId());
         body.put("description", description);
         body.put("out_trade_no", outTradeNo);
@@ -84,14 +101,23 @@ public class WechatPayService {
         return prepayId;
     }
 
-    /** 小程序 wx.requestPayment 所需参数 */
-    public Map<String, String> payParams(String prepayId) {
+    /**
+     * 调起支付所需参数。
+     *
+     * @param includeAppId 公众号 H5 用 WeixinJSBridge 调起时必须带 appId；小程序 requestPayment 不需要
+     * @param appId        与下单时一致的 AppID；为空时用后台配置的小程序 AppID
+     */
+    public Map<String, String> payParams(String prepayId, boolean includeAppId, String appId) {
         PayConfig cfg = requireWxReady();
+        String signAppId = appId == null || appId.isBlank() ? cfg.getWxAppid() : appId;
         String timeStamp = String.valueOf(Instant.now().getEpochSecond());
         String nonceStr = nonce();
         String pkg = "prepay_id=" + prepayId;
-        String message = cfg.getWxAppid() + "\n" + timeStamp + "\n" + nonceStr + "\n" + pkg + "\n";
+        String message = signAppId + "\n" + timeStamp + "\n" + nonceStr + "\n" + pkg + "\n";
         Map<String, String> params = new LinkedHashMap<>();
+        if (includeAppId) {
+            params.put("appId", signAppId);
+        }
         params.put("timeStamp", timeStamp);
         params.put("nonceStr", nonceStr);
         params.put("package", pkg);
@@ -153,11 +179,8 @@ public class WechatPayService {
             if (Math.abs(Instant.now().getEpochSecond() - ts) > 300) {
                 throw new BizException("微信回调时间戳超出允许范围");
             }
-            X509Certificate cert = platformCert(cfg, serial);
             String message = timestamp + "\n" + nonce + "\n" + body + "\n";
-            if (!verify(cert, message, signature)) {
-                throw new BizException("微信回调验签失败");
-            }
+            verifyNotifySignature(cfg, serial, message, signature);
             JsonNode root = objectMapper.readTree(body);
             JsonNode resource = root.path("resource");
             String plain = decryptResource(
@@ -181,6 +204,22 @@ public class WechatPayService {
             if (!payConfigService.wxReady(cfg)) {
                 result.put("ok", false);
                 result.put("msg", "微信参数不完整：需 AppID、商户号、APIv3 密钥、证书序列号、私钥、回调地址");
+                return result;
+            }
+            if (wechatPayPublicKeyPath != null && !wechatPayPublicKeyPath.isBlank()) {
+                // 公钥模式：平台证书接口可能不可用，用查单接口验证签名链路（订单不存在也算鉴权通过）
+                wechatPayPublicKey();
+                try {
+                    request(cfg, "GET", "/v3/pay/transactions/out-trade-no/FJVERIFY"
+                            + System.currentTimeMillis() + "?mchid=" + cfg.getWxMchId(), null);
+                } catch (BizException e) {
+                    String msg = String.valueOf(e.getMessage());
+                    if (msg.contains("401") || msg.contains("鉴权失败")) {
+                        throw e;
+                    }
+                }
+                result.put("ok", true);
+                result.put("msg", "商户签名与微信支付公钥配置通过");
                 return result;
             }
             refreshCertificates(cfg);
@@ -329,14 +368,49 @@ public class WechatPayService {
         }
     }
 
-    private boolean verify(X509Certificate cert, String message, String signature) {
+    private boolean verify(PublicKey key, String message, String signature) {
         try {
             Signature verifier = Signature.getInstance("SHA256withRSA");
-            verifier.initVerify(cert.getPublicKey());
+            verifier.initVerify(key);
             verifier.update(message.getBytes(StandardCharsets.UTF_8));
             return verifier.verify(Base64.getDecoder().decode(signature));
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * 回调验签：新商户为微信支付公钥模式（serial=PUB_KEY_ID_xxx），老商户为平台证书模式。
+     */
+    private void verifyNotifySignature(PayConfig cfg, String serial, String message, String signature) {
+        if (serial.startsWith("PUB_KEY_ID_")) {
+            if (wechatPayPublicKeyId != null && !wechatPayPublicKeyId.isBlank()
+                    && !wechatPayPublicKeyId.equals(serial)) {
+                throw new BizException("微信支付公钥 ID 不匹配");
+            }
+            if (!verify(wechatPayPublicKey(), message, signature)) {
+                throw new BizException("微信回调验签失败");
+            }
+            return;
+        }
+        if (!verify(platformCert(cfg, serial).getPublicKey(), message, signature)) {
+            throw new BizException("微信回调验签失败");
+        }
+    }
+
+    private PublicKey wechatPayPublicKey() {
+        if (wechatPayPublicKeyPath == null || wechatPayPublicKeyPath.isBlank()) {
+            throw new BizException("未配置微信支付公钥：请设置 WECHAT_PAY_PUBLIC_KEY_PATH");
+        }
+        try {
+            String content = Files.readString(Path.of(wechatPayPublicKeyPath.trim()), StandardCharsets.UTF_8)
+                    .replace("-----BEGIN PUBLIC KEY-----", "")
+                    .replace("-----END PUBLIC KEY-----", "")
+                    .replaceAll("\\s", "");
+            byte[] der = Base64.getDecoder().decode(content);
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(der));
+        } catch (Exception e) {
+            throw new BizException("微信支付公钥加载失败：" + e.getMessage());
         }
     }
 

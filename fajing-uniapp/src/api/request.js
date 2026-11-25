@@ -1,4 +1,5 @@
 import { clearToken, getToken, setToken } from '@/utils/auth'
+import { isWechatBrowser } from '@/utils/pay'
 
 const BASE_URL = (import.meta.env && import.meta.env.VITE_API_BASE) || ''
 
@@ -52,13 +53,106 @@ function guestKey() {
 
 /** 登录：小程序用 wx.login 的 code 换 token；H5 用浏览器本地 guestKey 换游客账号 */
 export function login() {
+  // #ifdef H5
+  return loginH5()
+  // #endif
+  // #ifndef H5
+  return loginWeixin()
+  // #endif
+}
+
+// #ifdef H5
+const OAUTH_DONE_KEY = 'fajing_oauth_done'
+const OAUTH_AT_KEY = 'fajing_oauth_at'
+/** 授权跳转前记住当前页面（hash 路由），回来后恢复，避免落在启动页 */
+const OAUTH_BACK_KEY = 'fajing_oauth_back'
+
+/** H5：微信内优先走公众号网页授权（拿 openid 供支付），否则游客登录 */
+function loginH5() {
+  const base = apiBase()
+  if (!base) {
+    return Promise.reject(new Error('no api base'))
+  }
   return new Promise((resolve, reject) => {
-    const base = apiBase()
-    if (!base) {
-      reject(new Error('no api base'))
-      return
-    }
-    // #ifdef H5
+    oauthConfig(base)
+      .then((cfg) => {
+        const code = readOAuthCode()
+        if (cfg && cfg.enabled && cfg.appid && isWechatBrowser()) {
+          if (code) {
+            oauthLogin(base, code)
+              .then((data) => {
+                setToken(data.token)
+                uni.setStorageSync(OAUTH_DONE_KEY, '1')
+                cleanOAuthQuery()
+                // 回到授权前的页面；页面会重新加载，无需再 resolve
+                if (!restoreOAuthBack()) resolve(data)
+              })
+              .catch((e) => {
+                console.warn('[fajing] oauth login failed, fallback to guest', e)
+                cleanOAuthQuery()
+                if (restoreOAuthBack()) return
+                guestLoginH5(base).then(resolve).catch(reject)
+              })
+            return
+          }
+          const done = uni.getStorageSync(OAUTH_DONE_KEY) === '1'
+          // 已授权过且 token 还在：直接复用，避免被游客登录覆盖
+          if (getToken() && done) {
+            resolve({ token: getToken() })
+            return
+          }
+          if (canRedirectOAuth()) {
+            redirectToOAuth(cfg.appid)
+            return
+          }
+        }
+        guestLoginH5(base).then(resolve).catch(reject)
+      })
+      .catch(() => {
+        guestLoginH5(base).then(resolve).catch(reject)
+      })
+  })
+}
+
+/** 读取后端公众号授权配置；未配置或接口失败时返回空对象，走游客登录 */
+function oauthConfig(base) {
+  return new Promise((resolve) => {
+    uni.request({
+      url: base + '/api/auth/wechat/oauth/config',
+      method: 'GET',
+      timeout: 8000,
+      success: (res) => {
+        const body = res.data || {}
+        resolve(res.statusCode === 200 && body.code === 0 ? (body.data || {}) : {})
+      },
+      fail: () => resolve({})
+    })
+  })
+}
+
+function oauthLogin(base, code) {
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: base + '/api/auth/wechat/oauth',
+      method: 'POST',
+      data: { code },
+      header: { 'Content-Type': 'application/json' },
+      timeout: 15000,
+      success: (res) => {
+        const body = res.data || {}
+        if (res.statusCode === 200 && body.code === 0 && body.data && body.data.token) {
+          resolve(body.data)
+        } else {
+          reject(new Error((body && body.msg) || '公众号授权失败'))
+        }
+      },
+      fail: reject
+    })
+  })
+}
+
+function guestLoginH5(base) {
+  return new Promise((resolve, reject) => {
     uni.request({
       url: base + '/api/auth/login/guest',
       method: 'POST',
@@ -80,9 +174,84 @@ export function login() {
         reject(err)
       }
     })
-    // #endif
+  })
+}
 
-    // #ifndef H5
+function readOAuthCode() {
+  try {
+    return new URLSearchParams(window.location.search).get('code') || ''
+  } catch (e) {
+    return ''
+  }
+}
+
+/** 当前地址（去掉 code/state，保留其它查询参数与 hash） */
+function currentUrlWithoutOAuth() {
+  const search = (window.location.search || '')
+    .replace(/([?&])(code|state)=[^&]*/g, '$1')
+    .replace(/[?&]$/, '')
+  return window.location.origin + window.location.pathname + (search === '?' ? '' : search)
+}
+
+function cleanOAuthQuery() {
+  try {
+    window.history.replaceState(null, '', currentUrlWithoutOAuth() + (window.location.hash || ''))
+  } catch (e) {
+    // 替换失败不影响已保存的 token
+  }
+}
+
+/** 1 分钟内不重复跳转，避免授权失败时来回刷新 */
+function canRedirectOAuth() {
+  try {
+    const last = Number(sessionStorage.getItem(OAUTH_AT_KEY) || 0)
+    if (Date.now() - last < 60000) return false
+    sessionStorage.setItem(OAUTH_AT_KEY, String(Date.now()))
+    return true
+  } catch (e) {
+    return true
+  }
+}
+
+function redirectToOAuth(appid) {
+  try {
+    sessionStorage.setItem(OAUTH_BACK_KEY, window.location.hash || '')
+  } catch (e) {
+    // 存不下时只会回到首页，不影响授权本身
+  }
+  const redirect = encodeURIComponent(currentUrlWithoutOAuth())
+  const url = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=' + appid
+    + '&redirect_uri=' + redirect
+    + '&response_type=code&scope=snsapi_base&state=fajing#wechat_redirect'
+  window.location.replace(url)
+}
+
+/** 授权完成后回到授权前的页面 */
+function restoreOAuthBack() {
+  try {
+    const hash = sessionStorage.getItem(OAUTH_BACK_KEY) || ''
+    sessionStorage.removeItem(OAUTH_BACK_KEY)
+    if (hash && hash.length > 2 && window.location.hash !== hash) {
+      window.location.replace(
+        window.location.origin + window.location.pathname + window.location.search + hash
+      )
+      return true
+    }
+  } catch (e) {
+    // 忽略，按原页面继续
+  }
+  return false
+}
+// #endif
+
+// #ifndef H5
+function loginWeixin() {
+  return new Promise((resolve, reject) => {
+    const base = apiBase()
+    if (!base) {
+      reject(new Error('no api base'))
+      return
+    }
     const doWxLogin = () => {
       uni.login({
         provider: 'weixin',
@@ -173,9 +342,9 @@ export function login() {
     // #ifndef MP-WEIXIN
     doWxLogin()
     // #endif
-    // #endif
   })
 }
+// #endif
 
 let loginPromise = null
 function ensureLogin() {

@@ -49,6 +49,13 @@ public class AuthService {
     @Value("${wechat.secret:}")
     private String secret;
 
+    /** 公众号（服务号）AppID/Secret：仅用于 H5 网页授权，不能与小程序 AppID 混用 */
+    @Value("${wechat.oauth-appid:}")
+    private String oauthAppid;
+
+    @Value("${wechat.oauth-secret:}")
+    private String oauthSecret;
+
     /** H5 游客登录开关：默认开启，生产也保留（浏览器匿名账号，用于 H5 端可用登录入口） */
     @Value("${auth.guest-enabled:true}")
     private boolean guestEnabled;
@@ -72,14 +79,57 @@ public class AuthService {
         }
         String sessionKey = session.path("session_key").asText("");
 
-        AppUser user = userMapper.selectOne(new QueryWrapper<AppUser>()
-                .eq("openid", openid).last("limit 1"));
+        LoginUser login = upsertByOpenid(openid, "发型试镜用户");
+        AppUser user = login.user();
+        // session_key 只落库，不下发前端
+        if (!sessionKey.isBlank()) {
+            user.setSessionKey(sessionKey);
+            userMapper.updateById(user);
+        }
+        return tokenPayload(user, login.isNew());
+    }
+
+    /** 公众号（服务号）网页授权是否已配置 */
+    public boolean oauthEnabled() {
+        return !isBlank(oauthAppid) && !isBlank(oauthSecret);
+    }
+
+    public String oauthAppid() {
+        return oauthEnabled() ? oauthAppid : "";
+    }
+
+    /**
+     * H5 公众号网页授权：snsapi_base 静默拿 openid → 建档 → JWT。
+     * 与小程序 openid 不互通，同一用户在小程序/公众号下会是两个账号。
+     */
+    public Map<String, Object> loginByOauthCode(String code) {
+        if (isBlank(code)) {
+            throw new BizException("缺少微信授权凭证");
+        }
+        if (!oauthEnabled()) {
+            throw new BizException("公众号网页授权未配置");
+        }
+        JsonNode root = oauthAccessToken(code);
+        String openid = root.path("openid").asText("");
+        if (openid.isBlank()) {
+            throw new BizException("公众号授权失败，请重试");
+        }
+        LoginUser login = upsertByOpenid(openid, "发型试镜用户");
+        return tokenPayload(login.user(), login.isNew());
+    }
+
+    private record LoginUser(AppUser user, boolean isNew) {
+    }
+
+    /** 按 openid 建档或更新活跃时间；并发首次登录时回读已有账号 */
+    private LoginUser upsertByOpenid(String openid, String defaultNickname) {
+        AppUser user = findByOpenid(openid);
         boolean isNewUser = false;
         if (user == null) {
             isNewUser = true;
             user = new AppUser();
             user.setOpenid(openid);
-            user.setNickname("发型试镜用户");
+            user.setNickname(defaultNickname);
             user.setGender("unknown");
             user.setStatus(1);
             user.setRegisterAt(LocalDateTime.now());
@@ -87,9 +137,7 @@ public class AuthService {
             try {
                 userMapper.insert(user);
             } catch (DuplicateKeyException e) {
-                // 同一 openid 并发首次登录时可能同时建档，回读已存在账号，避免 500
-                user = userMapper.selectOne(new QueryWrapper<AppUser>()
-                        .eq("openid", openid).last("limit 1"));
+                user = findByOpenid(openid);
                 if (user == null) {
                     throw e;
                 }
@@ -101,12 +149,7 @@ public class AuthService {
         }
         user.setLastActiveAt(LocalDateTime.now());
         userMapper.updateById(user);
-        // session_key 只落库，不下发前端
-        if (!sessionKey.isBlank()) {
-            user.setSessionKey(sessionKey);
-            userMapper.updateById(user);
-        }
-        return tokenPayload(user, isNewUser);
+        return new LoginUser(user, isNewUser);
     }
 
     /** 本地/H5 演示登录：固定体验用户，不调用微信 */
@@ -204,6 +247,44 @@ public class AuthService {
     /** mock / 游客登录共用：不携带 isNewUser（前端忽略） */
     private Map<String, Object> tokenPayload(AppUser user) {
         return tokenPayload(user, false);
+    }
+
+    /** 公众号网页授权 code → openid（snsapi_base 只需 openid） */
+    private JsonNode oauthAccessToken(String code) {
+        String url = "https://api.weixin.qq.com/sns/oauth2/access_token?appid="
+                + URLEncoder.encode(oauthAppid, StandardCharsets.UTF_8)
+                + "&secret=" + URLEncoder.encode(oauthSecret, StandardCharsets.UTF_8)
+                + "&code=" + URLEncoder.encode(code, StandardCharsets.UTF_8)
+                + "&grant_type=authorization_code";
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .GET()
+                    .build();
+            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            JsonNode root = objectMapper.readTree(resp.body());
+            int errcode = root.path("errcode").asInt(0);
+            if (errcode != 0) {
+                log.warn("公众号网页授权失败：{}", resp.body());
+                throw new BizException(oauthErrorMessage(errcode));
+            }
+            return root;
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("公众号网页授权调用异常：{}", e.getMessage());
+            throw new BizException("公众号授权失败，请检查网络后重试");
+        }
+    }
+
+    private String oauthErrorMessage(int errcode) {
+        return switch (errcode) {
+            case 40029 -> "授权码已失效，请重新进入页面";
+            case 40163 -> "授权码已被使用，请重新进入页面";
+            case 40013 -> "公众号 AppID 配置不正确";
+            case 40125 -> "公众号 AppSecret 配置不正确";
+            default -> "公众号授权失败（" + errcode + "）";
+        };
     }
 
     private JsonNode jscode2session(String code) {

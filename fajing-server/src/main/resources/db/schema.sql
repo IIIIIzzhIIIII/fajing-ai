@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS ai_config (
 CREATE TABLE IF NOT EXISTS pay_config (
   id BIGINT PRIMARY KEY,
   wx_enabled TINYINT NOT NULL DEFAULT 0,
-  wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'virtual',
+  wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'normal',
   wx_appid VARCHAR(64) NOT NULL DEFAULT '',
   wx_mch_id VARCHAR(32) NOT NULL DEFAULT '',
   wx_api_v3_key_enc VARCHAR(512) NOT NULL DEFAULT '',
@@ -241,9 +241,8 @@ ALTER TABLE orders ADD UNIQUE KEY uk_out_trade_no (out_trade_no);
 ALTER TABLE generation_task ADD COLUMN free_quota TINYINT NOT NULL DEFAULT 0;
 
 -- 支付配置：多平台接入字段（旧库增量）
-ALTER TABLE pay_config MODIFY wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'virtual';
--- 虚拟商品仅保留小程序虚拟支付，历史模式统一收敛
-UPDATE pay_config SET wx_pay_mode = 'virtual' WHERE wx_pay_mode <> 'virtual';
+ALTER TABLE pay_config MODIFY wx_pay_mode VARCHAR(16) NOT NULL DEFAULT 'normal';
+-- 公众号 H5 / 小程序普通 JSAPI 与虚拟支付并存，不再强制收敛为 virtual
 ALTER TABLE pay_config ADD COLUMN wx_virtual_offer_id VARCHAR(64) NOT NULL DEFAULT '';
 ALTER TABLE pay_config ADD COLUMN wx_virtual_env TINYINT NOT NULL DEFAULT 0;
 ALTER TABLE pay_config ADD COLUMN wx_virtual_product_one VARCHAR(64) NOT NULL DEFAULT '';

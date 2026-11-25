@@ -46,6 +46,25 @@ public class AuthController {
         return Result.ok(authService.guestLogin(guestKey, ip));
     }
 
+    @Operation(summary = "公众号网页授权配置：前端用来拼 authorize 跳转")
+    @GetMapping("/wechat/oauth/config")
+    public Result<Map<String, Object>> oauthConfig() {
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("enabled", authService.oauthEnabled());
+        data.put("appid", authService.oauthAppid());
+        return Result.ok(data);
+    }
+
+    @Operation(summary = "公众号网页授权 code 换 token（H5 支付前拿 openid）")
+    @PostMapping("/wechat/oauth")
+    public Result<Map<String, Object>> oauthLogin(@RequestBody(required = false) Map<String, String> body,
+                                                  HttpServletRequest request) {
+        String ip = clientIp(request);
+        rateLimitService.checkLogin("oauth", ip);
+        String code = body == null ? null : body.get("code");
+        return Result.ok(authService.loginByOauthCode(code));
+    }
+
     @Operation(summary = "当前登录用户信息")
     @GetMapping("/me")
     public Result<Map<String, Object>> me() {
